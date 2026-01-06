@@ -1,0 +1,24 @@
+<!-- SLDS 2 CSS from the installed package -->
+<link rel="stylesheet" href="/node_modules/@salesforce-ux/design-system/assets/styles/salesforce-lightning-design-system.min.css" />
+
+<!-- Tailwind CSS for utility classes -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        },
+      },
+    },
+  }
+</script>
+
+<style>
+  /* SLDS base wrapper */
+  .sb-show-main {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+</style>

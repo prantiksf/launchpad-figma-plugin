@@ -1,0 +1,24 @@
+/* SLDS 2 Cosmos Theme Tokens */
+@import './slds2-tokens.css';
+
+/* Base styles */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--slds-g-font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-size: var(--slds-g-font-size-4);
+  line-height: 1.5;
+  color: var(--slds-g-color-neutral-base-30);
+  background-color: var(--slds-g-color-neutral-base-100);
+}

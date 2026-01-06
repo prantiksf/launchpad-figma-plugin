@@ -1,0 +1,122 @@
+/**
+ * SLDS 2 Cosmos Theme Tokens
+ * 
+ * Official Salesforce Lightning Design System 2 color values
+ * Source: @salesforce-ux/sds-metadata package
+ */
+
+:root {
+  /* ===== BRAND COLORS (Electric Blue) ===== */
+  --slds-g-color-brand-base-10: #001639;
+  --slds-g-color-brand-base-15: #002453;
+  --slds-g-color-brand-base-20: #00306e;
+  --slds-g-color-brand-base-30: #0043a4;
+  --slds-g-color-brand-base-40: #0250d9;
+  --slds-g-color-brand-base-50: #066afe;
+  --slds-g-color-brand-base-60: #4d94ff;
+  --slds-g-color-brand-base-65: #7cb1fe;
+  --slds-g-color-brand-base-70: #a8cbff;
+  --slds-g-color-brand-base-80: #d6e6ff;
+  --slds-g-color-brand-base-90: #edf4ff;
+  --slds-g-color-brand-base-95: #f7faff;
+
+  /* ===== ERROR/DESTRUCTIVE COLORS (Pink) ===== */
+  --slds-g-color-error-base-10: #4a0c23;
+  --slds-g-color-error-base-20: #7a0d36;
+  --slds-g-color-error-base-30: #aa0648;
+  --slds-g-color-error-base-40: #d10559;
+  --slds-g-color-error-base-50: #e3066a;
+  --slds-g-color-error-base-60: #f54d94;
+  --slds-g-color-error-base-70: #ff8bba;
+  --slds-g-color-error-base-80: #ffc3dc;
+  --slds-g-color-error-base-90: #ffe3ef;
+  --slds-g-color-error-base-100: #fff5f9;
+
+  /* ===== SUCCESS COLORS (Teal) ===== */
+  --slds-g-color-success-base-10: #032d2a;
+  --slds-g-color-success-base-20: #044843;
+  --slds-g-color-success-base-30: #05635c;
+  --slds-g-color-success-base-40: #067a73;
+  --slds-g-color-success-base-50: #0b827c;
+  --slds-g-color-success-base-60: #1fa89e;
+  --slds-g-color-success-base-70: #5cc8c0;
+  --slds-g-color-success-base-80: #a3e3de;
+  --slds-g-color-success-base-90: #d4f4f1;
+  --slds-g-color-success-base-100: #f0fbfa;
+
+  /* ===== WARNING COLORS (Orange) ===== */
+  --slds-g-color-warning-base-10: #3a1a02;
+  --slds-g-color-warning-base-20: #5c2b04;
+  --slds-g-color-warning-base-30: #854008;
+  --slds-g-color-warning-base-40: #a6530a;
+  --slds-g-color-warning-base-50: #dd7a01;
+  --slds-g-color-warning-base-60: #fe9339;
+  --slds-g-color-warning-base-70: #ffb470;
+  --slds-g-color-warning-base-80: #ffd4a8;
+  --slds-g-color-warning-base-90: #ffedd9;
+  --slds-g-color-warning-base-100: #fff8f0;
+
+  /* ===== NEUTRAL COLORS ===== */
+  --slds-g-color-neutral-base-100: #ffffff;
+  --slds-g-color-neutral-base-95: #f7f7f7;
+  --slds-g-color-neutral-base-90: #e5e5e5;
+  --slds-g-color-neutral-base-80: #c9c9c9;
+  --slds-g-color-neutral-base-70: #aeaeae;
+  --slds-g-color-neutral-base-65: #939393;
+  --slds-g-color-neutral-base-60: #747474;
+  --slds-g-color-neutral-base-50: #5c5c5c;
+  --slds-g-color-neutral-base-40: #444444;
+  --slds-g-color-neutral-base-30: #2e2e2e;
+  --slds-g-color-neutral-base-20: #1a1a1a;
+  --slds-g-color-neutral-base-15: #141414;
+  --slds-g-color-neutral-base-10: #0a0a0a;
+
+  /* ===== SPACING ===== */
+  --slds-g-spacing-1: 0.25rem;
+  --slds-g-spacing-2: 0.5rem;
+  --slds-g-spacing-3: 0.75rem;
+  --slds-g-spacing-4: 1rem;
+  --slds-g-spacing-5: 1.5rem;
+  --slds-g-spacing-6: 2rem;
+  --slds-g-spacing-7: 2.5rem;
+  --slds-g-spacing-8: 3rem;
+  --slds-g-spacing-9: 3.5rem;
+  --slds-g-spacing-10: 4rem;
+  --slds-g-spacing-11: 4.5rem;
+  --slds-g-spacing-12: 5rem;
+
+  /* ===== RADIUS (Cosmos has more rounded corners) ===== */
+  --slds-g-radius-border-1: 0.25rem;
+  --slds-g-radius-border-2: 0.375rem;
+  --slds-g-radius-border-3: 0.5rem;
+  --slds-g-radius-border-4: 0.75rem;
+  --slds-g-radius-border-circle: 50%;
+  --slds-g-radius-border-pill: 15rem;
+
+  /* ===== FONT ===== */
+  --slds-g-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --slds-g-font-size-1: 0.625rem;
+  --slds-g-font-size-2: 0.75rem;
+  --slds-g-font-size-3: 0.8125rem;
+  --slds-g-font-size-4: 0.875rem;
+  --slds-g-font-size-5: 1rem;
+  --slds-g-font-size-6: 1.125rem;
+  --slds-g-font-size-7: 1.25rem;
+  --slds-g-font-size-8: 1.5rem;
+  --slds-g-font-size-9: 1.75rem;
+  --slds-g-font-size-10: 2rem;
+
+  /* ===== FONT WEIGHT ===== */
+  --slds-g-font-weight-light: 300;
+  --slds-g-font-weight-regular: 400;
+  --slds-g-font-weight-semibold: 600;
+  --slds-g-font-weight-bold: 700;
+
+  /* ===== SHADOW ===== */
+  --slds-g-shadow-1: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --slds-g-shadow-2: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  --slds-g-shadow-3: 0 4px 8px 0 rgba(0, 0, 0, 0.1);
+  --slds-g-shadow-4: 0 8px 16px 0 rgba(0, 0, 0, 0.1);
+}
+
+
