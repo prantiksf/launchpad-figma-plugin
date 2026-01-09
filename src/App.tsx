@@ -57,6 +57,13 @@ const categoryLabels: Record<string, string> = {
 };
 
 // ============ TYPES ============
+interface VariantInfo {
+  name: string;
+  displayName: string;
+  key: string;
+  preview: string | null;
+}
+
 interface Template {
   id: string;
   name: string;
@@ -67,7 +74,7 @@ interface Template {
   cloudId: string;
   preview?: string;
   isComponentSet?: boolean;
-  variantProperties?: Record<string, string[]>;
+  variants?: VariantInfo[];
   variantCount?: number;
 }
 
@@ -79,7 +86,7 @@ interface ComponentInfo {
   height: number;
   preview?: string;
   isComponentSet?: boolean;
-  variantProperties?: Record<string, string[]>;
+  variants?: VariantInfo[];
   variantCount?: number;
 }
 
@@ -97,6 +104,7 @@ export function App() {
   const [insertingId, setInsertingId] = useState<string | null>(null);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
+  const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
 
   // Load templates from Figma's clientStorage on mount
   useEffect(() => {
@@ -130,7 +138,7 @@ export function App() {
           break;
 
         case 'COMPONENT_INFO':
-          // Successfully captured component
+          // Successfully captured component - including variant data!
           setCapturedComponent({
             name: msg.name,
             key: msg.key,
@@ -138,6 +146,9 @@ export function App() {
             width: msg.width,
             height: msg.height,
             preview: msg.preview,
+            isComponentSet: msg.isComponentSet,
+            variants: msg.variants,
+            variantCount: msg.variantCount,
           });
           setFormName(msg.name); // Set editable name
           setAddStep('configure');
@@ -218,7 +229,7 @@ export function App() {
       cloudId: formCloud,
       preview: capturedComponent.preview,
       isComponentSet: capturedComponent.isComponentSet,
-      variantProperties: capturedComponent.variantProperties,
+      variants: capturedComponent.variants,
       variantCount: capturedComponent.variantCount,
     };
 
@@ -238,19 +249,48 @@ export function App() {
   // Insert template to canvas
   function insertTemplate(template: Template) {
     setInsertingId(template.id);
-    const variantSelection = selectedVariants[template.id] || {};
-    parent.postMessage({
-      pluginMessage: {
-        type: 'IMPORT_COMPONENT',
-        payload: { 
-          templateId: template.id, 
-          templateName: template.name, 
-          componentKey: template.componentKey,
-          isComponentSet: template.isComponentSet,
-          variantSelection: variantSelection,
+    
+    // Get selected slides for multi-select mode
+    const selected = selectedSlides[template.id] || [];
+    
+    // If it's a component set with variants
+    if (template.isComponentSet && template.variants && template.variants.length > 0) {
+      // If no slides selected, use first one
+      const keysToInsert = selected.length > 0 
+        ? selected 
+        : [template.variants[0].key];
+      
+      // Get display names for notification
+      const slideNames = keysToInsert.map(key => {
+        const variant = template.variants?.find(v => v.key === key);
+        return variant?.displayName || key;
+      });
+      
+      // Send message to insert all selected slides
+      parent.postMessage({
+        pluginMessage: {
+          type: 'IMPORT_MULTIPLE_COMPONENTS',
+          payload: { 
+            templateId: template.id, 
+            templateName: template.name, 
+            componentKeys: keysToInsert,
+            slideNames: slideNames,
+          },
         },
-      },
-    }, '*');
+      }, '*');
+    } else {
+      // Simple single component insert
+      parent.postMessage({
+        pluginMessage: {
+          type: 'IMPORT_COMPONENT',
+          payload: { 
+            templateId: template.id, 
+            templateName: template.name, 
+            componentKey: template.componentKey,
+          },
+        },
+      }, '*');
+    }
   }
 
   // Toggle variant panel
@@ -266,6 +306,36 @@ export function App() {
         ...(prev[templateId] || {}),
         [property]: value,
       }
+    }));
+  }
+
+  // Toggle slide selection for multi-select
+  function toggleSlideSelection(templateId: string, slideName: string) {
+    setSelectedSlides(prev => {
+      const current = prev[templateId] || [];
+      const isSelected = current.includes(slideName);
+      return {
+        ...prev,
+        [templateId]: isSelected 
+          ? current.filter(s => s !== slideName)
+          : [...current, slideName],
+      };
+    });
+  }
+
+  // Select all slides for a template
+  function selectAllSlides(templateId: string, allSlides: string[]) {
+    setSelectedSlides(prev => ({
+      ...prev,
+      [templateId]: [...allSlides],
+    }));
+  }
+
+  // Deselect all slides
+  function deselectAllSlides(templateId: string) {
+    setSelectedSlides(prev => ({
+      ...prev,
+      [templateId]: [],
     }));
   }
 
@@ -484,46 +554,74 @@ export function App() {
                   {cloud && <img src={cloud.icon} alt={cloud.name} className="template-item__icon" />}
                   <span className="template-item__title">{template.name}</span>
                   <span className="template-item__size">{template.size.width}×{template.size.height}</span>
-                  {template.isComponentSet && (
-                    <button 
-                      className={`template-item__variants-toggle ${expandedTemplate === template.id ? 'is-expanded' : ''}`}
-                      onClick={() => toggleVariantPanel(template.id)}
-                      title="Show variants"
-                    >
-                      <Badge variant="info" size="small">{template.variantCount}</Badge>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7 10l5 5 5-5z"/>
-                      </svg>
-                    </button>
-                  )}
                   <button className="template-item__delete" onClick={() => deleteTemplate(template.id)}>×</button>
                 </div>
-
-                {/* Variant Selector Panel */}
-                {template.isComponentSet && expandedTemplate === template.id && template.variantProperties && (
-                  <div className="variant-selector">
-                    {Object.entries(template.variantProperties).map(([prop, values]) => (
-                      <div key={prop} className="variant-selector__row">
-                        <label className="variant-selector__label">{prop}</label>
-                        <select 
-                          className="variant-selector__select"
-                          value={selectedVariants[template.id]?.[prop] || values[0]}
-                          onChange={(e) => updateVariantSelection(template.id, prop, e.target.value)}
-                        >
-                          {values.map(val => (
-                            <option key={val} value={val}>{val}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                )}
 
                 {template.preview && (
                   <div className="template-item__preview">
                     <img src={template.preview} alt={template.name} />
                   </div>
                 )}
+
+                {/* Variant Grid - Visual slide selector */}
+                {template.isComponentSet && template.variants && template.variants.length > 1 && (() => {
+                  const selected = selectedSlides[template.id] || [];
+                  const allSelected = selected.length === template.variants.length;
+                  
+                  return (
+                    <div className="variant-grid">
+                      <div className="variant-grid__header">
+                        <span className="variant-grid__title">
+                          {selected.length > 0 ? `${selected.length} selected` : 'Click to select'}
+                        </span>
+                        <button 
+                          className="variant-grid__toggle-all"
+                          onClick={() => allSelected 
+                            ? deselectAllSlides(template.id) 
+                            : selectAllSlides(template.id, template.variants!.map(v => v.key))
+                          }
+                        >
+                          {allSelected ? 'Clear' : 'Select All'}
+                        </button>
+                      </div>
+                      <div className="variant-grid__items">
+                        {template.variants.map(variant => {
+                          const isSelected = selected.includes(variant.key);
+                          return (
+                            <div 
+                              key={variant.key}
+                              className={`variant-grid__item ${isSelected ? 'is-selected' : ''}`}
+                              onClick={() => toggleSlideSelection(template.id, variant.key)}
+                            >
+                              {variant.preview ? (
+                                <img 
+                                  src={variant.preview} 
+                                  alt={variant.displayName}
+                                  className="variant-grid__thumb"
+                                />
+                              ) : (
+                                <div className="variant-grid__thumb variant-grid__thumb--empty">
+                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                                  </svg>
+                                </div>
+                              )}
+                              <span className="variant-grid__name">{variant.displayName}</span>
+                              {isSelected && (
+                                <div className="variant-grid__check">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="template-item__footer">
                   <p className="template-item__desc">{template.description}</p>
                   <Button 

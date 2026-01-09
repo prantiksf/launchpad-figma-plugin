@@ -68,20 +68,52 @@ figma.ui.onmessage = async (msg) => {
     if (node.type === 'COMPONENT_SET') {
       const preview = await generatePreview(node);
       
-      // Extract variant properties
-      const variantProperties: Record<string, string[]> = {};
-      if (node.componentPropertyDefinitions) {
-        for (const [key, def] of Object.entries(node.componentPropertyDefinitions)) {
-          if (def.type === 'VARIANT') {
-            variantProperties[key] = def.variantOptions || [];
+      // Build variants array with individual previews
+      const variants: Array<{
+        name: string;
+        displayName: string;
+        key: string;
+        preview: string | null;
+      }> = [];
+      
+      figma.notify(`Capturing ${node.children.length} slides...`);
+      
+      // Generate preview for each variant
+      for (const child of node.children) {
+        if (child.type === 'COMPONENT') {
+          // Extract display name (remove property prefix like "Slides=")
+          let displayName = child.name;
+          const eqIndex = child.name.indexOf('=');
+          if (eqIndex > 0) {
+            displayName = child.name.substring(eqIndex + 1).trim();
           }
+          
+          // Generate individual preview (smaller for grid)
+          let variantPreview: string | null = null;
+          try {
+            const bytes = await child.exportAsync({
+              format: 'PNG',
+              constraint: { type: 'WIDTH', value: 300 }
+            });
+            variantPreview = `data:image/png;base64,${figma.base64Encode(bytes)}`;
+          } catch {
+            // Skip preview if it fails
+          }
+          
+          variants.push({
+            name: child.name,
+            displayName: displayName,
+            key: child.key,
+            preview: variantPreview,
+          });
         }
       }
       
       // Get default variant (first child)
       const defaultVariant = node.children[0] as ComponentNode;
       
-      figma.notify(`✓ Found component set: ${node.name}`);
+      figma.notify(`✓ ${node.name}: ${variants.length} slides captured`);
+      
       figma.ui.postMessage({
         type: 'COMPONENT_INFO',
         name: node.name,
@@ -91,8 +123,8 @@ figma.ui.onmessage = async (msg) => {
         height: node.height,
         preview: preview,
         isComponentSet: true,
-        variantProperties: variantProperties,
-        variantCount: node.children.length,
+        variants: variants,
+        variantCount: variants.length,
       });
       return;
     }
@@ -198,6 +230,50 @@ figma.ui.onmessage = async (msg) => {
     } catch (error) {
       figma.notify('⚠️ Failed to import template', { error: true });
       figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'Failed to import template' });
+    }
+    return;
+  }
+
+  // ============ IMPORT MULTIPLE COMPONENTS ============
+  if (msg.type === 'IMPORT_MULTIPLE_COMPONENTS') {
+    const { templateName, componentKeys, slideNames } = msg.payload;
+    
+    try {
+      const instances: InstanceNode[] = [];
+      const center = figma.viewport.center;
+      let xOffset = 0;
+      
+      for (let i = 0; i < componentKeys.length; i++) {
+        const key = componentKeys[i];
+        try {
+          const component = await figma.importComponentByKeyAsync(key);
+          const instance = component.createInstance();
+          
+          // Position side by side with spacing
+          instance.x = center.x - (componentKeys.length * instance.width / 2) + xOffset;
+          instance.y = center.y - instance.height / 2;
+          xOffset += instance.width + 40; // 40px gap between slides
+          
+          figma.currentPage.appendChild(instance);
+          instances.push(instance);
+        } catch {
+          console.error(`Failed to import component ${key}`);
+        }
+      }
+      
+      if (instances.length > 0) {
+        figma.currentPage.selection = instances;
+        figma.viewport.scrollAndZoomIntoView(instances);
+        figma.notify(`✓ Inserted ${instances.length} slide${instances.length !== 1 ? 's' : ''} from "${templateName}"`);
+        figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, count: instances.length });
+      } else {
+        figma.notify('⚠️ No slides could be imported', { error: true });
+        figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'No slides could be imported' });
+      }
+      
+    } catch (error) {
+      figma.notify('⚠️ Failed to import templates', { error: true });
+      figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'Failed to import templates' });
     }
     return;
   }
