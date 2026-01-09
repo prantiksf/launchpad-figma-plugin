@@ -563,7 +563,8 @@ export function App() {
                   <button className="template-item__delete" onClick={() => deleteTemplate(template.id)}>×</button>
                 </div>
 
-                {template.preview && (
+                {/* Only show main preview for single components, not component sets */}
+                {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
                   <div className="template-item__preview">
                     <img src={template.preview} alt={template.name} />
                   </div>
