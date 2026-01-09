@@ -256,11 +256,17 @@ export function App() {
     // If it's a component set with variants
     if (template.isComponentSet && template.variants && template.variants.length > 0) {
       // If no slides selected, use first one
-      const keysToInsert = selected.length > 0 
+      let keysToInsert = selected.length > 0 
         ? selected 
         : [template.variants[0].key];
       
-      // Get display names for notification
+      // Sort by original order in component set (not selection order)
+      const originalOrder = template.variants.map(v => v.key);
+      keysToInsert = keysToInsert.sort((a, b) => {
+        return originalOrder.indexOf(a) - originalOrder.indexOf(b);
+      });
+      
+      // Get display names for notification (also in order)
       const slideNames = keysToInsert.map(key => {
         const variant = template.variants?.find(v => v.key === key);
         return variant?.displayName || key;
