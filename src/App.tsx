@@ -23,6 +23,7 @@ import MarketingCloudIcon from './assets/MarketingCloud-icon.png';
 import CommerceCloudIcon from './assets/CommerceCloud-icon.png';
 import RevenueCloudIcon from './assets/RevenueCloud-icon.png';
 import FieldServiceCloudIcon from './assets/FieldServiceCloud-icon.png';
+import GoogleSlideIcon from './assets/googleslide-icon.svg';
 
 // ============ CONSTANTS ============
 const clouds = [
@@ -76,6 +77,7 @@ interface Template {
   isComponentSet?: boolean;
   variants?: VariantInfo[];
   variantCount?: number;
+  googleSlideLink?: string;
 }
 
 interface ComponentInfo {
@@ -119,6 +121,7 @@ export function App() {
   const [formCloud, setFormCloud] = useState('sales');
   const [formCategory, setFormCategory] = useState('components');
   const [formDescription, setFormDescription] = useState('');
+  const [formGoogleSlideLink, setFormGoogleSlideLink] = useState('');
 
   // ============ MESSAGE HANDLER ============
   useEffect(() => {
@@ -202,6 +205,7 @@ export function App() {
     setFormCloud('sales');
     setFormCategory('components');
     setFormDescription('');
+    setFormGoogleSlideLink('');
   }
 
   // Go back to home
@@ -232,6 +236,7 @@ export function App() {
       isComponentSet: capturedComponent.isComponentSet,
       variants: capturedComponent.variants,
       variantCount: capturedComponent.variantCount,
+      googleSlideLink: formGoogleSlideLink || undefined,
     };
 
     const updated = [...templates, newTemplate];
@@ -550,6 +555,18 @@ export function App() {
                       onChange={(e) => setFormDescription(e.target.value)}
                     />
                   </div>
+
+                  <div className="form-field">
+                    <div className="google-slide-input">
+                      <img src={GoogleSlideIcon} alt="Google Slides" className="google-slide-input__icon" />
+                      <Input
+                        label="Google Slides Link"
+                        placeholder="https://docs.google.com/presentation/..."
+                        value={formGoogleSlideLink}
+                        onChange={(e) => setFormGoogleSlideLink(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </CardContent>
                 <CardFooter>
                   <Button variant="neutral" onClick={() => setAddStep('instructions')}>Cancel</Button>
@@ -579,7 +596,19 @@ export function App() {
                 <div className="template-item__header">
                   {cloud && <img src={cloud.icon} alt={cloud.name} className="template-item__icon" />}
                   <span className="template-item__title">{template.name}</span>
-                  <span className="template-item__size">{template.size.width}×{template.size.height}</span>
+                  {template.googleSlideLink ? (
+                    <a 
+                      href={template.googleSlideLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="template-item__slide-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <img src={GoogleSlideIcon} alt="Google Slides" />
+                    </a>
+                  ) : (
+                    <span className="template-item__size">{template.size.width}×{template.size.height}</span>
+                  )}
                   <button className="template-item__delete" onClick={() => deleteTemplate(template.id)}>×</button>
                 </div>
 
