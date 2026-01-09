@@ -65,7 +65,10 @@ interface Template {
   componentKey: string;
   size: { width: number; height: number };
   cloudId: string;
-  preview?: string; // Base64 preview image
+  preview?: string;
+  isComponentSet?: boolean;
+  variantProperties?: Record<string, string[]>;
+  variantCount?: number;
 }
 
 interface ComponentInfo {
@@ -92,6 +95,8 @@ export function App() {
   const [selectedClouds, setSelectedClouds] = useState<string[]>(['sales']);
   const [activeCategory, setActiveCategory] = useState('all');
   const [insertingId, setInsertingId] = useState<string | null>(null);
+  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
 
   // Load templates from Figma's clientStorage on mount
   useEffect(() => {
@@ -212,6 +217,9 @@ export function App() {
       size: { width: Math.round(capturedComponent.width), height: Math.round(capturedComponent.height) },
       cloudId: formCloud,
       preview: capturedComponent.preview,
+      isComponentSet: capturedComponent.isComponentSet,
+      variantProperties: capturedComponent.variantProperties,
+      variantCount: capturedComponent.variantCount,
     };
 
     const updated = [...templates, newTemplate];
@@ -230,12 +238,35 @@ export function App() {
   // Insert template to canvas
   function insertTemplate(template: Template) {
     setInsertingId(template.id);
+    const variantSelection = selectedVariants[template.id] || {};
     parent.postMessage({
       pluginMessage: {
         type: 'IMPORT_COMPONENT',
-        payload: { templateId: template.id, templateName: template.name, componentKey: template.componentKey },
+        payload: { 
+          templateId: template.id, 
+          templateName: template.name, 
+          componentKey: template.componentKey,
+          isComponentSet: template.isComponentSet,
+          variantSelection: variantSelection,
+        },
       },
     }, '*');
+  }
+
+  // Toggle variant panel
+  function toggleVariantPanel(templateId: string) {
+    setExpandedTemplate(prev => prev === templateId ? null : templateId);
+  }
+
+  // Update variant selection
+  function updateVariantSelection(templateId: string, property: string, value: string) {
+    setSelectedVariants(prev => ({
+      ...prev,
+      [templateId]: {
+        ...(prev[templateId] || {}),
+        [property]: value,
+      }
+    }));
   }
 
   // Delete template
@@ -453,8 +484,41 @@ export function App() {
                   {cloud && <img src={cloud.icon} alt={cloud.name} className="template-item__icon" />}
                   <span className="template-item__title">{template.name}</span>
                   <span className="template-item__size">{template.size.width}×{template.size.height}</span>
+                  {template.isComponentSet && (
+                    <button 
+                      className={`template-item__variants-toggle ${expandedTemplate === template.id ? 'is-expanded' : ''}`}
+                      onClick={() => toggleVariantPanel(template.id)}
+                      title="Show variants"
+                    >
+                      <Badge variant="info" size="small">{template.variantCount}</Badge>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7 10l5 5 5-5z"/>
+                      </svg>
+                    </button>
+                  )}
                   <button className="template-item__delete" onClick={() => deleteTemplate(template.id)}>×</button>
                 </div>
+
+                {/* Variant Selector Panel */}
+                {template.isComponentSet && expandedTemplate === template.id && template.variantProperties && (
+                  <div className="variant-selector">
+                    {Object.entries(template.variantProperties).map(([prop, values]) => (
+                      <div key={prop} className="variant-selector__row">
+                        <label className="variant-selector__label">{prop}</label>
+                        <select 
+                          className="variant-selector__select"
+                          value={selectedVariants[template.id]?.[prop] || values[0]}
+                          onChange={(e) => updateVariantSelection(template.id, prop, e.target.value)}
+                        >
+                          {values.map(val => (
+                            <option key={val} value={val}>{val}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {template.preview && (
                   <div className="template-item__preview">
                     <img src={template.preview} alt={template.name} />

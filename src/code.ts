@@ -144,11 +144,45 @@ figma.ui.onmessage = async (msg) => {
 
   // ============ IMPORT COMPONENT ============
   if (msg.type === 'IMPORT_COMPONENT') {
-    const { templateName, componentKey } = msg.payload;
+    const { templateName, componentKey, isComponentSet, variantSelection } = msg.payload;
     
     try {
       const component = await figma.importComponentByKeyAsync(componentKey);
-      const instance = component.createInstance();
+      let instance: InstanceNode;
+      
+      if (isComponentSet && variantSelection && Object.keys(variantSelection).length > 0) {
+        // For component sets, find the matching variant
+        const parent = component.parent;
+        if (parent && parent.type === 'COMPONENT_SET') {
+          // Build variant name from selection
+          const variantProps = Object.entries(variantSelection)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(', ');
+          
+          // Find matching child component
+          const matchingVariant = parent.children.find(child => {
+            if (child.type !== 'COMPONENT') return false;
+            return Object.entries(variantSelection).every(([key, value]) => {
+              const propValue = (child as ComponentNode).variantProperties?.[key];
+              return propValue === value;
+            });
+          }) as ComponentNode | undefined;
+          
+          if (matchingVariant) {
+            instance = matchingVariant.createInstance();
+            figma.notify(`✓ Inserted "${templateName}" (${variantProps})`);
+          } else {
+            instance = component.createInstance();
+            figma.notify(`✓ Inserted "${templateName}" (default variant)`);
+          }
+        } else {
+          instance = component.createInstance();
+          figma.notify(`✓ Inserted "${templateName}"`);
+        }
+      } else {
+        instance = component.createInstance();
+        figma.notify(`✓ Inserted "${templateName}"`);
+      }
       
       // Position at viewport center
       const center = figma.viewport.center;
@@ -159,7 +193,6 @@ figma.ui.onmessage = async (msg) => {
       figma.currentPage.selection = [instance];
       figma.viewport.scrollAndZoomIntoView([instance]);
       
-      figma.notify(`✓ Inserted "${templateName}"`);
       figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, nodeId: instance.id });
       
     } catch (error) {

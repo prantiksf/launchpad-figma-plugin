@@ -786,6 +786,59 @@
       margin-left: 12px;
     }
 
+    /* ===== VARIANT TOGGLE & SELECTOR ===== */
+    .template-item__variants-toggle {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 2px;
+      color: var(--slds-g-color-neutral-base-50);
+      transition: all 0.15s;
+    }
+    .template-item__variants-toggle:hover { color: var(--slds-g-color-brand-base-50); }
+    .template-item__variants-toggle svg { transition: transform 0.2s; }
+    .template-item__variants-toggle.is-expanded svg { transform: rotate(180deg); }
+    
+    .variant-selector {
+      background: var(--slds-g-color-neutral-base-95);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .variant-selector__row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+    .variant-selector__row:not(:last-child) {
+      border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+    }
+    .variant-selector__label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--slds-g-color-neutral-base-30);
+    }
+    .variant-selector__select {
+      font-size: 11px;
+      padding: 4px 24px 4px 8px;
+      border: 1px solid var(--slds-g-color-neutral-base-80);
+      border-radius: 4px;
+      background: var(--slds-g-color-neutral-base-100) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%23666'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E") no-repeat right 4px center;
+      appearance: none;
+      cursor: pointer;
+      min-width: 100px;
+    }
+    .variant-selector__select:hover { border-color: var(--slds-g-color-brand-base-50); }
+    .variant-selector__select:focus { 
+      outline: none;
+      border-color: var(--slds-g-color-brand-base-50);
+      box-shadow: 0 0 0 1px var(--slds-g-color-brand-base-50);
+    }
+
     /* ===== FOOTER ===== */
     .app-footer {
       display: flex;
