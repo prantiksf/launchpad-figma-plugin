@@ -68,12 +68,24 @@ figma.ui.onmessage = async (msg) => {
     if (node.type === 'COMPONENT_SET') {
       const preview = await generatePreview(node);
       
+      // Get the correct order from variant property definitions
+      let variantOrder: string[] = [];
+      if (node.componentPropertyDefinitions) {
+        for (const [key, def] of Object.entries(node.componentPropertyDefinitions)) {
+          if (def.type === 'VARIANT' && def.variantOptions) {
+            variantOrder = def.variantOptions;
+            break; // Use the first variant property's order
+          }
+        }
+      }
+      
       // Build variants array with individual previews
       const variants: Array<{
         name: string;
         displayName: string;
         key: string;
         preview: string | null;
+        orderIndex: number;
       }> = [];
       
       figma.notify(`Capturing ${node.children.length} slides...`);
@@ -87,6 +99,9 @@ figma.ui.onmessage = async (msg) => {
           if (eqIndex > 0) {
             displayName = child.name.substring(eqIndex + 1).trim();
           }
+          
+          // Find order index from variant property definition
+          const orderIndex = variantOrder.indexOf(displayName);
           
           // Generate individual preview (smaller for grid)
           let variantPreview: string | null = null;
@@ -105,9 +120,13 @@ figma.ui.onmessage = async (msg) => {
             displayName: displayName,
             key: child.key,
             preview: variantPreview,
+            orderIndex: orderIndex >= 0 ? orderIndex : 999,
           });
         }
       }
+      
+      // Sort variants by the order defined in Figma's variant property
+      variants.sort((a, b) => a.orderIndex - b.orderIndex);
       
       // Get default variant (first child)
       const defaultVariant = node.children[0] as ComponentNode;
