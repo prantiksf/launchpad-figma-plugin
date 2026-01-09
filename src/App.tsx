@@ -219,8 +219,9 @@ export function App() {
   function saveTemplate() {
     if (!capturedComponent) return;
 
+    const newTemplateId = `t-${Date.now()}`;
     const newTemplate: Template = {
-      id: `t-${Date.now()}`,
+      id: newTemplateId,
       name: formName || capturedComponent.name,
       category: formCategory,
       description: formDescription || `${categoryLabels[formCategory]} for ${clouds.find(c => c.id === formCloud)?.name} Cloud`,
@@ -237,6 +238,25 @@ export function App() {
     
     // Update local state
     setTemplates(updated);
+    
+    // Navigate to the template's category tab
+    setActiveCategory(formCategory);
+    
+    // Make sure the cloud filter includes the template's cloud
+    if (!selectedClouds.includes(formCloud)) {
+      setSelectedClouds([...selectedClouds, formCloud]);
+    }
+    
+    // Scroll to the new template after render
+    setTimeout(() => {
+      const element = document.getElementById(`template-${newTemplateId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Brief highlight effect
+        element.classList.add('template-item--highlight');
+        setTimeout(() => element.classList.remove('template-item--highlight'), 2000);
+      }
+    }, 100);
     
     // Save to Figma's clientStorage
     parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
@@ -555,7 +575,7 @@ export function App() {
           filteredTemplates.map(template => {
             const cloud = clouds.find(c => c.id === template.cloudId);
             return (
-              <div key={template.id} className="template-item">
+              <div key={template.id} id={`template-${template.id}`} className="template-item">
                 <div className="template-item__header">
                   {cloud && <img src={cloud.icon} alt={cloud.name} className="template-item__icon" />}
                   <span className="template-item__title">{template.name}</span>

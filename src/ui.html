@@ -692,6 +692,14 @@
       align-items: center;
       gap: 8px;
     }
+    .template-item--highlight {
+      animation: highlightPulse 2s ease-out;
+      border-radius: 8px;
+    }
+    @keyframes highlightPulse {
+      0% { box-shadow: 0 0 0 4px var(--slds-g-color-brand-base-50); }
+      100% { box-shadow: none; }
+    }
     .template-item__desc {
       flex: 1;
       font-size: 11px;
