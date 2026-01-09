@@ -640,7 +640,12 @@ export function App() {
                           {allSelected ? 'Clear' : 'Select All'}
                         </button>
                       </div>
-                      <div className="variant-grid__items">
+                      <div className={`variant-grid__items variant-grid__items--${
+                        template.variants.length === 1 ? 'single' :
+                        template.variants.length === 2 ? 'duo' :
+                        template.variants.length === 4 ? 'quad' :
+                        'default'
+                      }`}>
                         {template.variants.map(variant => {
                           const isSelected = selected.includes(variant.key);
                           return (
