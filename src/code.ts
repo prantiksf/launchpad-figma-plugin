@@ -261,9 +261,11 @@ figma.ui.onmessage = async (msg) => {
       const instances: InstanceNode[] = [];
       const center = figma.viewport.center;
       let xOffset = 0;
+      const errors: string[] = [];
       
       for (let i = 0; i < componentKeys.length; i++) {
         const key = componentKeys[i];
+        const slideName = slideNames?.[i] || `Slide ${i + 1}`;
         try {
           const component = await figma.importComponentByKeyAsync(key);
           const instance = component.createInstance();
@@ -275,23 +277,28 @@ figma.ui.onmessage = async (msg) => {
           
           figma.currentPage.appendChild(instance);
           instances.push(instance);
-        } catch {
-          console.error(`Failed to import component ${key}`);
+        } catch (err) {
+          console.error(`Failed to import "${slideName}" with key ${key}:`, err);
+          errors.push(slideName);
         }
       }
       
       if (instances.length > 0) {
         figma.currentPage.selection = instances;
         figma.viewport.scrollAndZoomIntoView(instances);
-        figma.notify(`✓ Inserted ${instances.length} slide${instances.length !== 1 ? 's' : ''} from "${templateName}"`);
+        if (errors.length > 0) {
+          figma.notify(`✓ Inserted ${instances.length} slide${instances.length !== 1 ? 's' : ''}, ${errors.length} failed`);
+        } else {
+          figma.notify(`✓ Inserted ${instances.length} slide${instances.length !== 1 ? 's' : ''} from "${templateName}"`);
+        }
         figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, count: instances.length });
       } else {
-        figma.notify('⚠️ No slides could be imported', { error: true });
-        figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'No slides could be imported' });
+        figma.notify('⚠️ Component not published to Team Library. Please publish first.', { error: true, timeout: 5000 });
+        figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'Component not in Team Library' });
       }
       
     } catch (error) {
-      figma.notify('⚠️ Failed to import templates', { error: true });
+      figma.notify('⚠️ Failed to import - ensure component is published', { error: true });
       figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'Failed to import templates' });
     }
     return;
