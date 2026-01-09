@@ -271,7 +271,7 @@ figma.ui.onmessage = async (msg) => {
           // Position side by side with spacing
           instance.x = center.x - (componentKeys.length * instance.width / 2) + xOffset;
           instance.y = center.y - instance.height / 2;
-          xOffset += instance.width + 40; // 40px gap between slides
+          xOffset += instance.width + 201; // 201px gap between slides
           
           figma.currentPage.appendChild(instance);
           instances.push(instance);
