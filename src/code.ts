@@ -64,6 +64,39 @@ figma.ui.onmessage = async (msg) => {
     
     const node = selection[0];
     
+    // Handle COMPONENT_SET (component with variants)
+    if (node.type === 'COMPONENT_SET') {
+      const preview = await generatePreview(node);
+      
+      // Extract variant properties
+      const variantProperties: Record<string, string[]> = {};
+      if (node.componentPropertyDefinitions) {
+        for (const [key, def] of Object.entries(node.componentPropertyDefinitions)) {
+          if (def.type === 'VARIANT') {
+            variantProperties[key] = def.variantOptions || [];
+          }
+        }
+      }
+      
+      // Get default variant (first child)
+      const defaultVariant = node.children[0] as ComponentNode;
+      
+      figma.notify(`✓ Found component set: ${node.name}`);
+      figma.ui.postMessage({
+        type: 'COMPONENT_INFO',
+        name: node.name,
+        key: defaultVariant?.key || '',
+        id: node.id,
+        width: node.width,
+        height: node.height,
+        preview: preview,
+        isComponentSet: true,
+        variantProperties: variantProperties,
+        variantCount: node.children.length,
+      });
+      return;
+    }
+
     // Handle COMPONENT
     if (node.type === 'COMPONENT') {
       const preview = await generatePreview(node);
@@ -76,6 +109,7 @@ figma.ui.onmessage = async (msg) => {
         width: node.width,
         height: node.height,
         preview: preview,
+        isComponentSet: false,
       });
       return;
     }

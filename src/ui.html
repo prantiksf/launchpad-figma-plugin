@@ -749,6 +749,43 @@
       color: var(--slds-g-color-neutral-base-60);
     }
 
+    /* ===== VARIANT PROPERTIES ===== */
+    .frame-info__meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .frame-info__size {
+      font-size: 11px;
+      color: var(--slds-g-color-neutral-base-50);
+    }
+    .variant-props {
+      background: var(--slds-g-color-neutral-base-95);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .variant-prop {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+    }
+    .variant-prop:last-child { border-bottom: none; }
+    .variant-prop__name {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--slds-g-color-neutral-base-30);
+      flex-shrink: 0;
+    }
+    .variant-prop__values {
+      font-size: 11px;
+      color: var(--slds-g-color-neutral-base-50);
+      text-align: right;
+      margin-left: 12px;
+    }
+
     /* ===== FOOTER ===== */
     .app-footer {
       display: flex;

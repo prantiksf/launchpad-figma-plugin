@@ -74,7 +74,10 @@ interface ComponentInfo {
   id: string;
   width: number;
   height: number;
-  preview?: string; // Base64 preview image
+  preview?: string;
+  isComponentSet?: boolean;
+  variantProperties?: Record<string, string[]>;
+  variantCount?: number;
 }
 
 // ============ STORAGE ============
@@ -360,11 +363,28 @@ export function App() {
                       value={formName} 
                       onChange={(e) => setFormName(e.target.value)} 
                     />
-                    <div className="frame-info__size">
-                      <span className="frame-info__size-label">Size detected</span>
-                      <span className="frame-info__size-value">{Math.round(capturedComponent.width)} × {Math.round(capturedComponent.height)}</span>
+                    <div className="frame-info__meta">
+                      <span className="frame-info__size">{Math.round(capturedComponent.width)} × {Math.round(capturedComponent.height)}</span>
+                      {capturedComponent.isComponentSet && (
+                        <Badge variant="info" size="small">{capturedComponent.variantCount} variants</Badge>
+                      )}
                     </div>
                   </div>
+
+                  {/* Show variant properties if component set */}
+                  {capturedComponent.isComponentSet && capturedComponent.variantProperties && (
+                    <div className="form-field">
+                      <label className="form-field__label">Properties</label>
+                      <div className="variant-props">
+                        {Object.entries(capturedComponent.variantProperties).map(([prop, values]) => (
+                          <div key={prop} className="variant-prop">
+                            <span className="variant-prop__name">{prop}</span>
+                            <span className="variant-prop__values">{values.join(', ')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="form-field">
                     <label className="form-field__label">Select Cloud</label>
