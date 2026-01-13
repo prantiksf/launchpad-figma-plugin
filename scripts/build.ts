@@ -26,7 +26,7 @@ async function copyHtml(): Promise<void> {
 async function buildAll(mode: Mode): Promise<void> {
   const isDev = mode === 'development';
 
-  // 1) Build UI first
+  // 1) Build UI first (with CSS bundled)
   await build({
     entryPoints: [join(ROOT, 'src/ui.tsx')],
     bundle: true,
@@ -36,18 +36,36 @@ async function buildAll(mode: Mode): Promise<void> {
     sourcemap: isDev,
     minify: !isDev,
     legalComments: 'none',
-    loader: { '.png': 'dataurl', '.svg': 'dataurl' },
+    loader: { 
+      '.png': 'dataurl', 
+      '.svg': 'dataurl',
+      '.css': 'css',
+    },
     define: {
       'process.env.NODE_ENV': JSON.stringify(mode),
     },
   });
 
+  // 1b) Build CSS separately
+  await build({
+    entryPoints: [join(ROOT, 'src/styles/globals.css')],
+    bundle: true,
+    outfile: join(ROOT, 'dist/ui.css'),
+    minify: !isDev,
+  });
+
   // 2) Copy ui.html to dist
   await copyHtml();
 
-  // 3) Inline ui.js safely via base64 to avoid </script> parse issues
+  // 3) Inline ui.js and ui.css safely
   const srcHtml = readFileSync(join(ROOT, 'src', 'ui.html'), 'utf8');
   const uiJs = readFileSync(join(ROOT, 'dist', 'ui.js'), 'utf8');
+  const uiCss = readFileSync(join(ROOT, 'dist', 'ui.css'), 'utf8');
+  
+  // Inline CSS
+  const cssTag = `<style>${uiCss}</style>`;
+  
+  // Inline JS via base64 to avoid </script> parse issues
   const uiB64 = Buffer.from(uiJs, 'utf8').toString('base64');
   const loader = [
     '<script>(function(){try{',
@@ -65,7 +83,10 @@ async function buildAll(mode: Mode): Promise<void> {
     'document.body.appendChild(pre);',
     '}})();</script>',
   ].join('');
-  const inlineHtml = srcHtml.replace(/<script\s+src=["']ui\.js["']><\/script>/, loader);
+  
+  // Insert CSS before </head> and JS before </body>
+  let inlineHtml = srcHtml.replace('</head>', `${cssTag}</head>`);
+  inlineHtml = inlineHtml.replace(/<script\s+src=["']ui\.js["']><\/script>/, loader);
 
   // 4) Build controller with __html__ defined at build time
   await build({
