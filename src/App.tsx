@@ -450,7 +450,7 @@ export function App() {
           </div>
         </div>
 
-            <Tabs defaultTab="all" activeTab={activeCategory} onTabChange={setActiveCategory} variant="default">
+            <Tabs defaultTab="all" activeTab={activeCategory} onTabChange={setActiveCategory} variant="pills">
               <TabList>
                 {categories.map(cat => (
                   <Tab key={cat.id} id={cat.id}>{cat.label}</Tab>
