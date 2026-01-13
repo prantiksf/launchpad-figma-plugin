@@ -328,11 +328,22 @@ figma.ui.onmessage = async (msg) => {
         return;
       }
       
-      // Rename existing "Page 1" to "Cover Page"
-      const coverPage = figma.root.children.find(p => p.name === 'Page 1');
-      if (coverPage) {
-        coverPage.name = 'Cover Page';
+      // Rename existing "Page 1" to "Cover Page" or use first page
+      let coverPage: PageNode | null = null;
+      const page1 = figma.root.children.find(p => p.name === 'Page 1') as PageNode | undefined;
+      
+      if (page1) {
+        page1.name = 'Cover Page';
+        coverPage = page1;
+      } else {
+        // Use the first page if no "Page 1" exists
+        coverPage = figma.root.children[0] as PageNode;
+        if (coverPage) {
+          coverPage.name = 'Cover Page';
+        }
       }
+      
+      console.log('Cover page after setup:', coverPage?.name);
       
       // Try to insert default cover from saved templates
       const coverComponentKey = msg.coverComponentKey;
