@@ -304,78 +304,90 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
+  // ============ CHECK SCAFFOLD EXISTS ============
+  if (msg.type === 'CHECK_SCAFFOLD_EXISTS') {
+    // Check if scaffold pages already exist by looking for "CURRENT DESIGNS" page
+    const exists = figma.root.children.some(page => 
+      page.name.includes('CURRENT DESIGNS') || page.name.includes('Read Me')
+    );
+    figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists });
+    return;
+  }
+
   // ============ SCAFFOLD FILE STRUCTURE ============
   if (msg.type === 'SCAFFOLD_FILE_STRUCTURE') {
-    try {
-      // Get current date for placeholders
-      const now = new Date();
-      const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
-      
-      // Define the file structure based on the SCUX Starter Kit pattern
-      const structure = [
-        // Read Me
-        { name: '📖 Read Me', isSection: false },
-        
-        // Divider
-        { name: '───────────────────', isSection: true },
-        
-        // Current Designs Section
-        { name: '📦 CURRENT DESIGNS', isSection: true },
-        { name: '🟡 {Release} {Feature Name}', isSection: false },
-        { name: '🟡 {Release} {Feature Name} • Variation 2', isSection: false },
-        { name: '🟡 {Release} {Feature Name} • Variation 3', isSection: false },
-        
-        // Divider
-        { name: '───────────────────', isSection: true },
-        
-        // Milestones & Demos Section
-        { name: '🎯 MILESTONES + E2E FLOWS/DEMOS', isSection: true },
-        { name: `🟢 ${dateStr}_Product Demo`, isSection: false },
-        { name: `🟢 ${dateStr}_Walkthrough Recording`, isSection: false },
-        { name: `🟢 ${dateStr}_Steelthread Proto`, isSection: false },
-        
-        // Divider
-        { name: '───────────────────', isSection: true },
-        
-        // Archived Explorations Section
-        { name: '📁 ARCHIVED EXPLORATIONS', isSection: true },
-        { name: `${dateStr}_{Exploration Name}`, isSection: false },
-        { name: `${dateStr}_{Exploration Name} 2`, isSection: false },
-        { name: `${dateStr}_{Exploration Name} 3`, isSection: false },
-        
-        // Divider
-        { name: '───────────────────', isSection: true },
-        
-        // Below the Line Section
-        { name: '🗑️ BELOW THE LINE', isSection: true },
-        { name: '❌ {Deprecated Feature}', isSection: false },
-        { name: '❌ {Parked Exploration}', isSection: false },
-        { name: '❌ {Old Version}', isSection: false },
-      ];
-      
-      // Create pages
-      let createdCount = 0;
-      let firstNewPage: PageNode | null = null;
-      
-      for (const item of structure) {
-        const page = figma.createPage();
-        page.name = item.name;
-        if (!firstNewPage) firstNewPage = page;
-        createdCount++;
-      }
-      
-      // Navigate to the first new page (Read Me)
-      if (firstNewPage) {
-        figma.currentPage = firstNewPage;
-      }
-      
-      figma.notify(`✓ Created ${createdCount} pages! Rename placeholders as needed.`, { timeout: 4000 });
-      figma.ui.postMessage({ type: 'SCAFFOLD_SUCCESS', count: createdCount });
-      
-    } catch (error) {
-      figma.notify('⚠️ Failed to create file structure', { error: true });
-      figma.ui.postMessage({ type: 'SCAFFOLD_ERROR', error: String(error) });
+    // Check if scaffold already exists
+    const alreadyExists = figma.root.children.some(page => 
+      page.name.includes('CURRENT DESIGNS') || page.name === 'Read Me'
+    );
+    
+    if (alreadyExists) {
+      figma.notify('⚠️ Scaffold already exists in this file', { error: true });
+      figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists: true });
+      return;
     }
+    
+    // Define the file structure based on the SCUX Starter Kit pattern (no icons, placeholder dates)
+    const structure = [
+      // Cover & Read Me
+      'Cover Page',
+      'Read Me',
+      
+      // Divider
+      '───────────────────',
+      
+      // Current Designs Section
+      'CURRENT DESIGNS',
+      '{Release} {Feature Name}',
+      '{Release} {Feature Name} • Variation 2',
+      '{Release} {Feature Name} • Variation 3',
+      
+      // Divider
+      '───────────────────',
+      
+      // Milestones & Demos Section
+      'MILESTONES + E2E FLOWS/DEMOS',
+      '{YYYY.MM.DD}_Product Demo',
+      '{YYYY.MM.DD}_Walkthrough Recording',
+      '{YYYY.MM.DD}_Steelthread Proto',
+      
+      // Divider
+      '───────────────────',
+      
+      // Archived Explorations Section
+      'ARCHIVED EXPLORATIONS',
+      '{YYYY.MM.DD}_{Exploration Name}',
+      '{YYYY.MM.DD}_{Exploration Name} 2',
+      '{YYYY.MM.DD}_{Exploration Name} 3',
+      
+      // Divider
+      '───────────────────',
+      
+      // Below the Line Section
+      'BELOW THE LINE',
+      '{Deprecated Feature}',
+      '{Parked Exploration}',
+      '{Old Version}',
+    ];
+    
+    // Create pages
+    let createdCount = 0;
+    let firstNewPage: PageNode | null = null;
+    
+    for (const name of structure) {
+      const page = figma.createPage();
+      page.name = name;
+      if (!firstNewPage) firstNewPage = page;
+      createdCount++;
+    }
+    
+    // Navigate to the first new page (Cover Page)
+    if (firstNewPage) {
+      figma.currentPage = firstNewPage;
+    }
+    
+    figma.notify(`✓ Created ${createdCount} pages! Rename placeholders as needed.`, { timeout: 4000 });
+    figma.ui.postMessage({ type: 'SCAFFOLD_SUCCESS', count: createdCount });
     return;
   }
 

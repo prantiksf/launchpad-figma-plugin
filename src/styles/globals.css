@@ -853,6 +853,16 @@ kbd {
   color: var(--slds-g-color-brand-base-40);
 }
 
+.scaffold-exists-notice {
+  font-size: 12px;
+  color: var(--slds-g-color-success-base-40);
+  background: var(--slds-g-color-success-base-90);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+  text-align: center;
+}
+
 /* ============ VARIANT PROPERTIES ============ */
 .variant-props {
   display: flex;

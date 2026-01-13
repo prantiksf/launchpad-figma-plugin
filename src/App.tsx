@@ -106,10 +106,12 @@ export function App() {
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
   const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
   const [isScaffolding, setIsScaffolding] = useState(false);
+  const [scaffoldExists, setScaffoldExists] = useState(false);
 
   // Load templates from Figma's clientStorage on mount
   useEffect(() => {
     parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
   }, []);
 
   // Add template flow
@@ -171,9 +173,15 @@ export function App() {
 
         case 'SCAFFOLD_SUCCESS':
           setIsScaffolding(false);
+          setScaffoldExists(true);
           break;
 
         case 'SCAFFOLD_ERROR':
+          setIsScaffolding(false);
+          break;
+
+        case 'SCAFFOLD_EXISTS':
+          setScaffoldExists(msg.exists);
           setIsScaffolding(false);
           break;
       }
@@ -440,31 +448,33 @@ export function App() {
           <div className="scaffold-section">
             <Card bordered={false} shadow="none">
               <CardContent>
-                <h3 className="step-title">🏗️ Scaffold File Structure</h3>
+                <h3 className="step-title">Scaffold File Structure</h3>
                 <p className="scaffold-desc">
                   Creates a starter kit page structure based on the SCUX pattern:
                 </p>
                 <div className="scaffold-preview">
-                  <div className="scaffold-preview__item">📖 Read Me</div>
+                  <div className="scaffold-preview__item">Cover Page</div>
+                  <div className="scaffold-preview__item">Read Me</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">📦 CURRENT DESIGNS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'}</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'} • Variation 2</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'} • Variation 3</div>
+                  <div className="scaffold-preview__section">CURRENT DESIGNS</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Release}'} {'{Feature Name}'}</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Release}'} {'{Feature Name}'} • Variation 2</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">🎯 MILESTONES + E2E FLOWS/DEMOS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{Date}'}_Product Demo</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{Date}'}_Walkthrough Recording</div>
+                  <div className="scaffold-preview__section">MILESTONES + E2E FLOWS/DEMOS</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_Product Demo</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_Walkthrough Recording</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">📁 ARCHIVED EXPLORATIONS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Date}'}_{'{Exploration Name}'}</div>
+                  <div className="scaffold-preview__section">ARCHIVED EXPLORATIONS</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_{'{Exploration Name}'}</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">🗑️ BELOW THE LINE</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">❌ {'{Deprecated Feature}'}</div>
+                  <div className="scaffold-preview__section">BELOW THE LINE</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Deprecated Feature}'}</div>
                 </div>
-                <p className="scaffold-hint">
-                  <strong>Tip:</strong> Use 🟡 for In Progress, 🟢 for Ready, ❌ for Deprecated
-                </p>
+                {scaffoldExists && (
+                  <p className="scaffold-exists-notice">
+                    ✓ Scaffold already exists in this file
+                  </p>
+                )}
               </CardContent>
               <CardFooter>
                 <Button 
@@ -472,8 +482,9 @@ export function App() {
                   fullWidth 
                   onClick={scaffoldFileStructure}
                   loading={isScaffolding}
+                  disabled={scaffoldExists}
                 >
-                  Create Pages
+                  {scaffoldExists ? 'Already Created' : 'Create Pages'}
                 </Button>
               </CardFooter>
             </Card>
