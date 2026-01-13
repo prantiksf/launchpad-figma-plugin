@@ -749,46 +749,43 @@ kbd {
   justify-content: center;
 }
 
-/* ============ TABS COMPONENT ============ */
-/* Override for tabs in the app */
-[role="tablist"] {
+/* ============ CATEGORY PILLS ============ */
+.category-pills {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--slds-g-color-neutral-base-95);
-  border-radius: 8px;
-  margin: 0 16px 0 16px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px 12px;
 }
 
-[role="tab"] {
+.category-pill {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 500;
   color: var(--slds-g-color-neutral-base-50);
-  background: transparent;
-  border: none;
-  border-radius: 6px;
+  background: var(--slds-g-color-neutral-base-100);
+  border: 1px solid var(--slds-g-color-neutral-base-80);
+  border-radius: 100px;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
-[role="tab"]:hover {
+.category-pill:hover {
+  background: var(--slds-g-color-neutral-base-95);
   color: var(--slds-g-color-neutral-base-30);
 }
 
-[role="tab"][aria-selected="true"] {
-  background: var(--slds-g-color-neutral-base-100);
-  color: var(--slds-g-color-neutral-base-10);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+.category-pill--selected {
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+  border-color: var(--slds-g-color-brand-base-50);
 }
 
-[role="tab"]:focus {
-  outline: none;
+.category-pill--selected:hover {
+  background: var(--slds-g-color-brand-base-40);
+  color: white;
 }
 
 /* ============ APP FOOTER ============ */

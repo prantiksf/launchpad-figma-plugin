@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 
 // Import Design System Components
-import { 
-  Button, 
-  Input, 
+import {
+  Button,
+  Input,
   Card,
   CardContent,
   CardFooter,
-  Badge, 
+  Badge,
   Spinner,
   EmptyState,
-  Tabs,
-  TabList,
-  Tab,
   RadioGroup,
 } from './design-system/components';
 
@@ -41,7 +38,7 @@ const categories = [
   { id: 'components', label: 'Components' },
   { id: 'slides', label: 'Slides' },
   { id: 'resources', label: 'Resources' },
-  { id: 'scaffold', label: '🏗️ Scaffold' },
+  { id: 'scaffold', label: 'Scaffold' },
 ];
 
 const categoryOptions = [
@@ -421,37 +418,19 @@ export function App() {
           </Button>
         </header>
 
-        {/* Filters (only on home) */}
+        {/* Category Pills (only on home) */}
         {view === 'home' && (
-          <>
-            {/* HIDDEN: Cloud filter - uncomment to restore
-            <div className="filters">
-              <span className="filters__label">Clouds</span>
-              <div className="filters__pills">
-                {clouds.map(cloud => (
-                  <button
-                    key={cloud.id}
-                    className={`pill pill--${cloud.id} ${selectedClouds.includes(cloud.id) ? 'pill--selected' : ''}`}
-                    onClick={() => toggleCloud(cloud.id)}
-                  >
-                    <span className="pill__icon">
-                      <img src={cloud.icon} alt={cloud.name} />
-                    </span>
-                    {cloud.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-            */}
-
-            <Tabs defaultTab="all" activeTab={activeCategory} onTabChange={setActiveCategory} variant="pills">
-              <TabList>
-                {categories.map(cat => (
-                  <Tab key={cat.id} id={cat.id}>{cat.label}</Tab>
-                ))}
-              </TabList>
-            </Tabs>
-          </>
+          <div className="category-pills">
+            {categories.map(cat => (
+              <button
+                key={cat.id}
+                className={`category-pill ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
+                onClick={() => setActiveCategory(cat.id)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
         )}
         </div>
 
