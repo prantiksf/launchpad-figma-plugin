@@ -397,20 +397,28 @@ export function App() {
     setIsScaffolding(true);
     
     // Find cover template and get the "Default" variant key
+    // Look for templates in 'cover-pages' category OR with 'cover' in the name
     const coverTemplate = templates.find(t => 
-      t.category === 'cover-pages' && t.isComponentSet && t.variants
+      t.category === 'cover-pages' || t.name.toLowerCase().includes('cover')
     );
     
+    console.log('Found cover template:', coverTemplate?.name, 'category:', coverTemplate?.category);
+    console.log('Has variants:', coverTemplate?.isComponentSet, 'count:', coverTemplate?.variants?.length);
+    
     let coverComponentKey: string | undefined;
-    if (coverTemplate?.variants) {
+    if (coverTemplate?.isComponentSet && coverTemplate?.variants && coverTemplate.variants.length > 0) {
       // Find the "Default" variant
       const defaultVariant = coverTemplate.variants.find(v => 
-        v.displayName.toLowerCase() === 'default' || v.name.toLowerCase().includes('default')
+        v.displayName.toLowerCase() === 'default' || 
+        v.name.toLowerCase().includes('default')
       );
+      console.log('Default variant found:', defaultVariant?.displayName, 'key:', defaultVariant?.key);
       coverComponentKey = defaultVariant?.key || coverTemplate.variants[0]?.key;
+      console.log('Using component key:', coverComponentKey);
     } else if (coverTemplate) {
       // Single component cover
       coverComponentKey = coverTemplate.componentKey;
+      console.log('Using single component key:', coverComponentKey);
     }
     
     parent.postMessage({ 

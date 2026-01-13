@@ -336,20 +336,29 @@ figma.ui.onmessage = async (msg) => {
       
       // Try to insert default cover from saved templates
       const coverComponentKey = msg.coverComponentKey;
+      console.log('Cover component key received:', coverComponentKey);
+      console.log('Cover page exists:', !!coverPage);
+      
       if (coverComponentKey && coverPage) {
         try {
+          console.log('Attempting to import component...');
           const component = await figma.importComponentByKeyAsync(coverComponentKey);
+          console.log('Component imported:', component.name);
           const instance = component.createInstance();
           
-          // Position at center of page
+          // Position at origin of page
           instance.x = 0;
           instance.y = 0;
           
           coverPage.appendChild(instance);
-          figma.notify('✓ Default cover inserted into Cover Page');
-        } catch {
-          // Cover component not available, continue without it
+          console.log('Instance added to cover page');
+          figma.notify('✓ Default cover inserted!', { timeout: 2000 });
+        } catch (err) {
+          console.error('Failed to insert cover:', err);
+          figma.notify('Cover not in Team Library - insert manually', { timeout: 3000 });
         }
+      } else {
+        console.log('Skipping cover insert - no key or no cover page');
       }
       
       // Define the file structure based on the SCUX Starter Kit pattern
