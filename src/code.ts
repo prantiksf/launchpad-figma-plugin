@@ -329,9 +329,27 @@ figma.ui.onmessage = async (msg) => {
       }
       
       // Rename existing "Page 1" to "Cover Page"
-      const existingPage = figma.root.children.find(p => p.name === 'Page 1');
-      if (existingPage) {
-        existingPage.name = 'Cover Page';
+      const coverPage = figma.root.children.find(p => p.name === 'Page 1');
+      if (coverPage) {
+        coverPage.name = 'Cover Page';
+      }
+      
+      // Try to insert default cover from saved templates
+      const coverComponentKey = msg.coverComponentKey;
+      if (coverComponentKey && coverPage) {
+        try {
+          const component = await figma.importComponentByKeyAsync(coverComponentKey);
+          const instance = component.createInstance();
+          
+          // Position at center of page
+          instance.x = 0;
+          instance.y = 0;
+          
+          coverPage.appendChild(instance);
+          figma.notify('✓ Default cover inserted into Cover Page');
+        } catch {
+          // Cover component not available, continue without it
+        }
       }
       
       // Define the file structure based on the SCUX Starter Kit pattern
@@ -390,8 +408,8 @@ figma.ui.onmessage = async (msg) => {
       
       // Navigate to Cover Page (the renamed Page 1)
       try {
-        if (existingPage) {
-          figma.currentPage = existingPage;
+        if (coverPage) {
+          figma.currentPage = coverPage;
         } else if (firstNewPage) {
           figma.currentPage = firstNewPage;
         }

@@ -395,7 +395,30 @@ export function App() {
   // Scaffold file structure
   function scaffoldFileStructure() {
     setIsScaffolding(true);
-    parent.postMessage({ pluginMessage: { type: 'SCAFFOLD_FILE_STRUCTURE' } }, '*');
+    
+    // Find cover template and get the "Default" variant key
+    const coverTemplate = templates.find(t => 
+      t.category === 'cover-pages' && t.isComponentSet && t.variants
+    );
+    
+    let coverComponentKey: string | undefined;
+    if (coverTemplate?.variants) {
+      // Find the "Default" variant
+      const defaultVariant = coverTemplate.variants.find(v => 
+        v.displayName.toLowerCase() === 'default' || v.name.toLowerCase().includes('default')
+      );
+      coverComponentKey = defaultVariant?.key || coverTemplate.variants[0]?.key;
+    } else if (coverTemplate) {
+      // Single component cover
+      coverComponentKey = coverTemplate.componentKey;
+    }
+    
+    parent.postMessage({ 
+      pluginMessage: { 
+        type: 'SCAFFOLD_FILE_STRUCTURE',
+        coverComponentKey 
+      } 
+    }, '*');
   }
 
   const VERSION = '1.0.0';
