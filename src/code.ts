@@ -327,10 +327,16 @@ figma.ui.onmessage = async (msg) => {
       return;
     }
     
-    // Define the file structure based on the SCUX Starter Kit pattern (no icons, placeholder dates)
+    // Rename existing "Page 1" to "Cover Page"
+    const existingPage = figma.root.children.find(p => p.name === 'Page 1');
+    if (existingPage) {
+      existingPage.name = 'Cover Page';
+    }
+    
+    // Define the file structure based on the SCUX Starter Kit pattern
+    // 🟢 = Ready/Complete, 🟡 = In Progress, ❌ = Below the Line/Deprecated
     const structure = [
-      // Cover & Read Me
-      'Cover Page',
+      // Read Me (Cover Page is renamed from Page 1)
       'Read Me',
       
       // Divider
@@ -338,18 +344,18 @@ figma.ui.onmessage = async (msg) => {
       
       // Current Designs Section
       'CURRENT DESIGNS',
-      '{Release} {Feature Name}',
-      '{Release} {Feature Name} • Variation 2',
-      '{Release} {Feature Name} • Variation 3',
+      '🟢 {Release} {Feature Name}',
+      '🟡 {Release} {Feature Name} • Variation 2',
+      '🟡 {Release} {Feature Name} • Variation 3',
       
       // Divider
       '───────────────────',
       
       // Milestones & Demos Section
       'MILESTONES + E2E FLOWS/DEMOS',
-      '{YYYY.MM.DD}_Product Demo',
-      '{YYYY.MM.DD}_Walkthrough Recording',
-      '{YYYY.MM.DD}_Steelthread Proto',
+      '🟢 {YYYY.MM.DD}_Product Demo',
+      '🟢 {YYYY.MM.DD}_Walkthrough Recording',
+      '🟢 {YYYY.MM.DD}_Steelthread Proto',
       
       // Divider
       '───────────────────',
@@ -365,9 +371,9 @@ figma.ui.onmessage = async (msg) => {
       
       // Below the Line Section
       'BELOW THE LINE',
-      '{Deprecated Feature}',
-      '{Parked Exploration}',
-      '{Old Version}',
+      '❌ {Deprecated Feature}',
+      '❌ {Parked Exploration}',
+      '❌ {Old Version}',
     ];
     
     // Create pages
@@ -381,8 +387,10 @@ figma.ui.onmessage = async (msg) => {
       createdCount++;
     }
     
-    // Navigate to the first new page (Cover Page)
-    if (firstNewPage) {
+    // Navigate to Cover Page (the renamed Page 1)
+    if (existingPage) {
+      figma.currentPage = existingPage;
+    } else if (firstNewPage) {
       figma.currentPage = firstNewPage;
     }
     

@@ -453,23 +453,26 @@ export function App() {
                   Creates a starter kit page structure based on the SCUX pattern:
                 </p>
                 <div className="scaffold-preview">
-                  <div className="scaffold-preview__item">Cover Page</div>
+                  <div className="scaffold-preview__item">Cover Page <span className="scaffold-preview__note">(renames Page 1)</span></div>
                   <div className="scaffold-preview__item">Read Me</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
                   <div className="scaffold-preview__section">CURRENT DESIGNS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Release}'} {'{Feature Name}'}</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Release}'} {'{Feature Name}'} • Variation 2</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{Release}'} {'{Feature Name}'}</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'} • Variation 2</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
                   <div className="scaffold-preview__section">MILESTONES + E2E FLOWS/DEMOS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_Product Demo</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_Walkthrough Recording</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{YYYY.MM.DD}'}_Product Demo</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{YYYY.MM.DD}'}_Walkthrough Recording</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
                   <div className="scaffold-preview__section">ARCHIVED EXPLORATIONS</div>
                   <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_{'{Exploration Name}'}</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
                   <div className="scaffold-preview__section">BELOW THE LINE</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Deprecated Feature}'}</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">❌ {'{Deprecated Feature}'}</div>
                 </div>
+                <p className="scaffold-hint">
+                  <strong>Status:</strong> 🟢 Ready • 🟡 In Progress • ❌ Deprecated
+                </p>
                 {scaffoldExists && (
                   <p className="scaffold-exists-notice">
                     ✓ Scaffold already exists in this file
