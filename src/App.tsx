@@ -109,6 +109,7 @@ export function App() {
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
   const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
   const [isScaffolding, setIsScaffolding] = useState(false);
+  const [showCloudFilter, setShowCloudFilter] = useState(true);
 
   // Load templates from Figma's clientStorage on mount
   useEffect(() => {
@@ -413,42 +414,47 @@ export function App() {
       <div className="sticky-header">
         <header className="header">
           <div className="header__brand">
-            <svg className="header__rocket" viewBox="0 0 24 24">
-              <defs>
-                <linearGradient id="rocketGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="var(--slds-g-color-brand-base-40)" />
-                  <stop offset="100%" stopColor="var(--slds-g-color-brand-base-50)" />
-                </linearGradient>
-              </defs>
-              <path fill="url(#rocketGradient)" d="M13.13 22.19L11.5 18.36C13.07 17.78 14.54 17 15.9 16.09L13.13 22.19M5.64 12.5L1.81 10.87L7.91 8.1C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39C21.61 2.39 16.66 .269 11 5.93C8.81 8.12 7.5 10.53 6.65 12.64C6.37 13.39 6.56 14.21 7.11 14.77L9.24 16.89C9.79 17.45 10.61 17.63 11.36 17.35C13.5 16.53 15.88 15.19 18.07 13C23.73 7.34 21.61 2.39 21.61 2.39M14.54 9.46C13.76 8.68 13.76 7.41 14.54 6.63S16.59 5.85 17.37 6.63C18.14 7.41 18.15 8.68 17.37 9.46C16.59 10.24 15.32 10.24 14.54 9.46Z"/>
-            </svg>
-            <span className="header__title">Launchpad</span>
+            <img src={SalesCloudIcon} alt="Starter Kit" className="header__icon" />
+            <span className="header__title">Starter Kit</span>
           </div>
-          <Button variant="neutral" size="small" onClick={view === 'home' ? startAddFlow : goHome}>
-            {view === 'home' ? '+ Add' : '← Back'}
-          </Button>
+          <div className="header__actions">
+            <button 
+              className={`header__toggle ${showCloudFilter ? 'is-active' : ''}`}
+              onClick={() => setShowCloudFilter(!showCloudFilter)}
+              title={showCloudFilter ? 'Hide cloud filter' : 'Show cloud filter'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+              </svg>
+            </button>
+            <Button variant="neutral" size="small" onClick={view === 'home' ? startAddFlow : goHome}>
+              {view === 'home' ? '+ Add' : '← Back'}
+            </Button>
+          </div>
         </header>
 
         {/* Filters (only on home) */}
         {view === 'home' && (
           <>
-            <div className="filters">
-              <span className="filters__label">Clouds</span>
-              <div className="filters__pills">
-                {clouds.map(cloud => (
-                  <button
-                    key={cloud.id}
-                    className={`pill pill--${cloud.id} ${selectedClouds.includes(cloud.id) ? 'pill--selected' : ''}`}
-                    onClick={() => toggleCloud(cloud.id)}
-                  >
-                    <span className="pill__icon">
-                      <img src={cloud.icon} alt={cloud.name} />
-                    </span>
-                    {cloud.name}
-                  </button>
-                ))}
-          </div>
-        </div>
+            {showCloudFilter && (
+              <div className="filters">
+                <span className="filters__label">Clouds</span>
+                <div className="filters__pills">
+                  {clouds.map(cloud => (
+                    <button
+                      key={cloud.id}
+                      className={`pill pill--${cloud.id} ${selectedClouds.includes(cloud.id) ? 'pill--selected' : ''}`}
+                      onClick={() => toggleCloud(cloud.id)}
+                    >
+                      <span className="pill__icon">
+                        <img src={cloud.icon} alt={cloud.name} />
+                      </span>
+                      {cloud.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <Tabs defaultTab="all" activeTab={activeCategory} onTabChange={setActiveCategory} variant="pills">
               <TabList>

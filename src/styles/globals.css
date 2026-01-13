@@ -301,7 +301,7 @@ body {
   gap: 8px;
 }
 
-.header__rocket {
+.header__icon {
   width: 24px;
   height: 24px;
 }
@@ -310,6 +310,36 @@ body {
   font-size: 16px;
   font-weight: 600;
   color: var(--slds-g-color-neutral-base-10);
+}
+
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header__toggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--slds-g-color-neutral-base-60);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header__toggle:hover {
+  background: var(--slds-g-color-neutral-base-95);
+  color: var(--slds-g-color-neutral-base-40);
+}
+
+.header__toggle.is-active {
+  background: var(--slds-g-color-brand-base-95);
+  color: var(--slds-g-color-brand-base-50);
 }
 
 /* ============ FILTERS ============ */
