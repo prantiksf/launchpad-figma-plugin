@@ -316,86 +316,96 @@ figma.ui.onmessage = async (msg) => {
 
   // ============ SCAFFOLD FILE STRUCTURE ============
   if (msg.type === 'SCAFFOLD_FILE_STRUCTURE') {
-    // Check if scaffold already exists
-    const alreadyExists = figma.root.children.some(page => 
-      page.name.includes('CURRENT DESIGNS') || page.name === 'Read Me'
-    );
-    
-    if (alreadyExists) {
-      figma.notify('⚠️ Scaffold already exists in this file', { error: true });
-      figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists: true });
-      return;
+    try {
+      // Check if scaffold already exists
+      const alreadyExists = figma.root.children.some(page => 
+        page.name.includes('CURRENT DESIGNS') || page.name === 'Read Me'
+      );
+      
+      if (alreadyExists) {
+        figma.notify('⚠️ Scaffold already exists in this file', { error: true });
+        figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists: true });
+        return;
+      }
+      
+      // Rename existing "Page 1" to "Cover Page"
+      const existingPage = figma.root.children.find(p => p.name === 'Page 1');
+      if (existingPage) {
+        existingPage.name = 'Cover Page';
+      }
+      
+      // Define the file structure based on the SCUX Starter Kit pattern
+      // 🟢 = Ready/Complete, 🟡 = In Progress, ❌ = Below the Line/Deprecated
+      const structure = [
+        // Read Me (Cover Page is renamed from Page 1)
+        'Read Me',
+        
+        // Divider
+        '───────────────────',
+        
+        // Current Designs Section
+        'CURRENT DESIGNS',
+        '🟢 {Release} {Feature Name}',
+        '🟡 {Release} {Feature Name} • Variation 2',
+        '🟡 {Release} {Feature Name} • Variation 3',
+        
+        // Divider
+        '───────────────────',
+        
+        // Milestones & Demos Section
+        'MILESTONES + E2E FLOWS/DEMOS',
+        '🟢 {YYYY.MM.DD}_Product Demo',
+        '🟢 {YYYY.MM.DD}_Walkthrough Recording',
+        '🟢 {YYYY.MM.DD}_Steelthread Proto',
+        
+        // Divider
+        '───────────────────',
+        
+        // Archived Explorations Section
+        'ARCHIVED EXPLORATIONS',
+        '{YYYY.MM.DD}_{Exploration Name}',
+        '{YYYY.MM.DD}_{Exploration Name} 2',
+        '{YYYY.MM.DD}_{Exploration Name} 3',
+        
+        // Divider
+        '───────────────────',
+        
+        // Below the Line Section
+        'BELOW THE LINE',
+        '❌ {Deprecated Feature}',
+        '❌ {Parked Exploration}',
+        '❌ {Old Version}',
+      ];
+      
+      // Create pages
+      let createdCount = 0;
+      let firstNewPage: PageNode | null = null;
+      
+      for (const name of structure) {
+        const page = figma.createPage();
+        page.name = name;
+        if (!firstNewPage) firstNewPage = page;
+        createdCount++;
+      }
+      
+      // Navigate to Cover Page (the renamed Page 1)
+      try {
+        if (existingPage) {
+          figma.currentPage = existingPage;
+        } else if (firstNewPage) {
+          figma.currentPage = firstNewPage;
+        }
+      } catch {
+        // Navigation failed, but pages were created
+      }
+      
+      figma.notify(`✓ Created ${createdCount} pages!`, { timeout: 3000 });
+      figma.ui.postMessage({ type: 'SCAFFOLD_SUCCESS', count: createdCount });
+    } catch (error) {
+      figma.notify('⚠️ Error creating scaffold', { error: true });
+      figma.ui.postMessage({ type: 'SCAFFOLD_ERROR', error: String(error) });
     }
-    
-    // Rename existing "Page 1" to "Cover Page"
-    const existingPage = figma.root.children.find(p => p.name === 'Page 1');
-    if (existingPage) {
-      existingPage.name = 'Cover Page';
-    }
-    
-    // Define the file structure based on the SCUX Starter Kit pattern
-    // 🟢 = Ready/Complete, 🟡 = In Progress, ❌ = Below the Line/Deprecated
-    const structure = [
-      // Read Me (Cover Page is renamed from Page 1)
-      'Read Me',
-      
-      // Divider
-      '───────────────────',
-      
-      // Current Designs Section
-      'CURRENT DESIGNS',
-      '🟢 {Release} {Feature Name}',
-      '🟡 {Release} {Feature Name} • Variation 2',
-      '🟡 {Release} {Feature Name} • Variation 3',
-      
-      // Divider
-      '───────────────────',
-      
-      // Milestones & Demos Section
-      'MILESTONES + E2E FLOWS/DEMOS',
-      '🟢 {YYYY.MM.DD}_Product Demo',
-      '🟢 {YYYY.MM.DD}_Walkthrough Recording',
-      '🟢 {YYYY.MM.DD}_Steelthread Proto',
-      
-      // Divider
-      '───────────────────',
-      
-      // Archived Explorations Section
-      'ARCHIVED EXPLORATIONS',
-      '{YYYY.MM.DD}_{Exploration Name}',
-      '{YYYY.MM.DD}_{Exploration Name} 2',
-      '{YYYY.MM.DD}_{Exploration Name} 3',
-      
-      // Divider
-      '───────────────────',
-      
-      // Below the Line Section
-      'BELOW THE LINE',
-      '❌ {Deprecated Feature}',
-      '❌ {Parked Exploration}',
-      '❌ {Old Version}',
-    ];
-    
-    // Create pages
-    let createdCount = 0;
-    let firstNewPage: PageNode | null = null;
-    
-    for (const name of structure) {
-      const page = figma.createPage();
-      page.name = name;
-      if (!firstNewPage) firstNewPage = page;
-      createdCount++;
-    }
-    
-    // Navigate to Cover Page (the renamed Page 1)
-    if (existingPage) {
-      figma.currentPage = existingPage;
-    } else if (firstNewPage) {
-      figma.currentPage = firstNewPage;
-    }
-    
-    figma.notify(`✓ Created ${createdCount} pages! Rename placeholders as needed.`, { timeout: 4000 });
-    figma.ui.postMessage({ type: 'SCAFFOLD_SUCCESS', count: createdCount });
+    return;
     return;
   }
 
