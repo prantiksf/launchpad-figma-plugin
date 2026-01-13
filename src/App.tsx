@@ -396,11 +396,14 @@ export function App() {
   function scaffoldFileStructure() {
     setIsScaffolding(true);
     
-    // Find cover template and get the "Default" variant key
-    // Look for templates in 'cover-pages' category OR with 'cover' in the name
-    const coverTemplate = templates.find(t => 
+    // Find cover template - prefer component sets over single components
+    // First try to find a component set with 'cover' in name, then fall back to any cover
+    const coverTemplates = templates.filter(t => 
       t.category === 'cover-pages' || t.name.toLowerCase().includes('cover')
     );
+    
+    // Prefer component sets (they have more variants to choose from)
+    const coverTemplate = coverTemplates.find(t => t.isComponentSet) || coverTemplates[0];
     
     console.log('Found cover template:', coverTemplate?.name, 'category:', coverTemplate?.category);
     console.log('Has variants:', coverTemplate?.isComponentSet, 'count:', coverTemplate?.variants?.length);
