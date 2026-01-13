@@ -38,7 +38,6 @@ const categories = [
   { id: 'components', label: 'Components' },
   { id: 'slides', label: 'Slides' },
   { id: 'resources', label: 'Resources' },
-  { id: 'scaffold', label: 'Scaffold' },
 ];
 
 const categoryOptions = [
@@ -115,7 +114,7 @@ export function App() {
   }, []);
 
   // Add template flow
-  const [view, setView] = useState<'home' | 'add'>('home');
+  const [view, setView] = useState<'home' | 'add' | 'scaffold'>('home');
   const [addStep, setAddStep] = useState<'instructions' | 'loading' | 'configure'>('instructions');
   const [capturedComponent, setCapturedComponent] = useState<ComponentInfo | null>(null);
   const [formName, setFormName] = useState('');
@@ -174,6 +173,7 @@ export function App() {
         case 'SCAFFOLD_SUCCESS':
           setIsScaffolding(false);
           setScaffoldExists(true);
+          setView('home'); // Go back to home after creating
           break;
 
         case 'SCAFFOLD_ERROR':
@@ -421,9 +421,26 @@ export function App() {
             <img src={SalesCloudIcon} alt="Starter Kit" className="header__icon" />
             <span className="header__title">Starter Kit</span>
           </div>
-          <Button variant="neutral" size="small" onClick={view === 'home' ? startAddFlow : goHome}>
-            {view === 'home' ? '+ Add' : '← Back'}
-          </Button>
+          <div className="header__actions">
+            {view === 'home' ? (
+              <>
+                <button 
+                  className="header__text-btn"
+                  onClick={() => setView('scaffold')}
+                  disabled={scaffoldExists}
+                >
+                  {scaffoldExists ? '✓ Pages Created' : 'Create Pages'}
+                </button>
+                <Button variant="neutral" size="small" onClick={startAddFlow}>
+                  + Add
+                </Button>
+              </>
+            ) : (
+              <Button variant="neutral" size="small" onClick={goHome}>
+                ← Back
+              </Button>
+            )}
+          </div>
         </header>
 
         {/* Category Pills (only on home) */}
@@ -444,13 +461,13 @@ export function App() {
 
       {/* Content */}
       <div className="content">
-        {activeCategory === 'scaffold' && view === 'home' ? (
+        {view === 'scaffold' ? (
           <div className="scaffold-section">
             <Card bordered={false} shadow="none">
               <CardContent>
-                <h3 className="step-title">Scaffold File Structure</h3>
+                <h3 className="step-title">Create Page Structure</h3>
                 <p className="scaffold-desc">
-                  Creates a starter kit page structure based on the SCUX pattern:
+                  Sets up your file with the SCUX starter kit pattern:
                 </p>
                 <div className="scaffold-preview">
                   <div className="scaffold-preview__item">Cover Page <span className="scaffold-preview__note">(renames Page 1)</span></div>
@@ -462,7 +479,6 @@ export function App() {
                   <div className="scaffold-preview__divider">───────────────────</div>
                   <div className="scaffold-preview__section">MILESTONES + E2E FLOWS/DEMOS</div>
                   <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{YYYY.MM.DD}'}_Product Demo</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{YYYY.MM.DD}'}_Walkthrough Recording</div>
                   <div className="scaffold-preview__divider">───────────────────</div>
                   <div className="scaffold-preview__section">ARCHIVED EXPLORATIONS</div>
                   <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_{'{Exploration Name}'}</div>
@@ -473,21 +489,15 @@ export function App() {
                 <p className="scaffold-hint">
                   <strong>Status:</strong> 🟢 Ready • 🟡 In Progress • ❌ Deprecated
                 </p>
-                {scaffoldExists && (
-                  <p className="scaffold-exists-notice">
-                    ✓ Scaffold already exists in this file
-                  </p>
-                )}
               </CardContent>
               <CardFooter>
                 <Button 
                   variant="brand" 
                   fullWidth 
-                  onClick={scaffoldFileStructure}
+                  onClick={() => { scaffoldFileStructure(); }}
                   loading={isScaffolding}
-                  disabled={scaffoldExists}
                 >
-                  {scaffoldExists ? 'Already Created' : 'Create Pages'}
+                  Create Pages
                 </Button>
               </CardFooter>
             </Card>

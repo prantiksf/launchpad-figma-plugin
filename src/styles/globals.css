@@ -342,6 +342,31 @@ body {
   color: var(--slds-g-color-brand-base-50);
 }
 
+.header__text-btn {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slds-g-color-brand-base-50);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.header__text-btn:hover {
+  background: var(--slds-g-color-brand-base-95);
+}
+
+.header__text-btn:disabled {
+  color: var(--slds-g-color-success-base-40);
+  cursor: default;
+}
+
+.header__text-btn:disabled:hover {
+  background: transparent;
+}
+
 /* ============ FILTERS ============ */
 .filters {
   padding: 8px 16px;
