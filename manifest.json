@@ -1,11 +1,15 @@
 {
-  "name": "Launchpad",
-  "id": "launchpad-001",
+  "name": "My Figma Plugin",
+  "id": "000000000000000000",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "dist/ui.html",
-  "editorType": ["figma"],
+  "permissions": ["currentuser"],
+  "enablePrivatePluginApi": true,
+  "documentAccess": "dynamic-page",
+  "editorType": ["figma", "figjam"],
   "networkAccess": {
-    "allowedDomains": ["none"]
+    "allowedDomains": ["https://*.herokuapp.com", "https://api.figma.com"]
   }
 }
+
