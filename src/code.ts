@@ -355,15 +355,18 @@ figma.ui.onmessage = async (msg) => {
       
       // Create pages
       let createdCount = 0;
+      let firstNewPage: PageNode | null = null;
+      
       for (const item of structure) {
         const page = figma.createPage();
         page.name = item.name;
+        if (!firstNewPage) firstNewPage = page;
         createdCount++;
       }
       
-      // Move to first page (Read Me)
-      if (figma.root.children.length > 0) {
-        figma.currentPage = figma.root.children[1]; // Skip the original page, go to Read Me
+      // Navigate to the first new page (Read Me)
+      if (firstNewPage) {
+        figma.currentPage = firstNewPage;
       }
       
       figma.notify(`✓ Created ${createdCount} pages! Rename placeholders as needed.`, { timeout: 4000 });
