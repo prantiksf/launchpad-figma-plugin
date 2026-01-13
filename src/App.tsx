@@ -109,7 +109,6 @@ export function App() {
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
   const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
   const [isScaffolding, setIsScaffolding] = useState(false);
-  const [showCloudFilter, setShowCloudFilter] = useState(true);
 
   // Load templates from Figma's clientStorage on mount
   useEffect(() => {
@@ -417,44 +416,33 @@ export function App() {
             <img src={SalesCloudIcon} alt="Starter Kit" className="header__icon" />
             <span className="header__title">Starter Kit</span>
           </div>
-          <div className="header__actions">
-            <button 
-              className={`header__toggle ${showCloudFilter ? 'is-active' : ''}`}
-              onClick={() => setShowCloudFilter(!showCloudFilter)}
-              title={showCloudFilter ? 'Hide cloud filter' : 'Show cloud filter'}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
-              </svg>
-            </button>
-            <Button variant="neutral" size="small" onClick={view === 'home' ? startAddFlow : goHome}>
-              {view === 'home' ? '+ Add' : '← Back'}
-            </Button>
-          </div>
+          <Button variant="neutral" size="small" onClick={view === 'home' ? startAddFlow : goHome}>
+            {view === 'home' ? '+ Add' : '← Back'}
+          </Button>
         </header>
 
         {/* Filters (only on home) */}
         {view === 'home' && (
           <>
-            {showCloudFilter && (
-              <div className="filters">
-                <span className="filters__label">Clouds</span>
-                <div className="filters__pills">
-                  {clouds.map(cloud => (
-                    <button
-                      key={cloud.id}
-                      className={`pill pill--${cloud.id} ${selectedClouds.includes(cloud.id) ? 'pill--selected' : ''}`}
-                      onClick={() => toggleCloud(cloud.id)}
-                    >
-                      <span className="pill__icon">
-                        <img src={cloud.icon} alt={cloud.name} />
-                      </span>
-                      {cloud.name}
-                    </button>
-                  ))}
-                </div>
+            {/* HIDDEN: Cloud filter - uncomment to restore
+            <div className="filters">
+              <span className="filters__label">Clouds</span>
+              <div className="filters__pills">
+                {clouds.map(cloud => (
+                  <button
+                    key={cloud.id}
+                    className={`pill pill--${cloud.id} ${selectedClouds.includes(cloud.id) ? 'pill--selected' : ''}`}
+                    onClick={() => toggleCloud(cloud.id)}
+                  >
+                    <span className="pill__icon">
+                      <img src={cloud.icon} alt={cloud.name} />
+                    </span>
+                    {cloud.name}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
+            */}
 
             <Tabs defaultTab="all" activeTab={activeCategory} onTabChange={setActiveCategory} variant="pills">
               <TabList>
