@@ -304,6 +304,78 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
+  // ============ SCAFFOLD FILE STRUCTURE ============
+  if (msg.type === 'SCAFFOLD_FILE_STRUCTURE') {
+    try {
+      // Get current date for placeholders
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+      
+      // Define the file structure based on the SCUX Starter Kit pattern
+      const structure = [
+        // Read Me
+        { name: '📖 Read Me', isSection: false },
+        
+        // Divider
+        { name: '───────────────────', isSection: true },
+        
+        // Current Designs Section
+        { name: '📦 CURRENT DESIGNS', isSection: true },
+        { name: '🟡 {Release} {Feature Name}', isSection: false },
+        { name: '🟡 {Release} {Feature Name} • Variation 2', isSection: false },
+        { name: '🟡 {Release} {Feature Name} • Variation 3', isSection: false },
+        
+        // Divider
+        { name: '───────────────────', isSection: true },
+        
+        // Milestones & Demos Section
+        { name: '🎯 MILESTONES + E2E FLOWS/DEMOS', isSection: true },
+        { name: `🟢 ${dateStr}_Product Demo`, isSection: false },
+        { name: `🟢 ${dateStr}_Walkthrough Recording`, isSection: false },
+        { name: `🟢 ${dateStr}_Steelthread Proto`, isSection: false },
+        
+        // Divider
+        { name: '───────────────────', isSection: true },
+        
+        // Archived Explorations Section
+        { name: '📁 ARCHIVED EXPLORATIONS', isSection: true },
+        { name: `${dateStr}_{Exploration Name}`, isSection: false },
+        { name: `${dateStr}_{Exploration Name} 2`, isSection: false },
+        { name: `${dateStr}_{Exploration Name} 3`, isSection: false },
+        
+        // Divider
+        { name: '───────────────────', isSection: true },
+        
+        // Below the Line Section
+        { name: '🗑️ BELOW THE LINE', isSection: true },
+        { name: '❌ {Deprecated Feature}', isSection: false },
+        { name: '❌ {Parked Exploration}', isSection: false },
+        { name: '❌ {Old Version}', isSection: false },
+      ];
+      
+      // Create pages
+      let createdCount = 0;
+      for (const item of structure) {
+        const page = figma.createPage();
+        page.name = item.name;
+        createdCount++;
+      }
+      
+      // Move to first page (Read Me)
+      if (figma.root.children.length > 0) {
+        figma.currentPage = figma.root.children[1]; // Skip the original page, go to Read Me
+      }
+      
+      figma.notify(`✓ Created ${createdCount} pages! Rename placeholders as needed.`, { timeout: 4000 });
+      figma.ui.postMessage({ type: 'SCAFFOLD_SUCCESS', count: createdCount });
+      
+    } catch (error) {
+      figma.notify('⚠️ Failed to create file structure', { error: true });
+      figma.ui.postMessage({ type: 'SCAFFOLD_ERROR', error: String(error) });
+    }
+    return;
+  }
+
   // ============ GET PREVIEW ============
   if (msg.type === 'GET_PREVIEW') {
     const { componentKey } = msg.payload;

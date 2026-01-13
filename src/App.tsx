@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
 // Import Design System Components
-import {
-  Button,
-  Input,
+import { 
+  Button, 
+  Input, 
   Card,
   CardContent,
   CardFooter,
-  Badge,
+  Badge, 
   Spinner,
   EmptyState,
   Tabs,
@@ -41,6 +41,7 @@ const categories = [
   { id: 'components', label: 'Components' },
   { id: 'slides', label: 'Slides' },
   { id: 'resources', label: 'Resources' },
+  { id: 'scaffold', label: '🏗️ Scaffold' },
 ];
 
 const categoryOptions = [
@@ -107,12 +108,13 @@ export function App() {
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
   const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
+  const [isScaffolding, setIsScaffolding] = useState(false);
 
   // Load templates from Figma's clientStorage on mount
   useEffect(() => {
     parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
   }, []);
-  
+
   // Add template flow
   const [view, setView] = useState<'home' | 'add'>('home');
   const [addStep, setAddStep] = useState<'instructions' | 'loading' | 'configure'>('instructions');
@@ -168,6 +170,14 @@ export function App() {
 
         case 'INSERT_ERROR':
           setInsertingId(null);
+          break;
+
+        case 'SCAFFOLD_SUCCESS':
+          setIsScaffolding(false);
+          break;
+
+        case 'SCAFFOLD_ERROR':
+          setIsScaffolding(false);
           break;
       }
     }
@@ -274,7 +284,7 @@ export function App() {
   // Insert template to canvas
   function insertTemplate(template: Template) {
     setInsertingId(template.id);
-    
+
     // Get selected slides for multi-select mode
     const selected = selectedSlides[template.id] || [];
     
@@ -377,6 +387,12 @@ export function App() {
     parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
   }
 
+  // Scaffold file structure
+  function scaffoldFileStructure() {
+    setIsScaffolding(true);
+    parent.postMessage({ pluginMessage: { type: 'SCAFFOLD_FILE_STRUCTURE' } }, '*');
+  }
+
   const VERSION = '1.0.0';
 
   // ============ RENDER ============
@@ -431,8 +447,8 @@ export function App() {
                     {cloud.name}
                   </button>
                 ))}
-              </div>
-            </div>
+          </div>
+        </div>
 
             <Tabs defaultTab="all" activeTab={activeCategory} onTabChange={setActiveCategory} variant="default">
               <TabList>
@@ -443,11 +459,53 @@ export function App() {
             </Tabs>
           </>
         )}
-      </div>
+        </div>
 
       {/* Content */}
       <div className="content">
-        {view === 'add' ? (
+        {activeCategory === 'scaffold' && view === 'home' ? (
+          <div className="scaffold-section">
+            <Card bordered={false} shadow="none">
+              <CardContent>
+                <h3 className="step-title">🏗️ Scaffold File Structure</h3>
+                <p className="scaffold-desc">
+                  Creates a starter kit page structure based on the SCUX pattern:
+                </p>
+                <div className="scaffold-preview">
+                  <div className="scaffold-preview__item">📖 Read Me</div>
+                  <div className="scaffold-preview__divider">───────────────────</div>
+                  <div className="scaffold-preview__section">📦 CURRENT DESIGNS</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'}</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'} • Variation 2</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'} • Variation 3</div>
+                  <div className="scaffold-preview__divider">───────────────────</div>
+                  <div className="scaffold-preview__section">🎯 MILESTONES + E2E FLOWS/DEMOS</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{Date}'}_Product Demo</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{Date}'}_Walkthrough Recording</div>
+                  <div className="scaffold-preview__divider">───────────────────</div>
+                  <div className="scaffold-preview__section">📁 ARCHIVED EXPLORATIONS</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{Date}'}_{'{Exploration Name}'}</div>
+                  <div className="scaffold-preview__divider">───────────────────</div>
+                  <div className="scaffold-preview__section">🗑️ BELOW THE LINE</div>
+                  <div className="scaffold-preview__item scaffold-preview__item--indent">❌ {'{Deprecated Feature}'}</div>
+                </div>
+                <p className="scaffold-hint">
+                  <strong>Tip:</strong> Use 🟡 for In Progress, 🟢 for Ready, ❌ for Deprecated
+                </p>
+              </CardContent>
+              <CardFooter>
+                <Button 
+                  variant="brand" 
+                  fullWidth 
+                  onClick={scaffoldFileStructure}
+                  loading={isScaffolding}
+                >
+                  Create Pages
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        ) : view === 'add' ? (
           <div className="add-flow">
             {/* Step: Instructions */}
             {addStep === 'instructions' && (
@@ -467,7 +525,7 @@ export function App() {
                       <span className="checklist__bullet">3</span>
                       Publish to Team Library
                     </div>
-                  </div>
+            </div>
                 </CardContent>
                 <CardFooter>
                   <Button variant="neutral" fullWidth onClick={captureComponent}>
@@ -500,8 +558,8 @@ export function App() {
                       {capturedComponent.isComponentSet && (
                         <Badge variant="info" size="small">{capturedComponent.variantCount} variants</Badge>
                       )}
-                    </div>
-                  </div>
+              </div>
+            </div>
 
                   {/* Show variant properties if component set */}
                   {capturedComponent.isComponentSet && capturedComponent.variantProperties && (
@@ -514,9 +572,9 @@ export function App() {
                             <span className="variant-prop__values">{values.join(', ')}</span>
                           </div>
                         ))}
-                      </div>
-                    </div>
-                  )}
+          </div>
+                </div>
+              )}
                   
                   <div className="form-field">
                     <label className="form-field__label">Select Cloud</label>
@@ -545,7 +603,7 @@ export function App() {
                       onChange={setFormCategory}
                       direction="horizontal"
                     />
-                  </div>
+            </div>
 
                   <div className="form-field">
                     <Input
@@ -610,7 +668,7 @@ export function App() {
                     <span className="template-item__size">{template.size.width}×{template.size.height}</span>
                   )}
                   <button className="template-item__delete" onClick={() => deleteTemplate(template.id)}>×</button>
-                </div>
+            </div>
 
                 {/* Only show main preview for single components, not component sets */}
                 {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
@@ -679,22 +737,22 @@ export function App() {
                           );
                         })}
                       </div>
-                    </div>
+            </div>
                   );
                 })()}
 
                 <div className="template-item__footer">
                   <p className="template-item__desc">{template.description}</p>
-                  <Button 
+              <Button 
                     variant="brand-outline" 
                     size="small"
                     onClick={() => insertTemplate(template)}
                     loading={insertingId === template.id}
-                  >
+              >
                     Insert
-                  </Button>
-                </div>
-              </div>
+              </Button>
+            </div>
+          </div>
             );
           })
         )}

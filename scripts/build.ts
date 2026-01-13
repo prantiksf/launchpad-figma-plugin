@@ -3,9 +3,6 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 type Mode = 'development' | 'production';
 
 function getMode(): Mode {
@@ -14,6 +11,8 @@ function getMode(): Mode {
   return 'production';
 }
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const ROOT = join(__dirname, '..');
 
 async function copyHtml(): Promise<void> {
