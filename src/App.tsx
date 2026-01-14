@@ -114,6 +114,7 @@ export function App() {
   const [isAddingLink, setIsAddingLink] = useState(false);
   const [newLinkName, setNewLinkName] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
@@ -649,6 +650,41 @@ export function App() {
                     <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                   </svg>
                 </button>
+                
+                {/* More Menu (Export/Import) */}
+                <div className="header__dropdown-container">
+                  <button 
+                    className="header__icon-btn"
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    title="More options"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <circle cx="8" cy="3" r="1.5"/>
+                      <circle cx="8" cy="8" r="1.5"/>
+                      <circle cx="8" cy="13" r="1.5"/>
+                    </svg>
+                  </button>
+                  
+                  {showMoreMenu && (
+                    <div className="header__dropdown header__dropdown--compact">
+                      <button 
+                        className="header__dropdown-menu-item"
+                        onClick={() => { exportTemplates(); setShowMoreMenu(false); }}
+                      >
+                        <span>↓</span> Export Backup
+                      </button>
+                      <label className="header__dropdown-menu-item">
+                        <span>↑</span> Import Backup
+                        <input 
+                          type="file" 
+                          accept=".json" 
+                          onChange={(e) => { importTemplates(e); setShowMoreMenu(false); }} 
+                          style={{ display: 'none' }} 
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <Button variant="neutral" size="small" onClick={goHome}>
@@ -972,21 +1008,8 @@ export function App() {
 
       {/* Footer */}
       <footer className="app-footer">
-        <div className="app-footer__left">
-          <button className="app-footer__btn" onClick={exportTemplates} title="Export backup">
-            ↓ Export
-          </button>
-          <label className="app-footer__btn" title="Import backup">
-            ↑ Import
-            <input 
-              type="file" 
-              accept=".json" 
-              onChange={importTemplates} 
-              style={{ display: 'none' }} 
-            />
-          </label>
-        </div>
-        <span className="app-footer__version">v{VERSION}</span>
+        <span>Need help? prantik.banerjee@salesforce.com</span>
+        <span>v{VERSION}</span>
       </footer>
     </div>
   );
