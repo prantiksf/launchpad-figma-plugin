@@ -692,6 +692,18 @@ kbd {
   margin-bottom: 16px;
 }
 
+/* Remove fieldset outline */
+fieldset.slds-form-element {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+fieldset.slds-form-element legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
 .form-field__label {
   font-size: 12px;
   font-weight: 500;
