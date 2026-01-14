@@ -69,6 +69,29 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
   
+  // ============ LOAD DEFAULT CLOUD ============
+  const DEFAULT_CLOUD_KEY = 'starter-kit-default-cloud';
+  
+  if (msg.type === 'LOAD_DEFAULT_CLOUD') {
+    try {
+      const cloudId = await figma.clientStorage.getAsync(DEFAULT_CLOUD_KEY);
+      figma.ui.postMessage({ type: 'DEFAULT_CLOUD_LOADED', cloudId: cloudId || null });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'DEFAULT_CLOUD_LOADED', cloudId: null });
+    }
+    return;
+  }
+  
+  // ============ SAVE DEFAULT CLOUD ============
+  if (msg.type === 'SAVE_DEFAULT_CLOUD') {
+    try {
+      await figma.clientStorage.setAsync(DEFAULT_CLOUD_KEY, msg.cloudId);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save default cloud', { error: true });
+    }
+    return;
+  }
+  
   // ============ SHOW TOAST ============
   if (msg.type === 'SHOW_TOAST') {
     figma.notify(`✓ ${msg.message}`, { timeout: 2500 });
@@ -466,7 +489,6 @@ figma.ui.onmessage = async (msg) => {
       figma.notify('⚠️ Error creating scaffold', { error: true });
       figma.ui.postMessage({ type: 'SCAFFOLD_ERROR', error: String(error) });
     }
-    return;
     return;
   }
 

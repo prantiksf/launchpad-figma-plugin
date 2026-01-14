@@ -1159,3 +1159,115 @@ fieldset.slds-form-element legend {
 .variant-prop__values {
   color: var(--slds-g-color-neutral-base-50);
 }
+
+/* ============ CLOUD SELECTOR DROPDOWN ============ */
+.header__cloud-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.header__cloud-selector:hover {
+  background: var(--slds-g-color-neutral-base-95);
+}
+
+.header__dropdown-caret {
+  color: var(--slds-g-color-neutral-base-50);
+  transition: transform 0.15s ease;
+}
+
+.header__cloud-selector:hover .header__dropdown-caret {
+  color: var(--slds-g-color-neutral-base-30);
+}
+
+.cloud-selector-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: white;
+  border: 1px solid var(--slds-g-color-neutral-base-80);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 150;
+  overflow: hidden;
+}
+
+.cloud-selector-dropdown__header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--slds-g-color-neutral-base-50);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--slds-g-color-neutral-base-97);
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+}
+
+.cloud-selector-dropdown__item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-95);
+}
+
+.cloud-selector-dropdown__item:last-child {
+  border-bottom: none;
+}
+
+.cloud-selector-dropdown__item:hover {
+  background: var(--slds-g-color-neutral-base-97);
+}
+
+.cloud-selector-dropdown__item.is-selected {
+  background: var(--slds-g-color-brand-base-95);
+}
+
+.cloud-selector-dropdown__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.cloud-selector-dropdown__name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--slds-g-color-neutral-base-20);
+}
+
+.cloud-selector-dropdown__default-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--slds-g-color-brand-base-50);
+  background: var(--slds-g-color-brand-base-95);
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+
+.cloud-selector-dropdown__make-default {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--slds-g-color-brand-base-50);
+  background: var(--slds-g-color-brand-base-95);
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cloud-selector-dropdown__make-default:hover {
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+}

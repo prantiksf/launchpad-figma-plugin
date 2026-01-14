@@ -116,15 +116,22 @@ export function App() {
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   
+  // Cloud selector feature
+  const [showCloudSelector, setShowCloudSelector] = useState(false);
+  const [defaultCloud, setDefaultCloud] = useState<string | null>(null);
+  const [hoveredCloud, setHoveredCloud] = useState<string | null>(null);
+  
   // Refs for click-outside handling
   const linksDropdownRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const cloudSelectorRef = useRef<HTMLDivElement>(null);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
     parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
     parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
     parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
   }, []);
 
   // Add template flow
@@ -201,6 +208,13 @@ export function App() {
           setFigmaLinks(msg.links || []);
           break;
 
+        case 'DEFAULT_CLOUD_LOADED':
+          if (msg.cloudId) {
+            setDefaultCloud(msg.cloudId);
+            setSelectedClouds([msg.cloudId]);
+          }
+          break;
+
         case 'SCAFFOLD_EXISTS':
           setScaffoldExists(msg.exists);
           setIsScaffolding(false);
@@ -221,6 +235,10 @@ export function App() {
       }
       if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
         setShowMoreMenu(false);
+      }
+      if (cloudSelectorRef.current && !cloudSelectorRef.current.contains(event.target as Node)) {
+        setShowCloudSelector(false);
+        setHoveredCloud(null);
       }
     }
     
@@ -508,6 +526,22 @@ export function App() {
     setShowLinksDropdown(false);
   }
 
+  // Cloud selector functions
+  function selectCloud(cloudId: string) {
+    setSelectedClouds([cloudId]);
+    setShowCloudSelector(false);
+    setHoveredCloud(null);
+  }
+
+  function makeDefaultCloud(cloudId: string) {
+    setDefaultCloud(cloudId);
+    setSelectedClouds([cloudId]);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${clouds.find(c => c.id === cloudId)?.name} Cloud set as default` } }, '*');
+    setShowCloudSelector(false);
+    setHoveredCloud(null);
+  }
+
   // Scaffold file structure
   function scaffoldFileStructure() {
     setIsScaffolding(true);
@@ -548,7 +582,7 @@ export function App() {
     }, '*');
   }
 
-  const VERSION = '1.6.0';
+  const VERSION = '1.7.0';
 
   // ============ RENDER ============
   if (isLoading) {
@@ -567,9 +601,50 @@ export function App() {
       {/* Header */}
       <div className="sticky-header">
         <header className="header">
-          <div className="header__brand">
-            <img src={SalesCloudIcon} alt="Starter Kit" className="header__icon" />
-            <span className="header__title">Starter Kit</span>
+          <div className="header__brand" ref={cloudSelectorRef}>
+            <button 
+              className="header__cloud-selector"
+              onClick={() => setShowCloudSelector(!showCloudSelector)}
+            >
+              <img 
+                src={clouds.find(c => c.id === selectedClouds[0])?.icon || SalesCloudIcon} 
+                alt="Cloud" 
+                className="header__icon" 
+              />
+              <span className="header__title">Starter Kit</span>
+              <svg className="header__dropdown-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+                <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+              </svg>
+            </button>
+            
+            {showCloudSelector && (
+              <div className="cloud-selector-dropdown">
+                <div className="cloud-selector-dropdown__header">Select Cloud</div>
+                {clouds.map(cloud => (
+                  <div 
+                    key={cloud.id}
+                    className={`cloud-selector-dropdown__item ${selectedClouds[0] === cloud.id ? 'is-selected' : ''}`}
+                    onMouseEnter={() => setHoveredCloud(cloud.id)}
+                    onMouseLeave={() => setHoveredCloud(null)}
+                    onClick={() => selectCloud(cloud.id)}
+                  >
+                    <img src={cloud.icon} alt={cloud.name} className="cloud-selector-dropdown__icon" />
+                    <span className="cloud-selector-dropdown__name">{cloud.name}</span>
+                    {defaultCloud === cloud.id && (
+                      <span className="cloud-selector-dropdown__default-badge">Default</span>
+                    )}
+                    {hoveredCloud === cloud.id && defaultCloud !== cloud.id && (
+                      <button 
+                        className="cloud-selector-dropdown__make-default"
+                        onClick={(e) => { e.stopPropagation(); makeDefaultCloud(cloud.id); }}
+                      >
+                        Make Default
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="header__actions">
             {view === 'home' ? (
