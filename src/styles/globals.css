@@ -299,6 +299,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
 }
 
 .header__icon {
@@ -1188,10 +1189,9 @@ fieldset.slds-form-element legend {
 
 .cloud-selector-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 2px);
   left: 0;
-  margin-top: 4px;
-  min-width: 200px;
+  min-width: 220px;
   background: white;
   border: 1px solid var(--slds-g-color-neutral-base-80);
   border-radius: 8px;
