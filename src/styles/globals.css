@@ -381,14 +381,14 @@ body {
 }
 
 .header__icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: none;
-  border: 1px solid var(--slds-g-color-neutral-base-80);
-  border-radius: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
   color: var(--slds-g-color-neutral-base-50);
   transition: all 0.15s ease;
@@ -396,20 +396,16 @@ body {
 
 .header__icon-btn:hover {
   background: var(--slds-g-color-neutral-base-95);
-  border-color: var(--slds-g-color-neutral-base-70);
   color: var(--slds-g-color-neutral-base-30);
 }
 
 .header__icon-btn--add {
-  background: var(--slds-g-color-brand-base-50);
-  border-color: var(--slds-g-color-brand-base-50);
-  color: white;
+  color: var(--slds-g-color-neutral-base-40);
 }
 
 .header__icon-btn--add:hover {
-  background: var(--slds-g-color-brand-base-40);
-  border-color: var(--slds-g-color-brand-base-40);
-  color: white;
+  background: var(--slds-g-color-neutral-base-95);
+  color: var(--slds-g-color-brand-base-50);
 }
 
 .header__dropdown-container {
