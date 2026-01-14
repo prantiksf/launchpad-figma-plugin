@@ -57,7 +57,7 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
 
   const optionContainerStyles = clsx(
     'flex',
-    direction === 'horizontal' ? 'flex-row gap-6' : 'flex-col gap-2'
+    direction === 'horizontal' ? 'flex-row gap-8' : 'flex-col gap-2'
   );
 
   return (
