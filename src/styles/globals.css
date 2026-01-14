@@ -713,6 +713,7 @@ fieldset.slds-form-element legend {
 
 .slds-radio-label {
   margin-left: 6px;
+  white-space: nowrap;
 }
 
 .form-field__label {
