@@ -1016,6 +1016,31 @@ kbd {
   border-top: 1px solid var(--slds-g-color-neutral-base-90);
 }
 
+.app-footer__left {
+  display: flex;
+  gap: 8px;
+}
+
+.app-footer__btn {
+  background: none;
+  border: 1px solid var(--slds-g-color-neutral-base-80);
+  color: var(--slds-g-color-neutral-base-30);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.app-footer__btn:hover {
+  background: var(--slds-g-color-neutral-base-95);
+  border-color: var(--slds-g-color-neutral-base-70);
+}
+
+.app-footer__version {
+  color: var(--slds-g-color-neutral-base-60);
+}
+
 /* ============ SCAFFOLD SECTION ============ */
 .scaffold-section {
   padding: 0;

@@ -408,6 +408,55 @@ export function App() {
     parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
   }
 
+  // Export templates to JSON file
+  function exportTemplates() {
+    const data = {
+      version: VERSION,
+      exportedAt: new Date().toISOString(),
+      templates: templates,
+      figmaLinks: figmaLinks,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `starter-kit-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Templates exported!' } }, '*');
+  }
+
+  // Import templates from JSON file
+  function importTemplates(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (data.templates && Array.isArray(data.templates)) {
+          setTemplates(data.templates);
+          parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: data.templates } }, '*');
+          
+          if (data.figmaLinks && Array.isArray(data.figmaLinks)) {
+            setFigmaLinks(data.figmaLinks);
+            parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: data.figmaLinks } }, '*');
+          }
+          
+          parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Imported ${data.templates.length} templates!` } }, '*');
+        } else {
+          parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Invalid backup file' } }, '*');
+        }
+      } catch {
+        parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to parse file' } }, '*');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be imported again
+    event.target.value = '';
+  }
+
   // Figma Links functions
   function addFigmaLink() {
     if (!newLinkName.trim() || !newLinkUrl.trim()) return;
@@ -478,7 +527,7 @@ export function App() {
     }, '*');
   }
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
 
   // ============ RENDER ============
   if (isLoading) {
@@ -923,8 +972,21 @@ export function App() {
 
       {/* Footer */}
       <footer className="app-footer">
-        <span>Need help? prantik.banerjee@salesforce.com</span>
-        <span>v{VERSION}</span>
+        <div className="app-footer__left">
+          <button className="app-footer__btn" onClick={exportTemplates} title="Export backup">
+            ↓ Export
+          </button>
+          <label className="app-footer__btn" title="Import backup">
+            ↑ Import
+            <input 
+              type="file" 
+              accept=".json" 
+              onChange={importTemplates} 
+              style={{ display: 'none' }} 
+            />
+          </label>
+        </div>
+        <span className="app-footer__version">v{VERSION}</span>
       </footer>
     </div>
   );
