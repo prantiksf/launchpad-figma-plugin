@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 // Import Design System Components
 import { 
@@ -115,6 +115,10 @@ export function App() {
   const [newLinkName, setNewLinkName] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  
+  // Refs for click-outside handling
+  const linksDropdownRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
@@ -206,6 +210,22 @@ export function App() {
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (linksDropdownRef.current && !linksDropdownRef.current.contains(event.target as Node)) {
+        setShowLinksDropdown(false);
+        setIsAddingLink(false);
+      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
 
@@ -567,7 +587,7 @@ export function App() {
                 )}
                 
                 {/* Figma Links Dropdown */}
-                <div className="header__dropdown-container">
+                <div className="header__dropdown-container" ref={linksDropdownRef}>
                   <button 
                     className="header__icon-btn"
                     onClick={() => setShowLinksDropdown(!showLinksDropdown)}
@@ -652,7 +672,7 @@ export function App() {
                 </button>
                 
                 {/* More Menu (Export/Import) */}
-                <div className="header__dropdown-container">
+                <div className="header__dropdown-container" ref={moreMenuRef}>
                   <button 
                     className="header__icon-btn"
                     onClick={() => setShowMoreMenu(!showMoreMenu)}
