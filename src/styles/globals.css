@@ -704,6 +704,17 @@ fieldset.slds-form-element legend {
   margin-bottom: 8px;
 }
 
+/* Radio button styling */
+.slds-radio-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.slds-radio-label {
+  margin-left: 6px;
+}
+
 .form-field__label {
   font-size: 12px;
   font-weight: 500;
