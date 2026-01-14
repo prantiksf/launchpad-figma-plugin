@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
 // Import Design System Components
-import {
-  Button,
-  Input,
+import { 
+  Button, 
+  Input, 
   Card,
   CardContent,
   CardFooter,
-  Badge,
+  Badge, 
   Spinner,
   EmptyState,
   RadioGroup,
@@ -106,11 +106,20 @@ export function App() {
   const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
   const [isScaffolding, setIsScaffolding] = useState(false);
   const [scaffoldExists, setScaffoldExists] = useState(false);
+  const [showPagesCreatedMessage, setShowPagesCreatedMessage] = useState(false);
+  
+  // Figma Links feature
+  const [figmaLinks, setFigmaLinks] = useState<Array<{id: string; name: string; url: string}>>([]);
+  const [showLinksDropdown, setShowLinksDropdown] = useState(false);
+  const [isAddingLink, setIsAddingLink] = useState(false);
+  const [newLinkName, setNewLinkName] = useState('');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
 
-  // Load templates from Figma's clientStorage on mount
+  // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
     parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
     parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
   }, []);
 
   // Add template flow
@@ -173,11 +182,18 @@ export function App() {
         case 'SCAFFOLD_SUCCESS':
           setIsScaffolding(false);
           setScaffoldExists(true);
+          setShowPagesCreatedMessage(true);
           setView('home'); // Go back to home after creating
+          // Hide message after 3 seconds
+          setTimeout(() => setShowPagesCreatedMessage(false), 3000);
           break;
 
         case 'SCAFFOLD_ERROR':
           setIsScaffolding(false);
+          break;
+          
+        case 'FIGMA_LINKS_LOADED':
+          setFigmaLinks(msg.links || []);
           break;
 
         case 'SCAFFOLD_EXISTS':
@@ -392,6 +408,36 @@ export function App() {
     parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
   }
 
+  // Figma Links functions
+  function addFigmaLink() {
+    if (!newLinkName.trim() || !newLinkUrl.trim()) return;
+    
+    const newLink = {
+      id: Date.now().toString(),
+      name: newLinkName.trim(),
+      url: newLinkUrl.trim()
+    };
+    
+    const updatedLinks = [...figmaLinks, newLink];
+    setFigmaLinks(updatedLinks);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedLinks } }, '*');
+    
+    setNewLinkName('');
+    setNewLinkUrl('');
+    setIsAddingLink(false);
+  }
+  
+  function removeFigmaLink(id: string) {
+    const updatedLinks = figmaLinks.filter(link => link.id !== id);
+    setFigmaLinks(updatedLinks);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedLinks } }, '*');
+  }
+  
+  function openFigmaLink(url: string) {
+    window.open(url, '_blank');
+    setShowLinksDropdown(false);
+  }
+
   // Scaffold file structure
   function scaffoldFileStructure() {
     setIsScaffolding(true);
@@ -458,16 +504,102 @@ export function App() {
           <div className="header__actions">
             {view === 'home' ? (
               <>
-                <button 
-                  className="header__text-btn"
-                  onClick={() => setView('scaffold')}
-                  disabled={scaffoldExists}
-                >
-                  {scaffoldExists ? '✓ Pages Created' : 'Create Pages'}
+                {showPagesCreatedMessage && (
+                  <span className="header__success-msg">✓ Pages Created</span>
+                )}
+                {!scaffoldExists && (
+                  <button 
+                    className="header__text-btn"
+                    onClick={() => setView('scaffold')}
+                  >
+                    Create Pages
+                  </button>
+                )}
+                
+                {/* Figma Links Dropdown */}
+                <div className="header__dropdown-container">
+                  <button 
+                    className="header__icon-btn"
+                    onClick={() => setShowLinksDropdown(!showLinksDropdown)}
+                    title="Figma Links"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 38 57" fill="currentColor">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
+                    </svg>
+                  </button>
+                  
+                  {showLinksDropdown && (
+                    <div className="header__dropdown">
+                      <div className="header__dropdown-header">
+                        <span className="header__dropdown-title">Figma Links</span>
+                        <button 
+                          className="header__dropdown-add"
+                          onClick={() => setIsAddingLink(!isAddingLink)}
+                        >
+                          {isAddingLink ? '×' : '+'}
+                        </button>
+                      </div>
+                      
+                      {isAddingLink && (
+                        <div className="header__dropdown-form">
+                          <input
+                            type="text"
+                            placeholder="Link name"
+                            value={newLinkName}
+                            onChange={(e) => setNewLinkName(e.target.value)}
+                            className="header__dropdown-input"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Figma URL"
+                            value={newLinkUrl}
+                            onChange={(e) => setNewLinkUrl(e.target.value)}
+                            className="header__dropdown-input"
+                          />
+                          <button 
+                            className="header__dropdown-save"
+                            onClick={addFigmaLink}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      )}
+                      
+                      <div className="header__dropdown-links">
+                        {figmaLinks.length === 0 && !isAddingLink ? (
+                          <p className="header__dropdown-empty">No links added yet</p>
+                        ) : (
+                          figmaLinks.map(link => (
+                            <div key={link.id} className="header__dropdown-link">
+                              <button 
+                                className="header__dropdown-link-btn"
+                                onClick={() => openFigmaLink(link.url)}
+                              >
+                                {link.name}
+                              </button>
+                              <button 
+                                className="header__dropdown-link-delete"
+                                onClick={() => removeFigmaLink(link.id)}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <button className="header__icon-btn header__icon-btn--add" onClick={startAddFlow} title="Add Template">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
                 </button>
-                <Button variant="neutral" size="small" onClick={startAddFlow}>
-                  + Add
-                </Button>
               </>
             ) : (
               <Button variant="neutral" size="small" onClick={goHome}>
@@ -489,7 +621,7 @@ export function App() {
                 {cat.label}
               </button>
             ))}
-          </div>
+        </div>
         )}
         </div>
 
@@ -519,7 +651,7 @@ export function App() {
                   <div className="scaffold-preview__divider">───────────────────</div>
                   <div className="scaffold-preview__section">BELOW THE LINE</div>
                   <div className="scaffold-preview__item scaffold-preview__item--indent">❌ {'{Deprecated Feature}'}</div>
-                </div>
+            </div>
                 <p className="scaffold-hint">
                   <strong>Status:</strong> 🟢 Ready • 🟡 In Progress • ❌ Deprecated
                 </p>
@@ -527,7 +659,7 @@ export function App() {
               <CardFooter>
                 <Button 
                   variant="brand" 
-                  fullWidth 
+                  fullWidth
                   onClick={() => { scaffoldFileStructure(); }}
                   loading={isScaffolding}
                 >
@@ -561,7 +693,7 @@ export function App() {
                 <CardFooter>
                   <Button variant="neutral" fullWidth onClick={captureComponent}>
                     Add to Library
-                  </Button>
+                </Button>
                 </CardFooter>
               </Card>
             )}

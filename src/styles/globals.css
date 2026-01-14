@@ -367,6 +367,202 @@ body {
   background: transparent;
 }
 
+.header__success-msg {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--slds-g-color-success-base-40);
+  padding: 6px 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.header__icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--slds-g-color-neutral-base-80);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--slds-g-color-neutral-base-50);
+  transition: all 0.15s ease;
+}
+
+.header__icon-btn:hover {
+  background: var(--slds-g-color-neutral-base-95);
+  border-color: var(--slds-g-color-neutral-base-70);
+  color: var(--slds-g-color-neutral-base-30);
+}
+
+.header__icon-btn--add {
+  background: var(--slds-g-color-brand-base-50);
+  border-color: var(--slds-g-color-brand-base-50);
+  color: white;
+}
+
+.header__icon-btn--add:hover {
+  background: var(--slds-g-color-brand-base-40);
+  border-color: var(--slds-g-color-brand-base-40);
+  color: white;
+}
+
+.header__dropdown-container {
+  position: relative;
+}
+
+.header__dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 240px;
+  background: white;
+  border: 1px solid var(--slds-g-color-neutral-base-80);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.header__dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+  background: var(--slds-g-color-neutral-base-97);
+}
+
+.header__dropdown-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--slds-g-color-neutral-base-30);
+}
+
+.header__dropdown-add {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.header__dropdown-add:hover {
+  background: var(--slds-g-color-brand-base-40);
+}
+
+.header__dropdown-form {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+}
+
+.header__dropdown-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  border: 1px solid var(--slds-g-color-neutral-base-80);
+  border-radius: 6px;
+  outline: none;
+}
+
+.header__dropdown-input:focus {
+  border-color: var(--slds-g-color-brand-base-50);
+}
+
+.header__dropdown-save {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.header__dropdown-save:hover {
+  background: var(--slds-g-color-brand-base-40);
+}
+
+.header__dropdown-links {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.header__dropdown-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--slds-g-color-neutral-base-50);
+}
+
+.header__dropdown-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 0 0;
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-95);
+}
+
+.header__dropdown-link:last-child {
+  border-bottom: none;
+}
+
+.header__dropdown-link-btn {
+  flex: 1;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--slds-g-color-neutral-base-20);
+  background: none;
+  border: none;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header__dropdown-link-btn:hover {
+  background: var(--slds-g-color-neutral-base-97);
+  color: var(--slds-g-color-brand-base-50);
+}
+
+.header__dropdown-link-delete {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--slds-g-color-neutral-base-60);
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 4px;
+}
+
+.header__dropdown-link-delete:hover {
+  background: var(--slds-g-color-error-base-90);
+  color: var(--slds-g-color-error-base-40);
+}
+
 /* ============ FILTERS ============ */
 .filters {
   padding: 8px 16px;
