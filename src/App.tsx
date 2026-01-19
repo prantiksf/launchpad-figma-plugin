@@ -13,8 +13,7 @@ import {
   RadioGroup,
 } from './design-system/components';
 
-// Import Onboarding
-import { Onboarding } from './components/Onboarding';
+// Onboarding component not used - using inline splash screen
 
 // Import cloud icons
 import SalesCloudIcon from './assets/SalesCloud-icon.png';
@@ -24,6 +23,8 @@ import CommerceCloudIcon from './assets/CommerceCloud-icon.png';
 import RevenueCloudIcon from './assets/RevenueCloud-icon.png';
 import FieldServiceCloudIcon from './assets/FieldServiceCloud-icon.png';
 import GoogleSlideIcon from './assets/googleslide-icon.svg';
+import StarterKitIcon from './assets/Starter Kit _icon.png';
+import StarterKitIllustration from './assets/starterkit_illustration.png';
 
 // ============ CONSTANTS ============
 const clouds = [
@@ -101,6 +102,8 @@ export function App() {
   // Onboarding state
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  const [skipSplashOnLaunch, setSkipSplashOnLaunch] = useState(false);
+  const [showMoreCloudsInSplash, setShowMoreCloudsInSplash] = useState(false);
   
   // Core state
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -114,24 +117,166 @@ export function App() {
   const [isScaffolding, setIsScaffolding] = useState(false);
   const [scaffoldExists, setScaffoldExists] = useState(false);
   const [showPagesCreatedMessage, setShowPagesCreatedMessage] = useState(false);
+  const [isEditingScaffold, setIsEditingScaffold] = useState(false);
+  const [isEditingStatusBadges, setIsEditingStatusBadges] = useState(false);
   
-  // Figma Links feature
-  const [figmaLinks, setFigmaLinks] = useState<Array<{id: string; name: string; url: string}>>([]);
+  // Editable scaffold structure - organized by sections
+  interface ScaffoldPage {
+    id: string;
+    name: string;
+    status: string | null;
+    isRename?: boolean;
+  }
+  
+  interface ScaffoldSection {
+    id: string;
+    name: string;
+    pages: ScaffoldPage[];
+  }
+  
+  // Default scaffold sections (for reset)
+  const defaultScaffoldSections: ScaffoldSection[] = [
+    {
+      id: 'top',
+      name: '',
+      pages: [
+        { id: 'cover', name: 'Cover Page', status: null, isRename: true },
+        { id: 'readme', name: 'Read Me', status: null },
+      ]
+    },
+    {
+      id: 'current',
+      name: 'CURRENT DESIGNS',
+      pages: [
+        { id: 'current1', name: '{Release} {Feature Name}', status: '🟢' },
+        { id: 'current2', name: '{Release} {Feature Name} • Explorations', status: '🟡' },
+        { id: 'current3', name: '{Release} {Feature Name 2}', status: '🟢' },
+      ]
+    },
+    {
+      id: 'milestones',
+      name: 'MILESTONES + E2E FLOWS/DEMOS',
+      pages: [
+        { id: 'milestone1', name: '{YYYY.MM.DD}_Product Demo', status: '🟢' },
+        { id: 'milestone2', name: '{YYYY.MM.DD}_Customer Demo', status: '🟢' },
+        { id: 'milestone3', name: '{YYYY.MM.DD}_Sprint Review', status: '🟡' },
+      ]
+    },
+    {
+      id: 'archived',
+      name: 'ARCHIVED EXPLORATIONS',
+      pages: [
+        { id: 'archive1', name: '{YYYY.MM.DD}_{Exploration Name}', status: null },
+        { id: 'archive2', name: '{YYYY.MM.DD}_{Previous Iteration}', status: null },
+        { id: 'archive3', name: '{YYYY.MM.DD}_{Deprecated Flow}', status: null },
+      ]
+    },
+    {
+      id: 'btl',
+      name: 'BELOW THE LINE',
+      pages: [
+        { id: 'btl1', name: '{Deprecated Feature}', status: '❌' },
+        { id: 'btl2', name: '{Old Component Library}', status: '❌' },
+      ]
+    },
+  ];
+  
+  const [scaffoldSections, setScaffoldSections] = useState<ScaffoldSection[]>([
+    {
+      id: 'top',
+      name: '',  // No header for top-level pages
+      pages: [
+        { id: 'cover', name: 'Cover Page', status: null, isRename: true },
+        { id: 'readme', name: 'Read Me', status: null },
+      ]
+    },
+    {
+      id: 'current',
+      name: 'CURRENT DESIGNS',
+      pages: [
+        { id: 'current1', name: '{Release} {Feature Name}', status: '🟢' },
+        { id: 'current2', name: '{Release} {Feature Name} • Explorations', status: '🟡' },
+        { id: 'current3', name: '{Release} {Feature Name 2}', status: '🟢' },
+      ]
+    },
+    {
+      id: 'milestones',
+      name: 'MILESTONES + E2E FLOWS/DEMOS',
+      pages: [
+        { id: 'milestone1', name: '{YYYY.MM.DD}_Product Demo', status: '🟢' },
+        { id: 'milestone2', name: '{YYYY.MM.DD}_Customer Demo', status: '🟢' },
+        { id: 'milestone3', name: '{YYYY.MM.DD}_Sprint Review', status: '🟡' },
+      ]
+    },
+    {
+      id: 'archived',
+      name: 'ARCHIVED EXPLORATIONS',
+      pages: [
+        { id: 'archive1', name: '{YYYY.MM.DD}_{Exploration Name}', status: null },
+        { id: 'archive2', name: '{YYYY.MM.DD}_{Previous Iteration}', status: null },
+        { id: 'archive3', name: '{YYYY.MM.DD}_{Deprecated Flow}', status: null },
+      ]
+    },
+    {
+      id: 'btl',
+      name: 'BELOW THE LINE',
+      pages: [
+        { id: 'btl1', name: '{Deprecated Feature}', status: '❌' },
+        { id: 'btl2', name: '{Old Component Library}', status: '❌' },
+      ]
+    },
+  ]);
+  
+  // Figma Links feature (per cloud)
+  const [cloudFigmaLinks, setCloudFigmaLinks] = useState<Record<string, Array<{id: string; name: string; url: string}>>>({});
   const [showLinksDropdown, setShowLinksDropdown] = useState(false);
   const [isAddingLink, setIsAddingLink] = useState(false);
   const [newLinkName, setNewLinkName] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   
+  // Settings accordion state
+  const [expandedSettingsSection, setExpandedSettingsSection] = useState<string | null>(null);
+  
   // Cloud selector feature
   const [showCloudSelector, setShowCloudSelector] = useState(false);
   const [defaultCloud, setDefaultCloud] = useState<string | null>(null);
   const [hoveredCloud, setHoveredCloud] = useState<string | null>(null);
+  const [showAddCloudModal, setShowAddCloudModal] = useState(false);
+  const [newCloudName, setNewCloudName] = useState('');
+  const [newCloudIcon, setNewCloudIcon] = useState<string | null>(null);
+  
+  // Cloud visibility and per-cloud settings
+  const [hiddenClouds, setHiddenClouds] = useState<string[]>([]);
+  const [cloudCategories, setCloudCategories] = useState<Record<string, Array<{id: string; label: string}>>>({});
+  
+  // Drag and drop state
+  const [draggedItem, setDraggedItem] = useState<{ type: string; index: number } | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  
+  // Default categories (used for reset and initial state)
+  const defaultCategories = [
+    { id: 'all', label: 'All' },
+    { id: 'cover-pages', label: 'Covers' },
+    { id: 'components', label: 'Components' },
+    { id: 'slides', label: 'Slides' },
+    { id: 'resources', label: 'Resources' },
+  ];
+  
+  // Status symbols for scaffold pages
+  const defaultStatusSymbols = [
+    { id: 'ready', symbol: '🟢', label: 'Ready' },
+    { id: 'progress', symbol: '🟡', label: 'In Progress' },
+    { id: 'deprecated', symbol: '❌', label: 'Deprecated' },
+  ];
+  const [statusSymbols, setStatusSymbols] = useState(defaultStatusSymbols);
   
   // Refs for click-outside handling
   const linksDropdownRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const cloudSelectorRef = useRef<HTMLDivElement>(null);
+  const cloudIconInputRef = useRef<HTMLInputElement>(null);
+  const splashMoreDropdownRef = useRef<HTMLDivElement>(null);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
@@ -144,24 +289,28 @@ export function App() {
       parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_CUSTOM_CLOUDS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_HIDDEN_CLOUDS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
     } else {
       // Browser preview - skip onboarding
       setHasCompletedOnboarding(true);
       setShowSplash(false);
     }
     
-    // Fallback timeout for browser preview (stop loading after 1s if no response)
+    // Fallback timeout - if no response in 2s, assume first-time user
     const timeout = setTimeout(() => {
-      if (isLoading) {
-        setIsLoading(false);
-      }
-    }, 1000);
+      setIsLoading(false);
+      // Use a setter function to access current state
+      setHasCompletedOnboarding(prev => prev === null ? false : prev);
+    }, 2000);
     
     return () => clearTimeout(timeout);
   }, []);
 
   // Add template flow
-  const [view, setView] = useState<'home' | 'add' | 'scaffold'>('home');
+  const [view, setView] = useState<'home' | 'add' | 'scaffold' | 'settings'>('home');
   const [addStep, setAddStep] = useState<'instructions' | 'loading' | 'configure'>('instructions');
   const [capturedComponent, setCapturedComponent] = useState<ComponentInfo | null>(null);
   const [formName, setFormName] = useState('');
@@ -231,7 +380,13 @@ export function App() {
           break;
           
         case 'FIGMA_LINKS_LOADED':
-          setFigmaLinks(msg.links || []);
+          // Support both old format (array) and new format (object per cloud)
+          if (msg.links && typeof msg.links === 'object' && !Array.isArray(msg.links)) {
+            setCloudFigmaLinks(msg.links);
+          } else if (Array.isArray(msg.links)) {
+            // Migrate old format to new - assign to 'sales' as default
+            setCloudFigmaLinks({ sales: msg.links });
+          }
           break;
 
         case 'DEFAULT_CLOUD_LOADED':
@@ -242,13 +397,35 @@ export function App() {
           break;
 
         case 'ONBOARDING_STATE_LOADED':
-          if (msg.hasCompleted) {
-            setHasCompletedOnboarding(true);
-            // Show splash briefly, then hide
-            setTimeout(() => setShowSplash(false), 800);
-          } else {
-            setHasCompletedOnboarding(false);
+          setHasCompletedOnboarding(msg.hasCompleted || false);
+          setSkipSplashOnLaunch(msg.skipSplash || false);
+          // If skip splash is enabled, hide splash immediately
+          if (msg.skipSplash && msg.hasCompleted) {
             setShowSplash(false);
+          }
+          break;
+
+        case 'CUSTOM_CLOUDS_LOADED':
+          if (msg.clouds && Array.isArray(msg.clouds)) {
+            setCustomClouds(msg.clouds);
+          }
+          break;
+
+        case 'HIDDEN_CLOUDS_LOADED':
+          if (msg.hiddenClouds && Array.isArray(msg.hiddenClouds)) {
+            setHiddenClouds(msg.hiddenClouds);
+          }
+          break;
+
+        case 'CLOUD_CATEGORIES_LOADED':
+          if (msg.categories && typeof msg.categories === 'object') {
+            setCloudCategories(msg.categories);
+          }
+          break;
+
+        case 'STATUS_SYMBOLS_LOADED':
+          if (msg.symbols && Array.isArray(msg.symbols) && msg.symbols.length > 0) {
+            setStatusSymbols(msg.symbols);
           }
           break;
 
@@ -276,6 +453,9 @@ export function App() {
       if (cloudSelectorRef.current && !cloudSelectorRef.current.contains(event.target as Node)) {
         setShowCloudSelector(false);
         setHoveredCloud(null);
+      }
+      if (splashMoreDropdownRef.current && !splashMoreDropdownRef.current.contains(event.target as Node)) {
+        setShowMoreCloudsInSplash(false);
       }
     }
     
@@ -533,6 +713,10 @@ export function App() {
     event.target.value = '';
   }
 
+  // Get current cloud's figma links
+  const currentCloudId = selectedClouds[0] || 'sales';
+  const figmaLinks = cloudFigmaLinks[currentCloudId] || [];
+  
   // Figma Links functions
   function addFigmaLink() {
     if (!newLinkName.trim() || !newLinkUrl.trim()) return;
@@ -544,8 +728,9 @@ export function App() {
     };
     
     const updatedLinks = [...figmaLinks, newLink];
-    setFigmaLinks(updatedLinks);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedLinks } }, '*');
+    const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
+    setCloudFigmaLinks(updatedCloudLinks);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
     
     setNewLinkName('');
     setNewLinkUrl('');
@@ -554,8 +739,9 @@ export function App() {
   
   function removeFigmaLink(id: string) {
     const updatedLinks = figmaLinks.filter(link => link.id !== id);
-    setFigmaLinks(updatedLinks);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedLinks } }, '*');
+    const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
+    setCloudFigmaLinks(updatedCloudLinks);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
   }
   
   function openFigmaLink(url: string) {
@@ -574,24 +760,126 @@ export function App() {
     setDefaultCloud(cloudId);
     setSelectedClouds([cloudId]);
     parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId } }, '*');
-    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${clouds.find(c => c.id === cloudId)?.name} Cloud set as default` } }, '*');
+    const cloudName = allClouds.find(c => c.id === cloudId)?.name || cloudId;
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${cloudName} set as default` } }, '*');
     setShowCloudSelector(false);
     setHoveredCloud(null);
   }
 
+  // Add cloud from header dropdown
+  function handleCloudIconUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setNewCloudIcon(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function saveNewCloud() {
+    if (newCloudName.trim() && newCloudIcon) {
+      const newCloud = {
+        id: `custom-${Date.now()}`,
+        name: newCloudName.trim(),
+        icon: newCloudIcon,
+        isCustom: true,
+      };
+      const updatedClouds = [...customClouds, newCloud];
+      setCustomClouds(updatedClouds);
+      setSelectedClouds([newCloud.id]);
+      setDefaultCloud(newCloud.id);
+      parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedClouds } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: newCloud.id } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${newCloud.name} added!` } }, '*');
+      
+      // Reset form
+      setNewCloudName('');
+      setNewCloudIcon(null);
+      setShowAddCloudModal(false);
+      setShowCloudSelector(false);
+    }
+  }
+
+  function cancelAddCloud() {
+    setNewCloudName('');
+    setNewCloudIcon(null);
+    setShowAddCloudModal(false);
+  }
+
+  // Custom clouds state
+  const [customClouds, setCustomClouds] = useState<Array<{id: string; name: string; icon: string; isCustom?: boolean}>>([]);
+
+  // Combined clouds list (default + custom)
+  const allClouds = [...clouds, ...customClouds];
+  
+  // Visible clouds (excluding hidden ones)
+  const visibleClouds = allClouds.filter(cloud => !hiddenClouds.includes(cloud.id));
+  
+  // Get categories for current selected cloud
+  const currentCategories = selectedClouds[0] && cloudCategories[selectedClouds[0]] 
+    ? cloudCategories[selectedClouds[0]] 
+    : defaultCategories;
+    
+  // Helper functions for settings
+  function toggleCloudVisibility(cloudId: string) {
+    const newHiddenClouds = hiddenClouds.includes(cloudId)
+      ? hiddenClouds.filter(id => id !== cloudId)
+      : [...hiddenClouds, cloudId];
+    setHiddenClouds(newHiddenClouds);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_HIDDEN_CLOUDS', hiddenClouds: newHiddenClouds } }, '*');
+  }
+  
+  function updateCloudCategories(cloudId: string, newCategories: Array<{id: string; label: string}>) {
+    const updated = { ...cloudCategories, [cloudId]: newCategories };
+    setCloudCategories(updated);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_CATEGORIES', categories: updated } }, '*');
+  }
+  
+  function updateStatusSymbols(newSymbols: typeof statusSymbols) {
+    setStatusSymbols(newSymbols);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_STATUS_SYMBOLS', symbols: newSymbols } }, '*');
+  }
+  
+  function resetAllSettings() {
+    if (confirm('Reset all settings to default? This will:\n• Show all clouds\n• Reset categories to default\n• Clear custom clouds\n• Reset default cloud\n• Reset status symbols\n• Reset page structure')) {
+      setHiddenClouds([]);
+      setCloudCategories({});
+      setDefaultCloud('sales');
+      setSelectedClouds(['sales']);
+      setCustomClouds([]);
+      setStatusSymbols(defaultStatusSymbols);
+      setScaffoldSections(defaultScaffoldSections);
+      setCloudFigmaLinks({});
+      parent.postMessage({ pluginMessage: { type: 'SAVE_HIDDEN_CLOUDS', hiddenClouds: [] } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_CATEGORIES', categories: {} } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: 'sales' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: [] } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_STATUS_SYMBOLS', symbols: defaultStatusSymbols } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: {} } }, '*');
+    }
+  }
+
   // Onboarding completion
-  function completeOnboarding(selectedCloud: string) {
+  function completeOnboarding(selectedCloud: string, customCloud?: {id: string; name: string; icon: string; isCustom?: boolean}) {
+    // If a custom cloud was added, save it first
+    let updatedCustomClouds = customClouds;
+    if (customCloud) {
+      updatedCustomClouds = [...customClouds, customCloud];
+      setCustomClouds(updatedCustomClouds);
+      parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedCustomClouds } }, '*');
+    }
+    
     setHasCompletedOnboarding(true);
     setSelectedClouds([selectedCloud]);
     setDefaultCloud(selectedCloud);
+    
     parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true } }, '*');
     parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: selectedCloud } }, '*');
-    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Welcome to Starter Kit!' } }, '*');
-  }
-
-  // Add custom cloud (placeholder - will implement modal later)
-  function handleAddCustomCloud() {
-    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Coming soon: Add custom cloud!' } }, '*');
+    
+    const cloudName = customCloud?.name || clouds.find(c => c.id === selectedCloud)?.name || selectedCloud;
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Welcome! Showing ${cloudName} templates` } }, '*');
   }
 
   // Scaffold file structure
@@ -626,10 +914,34 @@ export function App() {
       console.log('Using single component key:', coverComponentKey);
     }
     
+    // Build pages list from editable scaffold sections
+    const pages: Array<{ name: string; isRename: boolean }> = [];
+    
+    scaffoldSections.forEach((section, sectionIndex) => {
+      // Add divider before sections (except first and top-level)
+      if (sectionIndex > 0 && section.name) {
+        pages.push({ name: '───────────────────', isRename: false });
+      }
+      
+      // Add section header if it has a name
+      if (section.name) {
+        pages.push({ name: section.name, isRename: false });
+      }
+      
+      // Add pages in this section
+      section.pages.forEach(page => {
+        pages.push({
+          name: page.status ? `${page.status} ${page.name}` : page.name,
+          isRename: page.isRename || false
+        });
+      });
+    });
+    
     parent.postMessage({ 
       pluginMessage: { 
         type: 'SCAFFOLD_FILE_STRUCTURE',
-        coverComponentKey 
+        coverComponentKey,
+        pages
       } 
     }, '*');
   }
@@ -640,19 +952,181 @@ export function App() {
   
   // Show onboarding for first-time users
   if (hasCompletedOnboarding === false) {
-    return (
+  return (
       <Onboarding 
         onComplete={completeOnboarding}
-        onAddCustomCloud={handleAddCustomCloud}
+        customClouds={customClouds}
       />
     );
   }
 
-  // Show splash screen while loading (for returning users)
-  if (showSplash || hasCompletedOnboarding === null) {
+  // Splash screen functions
+  function selectCloudFromSplash(cloudId: string) {
+    setSelectedClouds([cloudId]);
+    setDefaultCloud(cloudId);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId } }, '*');
+  }
+
+  function enterFromSplash() {
+    setShowSplash(false);
+    if (!hasCompletedOnboarding) {
+      setHasCompletedOnboarding(true);
+      parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true, skipSplash: skipSplashOnLaunch } }, '*');
+    }
+  }
+
+  function toggleSkipSplash() {
+    const newValue = !skipSplashOnLaunch;
+    setSkipSplashOnLaunch(newValue);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true, skipSplash: newValue } }, '*');
+  }
+
+  // Show splash screen (launcher)
+  if (showSplash && hasCompletedOnboarding !== null) {
+    const displayedClouds = clouds.filter(c => !hiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
+    const visibleCustomClouds = customClouds.filter(c => !hiddenClouds.includes(c.id));
+    const hasMoreClouds = visibleCustomClouds.length > 0;
+    
+    return (
+      <div className="splash-screen splash-screen--launcher">
+        <div className="splash-screen__logo">
+          <img src={StarterKitIcon} alt="Starter Kit" className="splash-screen__icon" />
+          <h1 className="splash-screen__title">
+            <span className="onboarding__title-gradient">starter</span>
+            <span className="onboarding__title-kit">KIT</span>
+            </h1>
+          <p className="splash-screen__tagline">Get, Set Go with your design assets</p>
+          </div>
+        
+        <img src={StarterKitIllustration} alt="Starter Kit" className="splash-screen__illustration" />
+
+        <div className="splash-screen__selection">
+          <p className="splash-screen__label">Select your cloud</p>
+          
+          <div className="splash-screen__clouds">
+            {displayedClouds.map(cloud => (
+              <button
+                key={cloud.id}
+                className={`splash-screen__cloud-btn ${selectedClouds[0] === cloud.id ? 'is-selected' : ''}`}
+                onClick={() => selectCloudFromSplash(cloud.id)}
+                title={cloud.name}
+              >
+                <img src={cloud.icon} alt={cloud.name} />
+              </button>
+            ))}
+            
+            {/* More clouds dropdown */}
+            <div className="splash-screen__more-container" ref={splashMoreDropdownRef}>
+              <button 
+                className={`splash-screen__cloud-btn splash-screen__more-btn ${showMoreCloudsInSplash ? 'is-open' : ''}`}
+                onClick={() => setShowMoreCloudsInSplash(!showMoreCloudsInSplash)}
+                title="More clouds"
+              >
+                <span>•••</span>
+              </button>
+              
+              {showMoreCloudsInSplash && (
+                <div className="splash-screen__more-dropdown">
+                  {visibleCustomClouds.length > 0 && (
+                    <>
+                      <div className="splash-screen__dropdown-label">Your Clouds</div>
+                      {visibleCustomClouds.map(cloud => (
+                        <button
+                          key={cloud.id}
+                          className={`splash-screen__dropdown-item ${selectedClouds[0] === cloud.id ? 'is-selected' : ''}`}
+                          onClick={() => { selectCloudFromSplash(cloud.id); setShowMoreCloudsInSplash(false); }}
+                        >
+                          <img src={cloud.icon} alt={cloud.name} />
+                          <span>{cloud.name}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  <button 
+                    className="splash-screen__dropdown-add"
+                    onClick={() => { setShowMoreCloudsInSplash(false); setShowAddCloudModal(true); }}
+                  >
+                    <span>+</span>
+                    <span>Add Cloud / Team</span>
+                  </button>
+        </div>
+              )}
+        </div>
+          </div>
+        </div>
+
+        <button className="splash-screen__cta" onClick={enterFromSplash}>
+          Get Started →
+        </button>
+
+        <label className="splash-screen__skip">
+          <input 
+            type="checkbox" 
+            checked={skipSplashOnLaunch}
+            onChange={toggleSkipSplash}
+          />
+          <span>Don't show this again</span>
+        </label>
+
+        {/* Add Cloud Modal (for splash screen) */}
+        {showAddCloudModal && (
+          <div className="modal-overlay" onClick={cancelAddCloud}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal__header">
+                <h3 className="modal__title">Add Cloud / Team</h3>
+                <button className="modal__close" onClick={cancelAddCloud}>×</button>
+            </div>
+              <div className="modal__body">
+                <div 
+                  className="modal__icon-upload"
+                  onClick={() => cloudIconInputRef.current?.click()}
+                >
+                  {newCloudIcon ? (
+                    <img src={newCloudIcon} alt="Icon" className="modal__uploaded-icon" />
+                  ) : (
+                    <div className="modal__icon-placeholder">
+                      <span>+</span>
+                      <span className="modal__icon-hint">Upload Icon</span>
+                    </div>
+                  )}
+                  <input
+                    ref={cloudIconInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCloudIconUpload}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+              <Input
+                  label="Cloud or Team Name"
+                  placeholder="e.g. Data Cloud, My Team"
+                  value={newCloudName}
+                  onChange={(e) => setNewCloudName(e.target.value)}
+                />
+              </div>
+              <div className="modal__footer">
+                <Button variant="neutral" onClick={cancelAddCloud}>Cancel</Button>
+                <Button 
+                  variant="brand" 
+                  onClick={saveNewCloud}
+                  disabled={!newCloudName.trim() || !newCloudIcon}
+                >
+                  Add Cloud
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  // Loading state (before onboarding state is known)
+  if (hasCompletedOnboarding === null) {
     return (
       <div className="splash-screen">
         <div className="splash-screen__logo">
+          <img src={StarterKitIcon} alt="Starter Kit" className="splash-screen__icon" />
           <h1 className="splash-screen__title">
             <span className="onboarding__title-gradient">starter</span>
             <span className="onboarding__title-kit">KIT</span>
@@ -687,7 +1161,7 @@ export function App() {
               onClick={() => setShowCloudSelector(!showCloudSelector)}
             >
               <img 
-                src={clouds.find(c => c.id === selectedClouds[0])?.icon || SalesCloudIcon} 
+                src={allClouds.find(c => c.id === selectedClouds[0])?.icon || SalesCloudIcon} 
                 alt="Cloud" 
                 className="header__icon" 
               />
@@ -697,10 +1171,10 @@ export function App() {
               </svg>
             </button>
             
-            {showCloudSelector && (
+            {showCloudSelector && !showAddCloudModal && (
               <div className="cloud-selector-dropdown">
                 <div className="cloud-selector-dropdown__header">Select Cloud</div>
-                {clouds.map(cloud => (
+                {visibleClouds.map(cloud => (
                   <div 
                     key={cloud.id}
                     className={`cloud-selector-dropdown__item ${selectedClouds[0] === cloud.id ? 'is-selected' : ''}`}
@@ -723,8 +1197,16 @@ export function App() {
                     )}
                   </div>
                 ))}
+                <div 
+                  className="cloud-selector-dropdown__add"
+                  onClick={() => setShowAddCloudModal(true)}
+                >
+                  <span className="cloud-selector-dropdown__add-icon">+</span>
+                  <span>Add Cloud / Team</span>
+              </div>
               </div>
             )}
+            
           </div>
           <div className="header__actions">
             {view === 'home' ? (
@@ -767,7 +1249,7 @@ export function App() {
                         >
                           {isAddingLink ? '×' : '+'}
                         </button>
-                      </div>
+              </div>
                       
                       {isAddingLink && (
                         <div className="header__dropdown-form">
@@ -791,7 +1273,7 @@ export function App() {
                           >
                             Save
                           </button>
-                        </div>
+            </div>
                       )}
                       
                       <div className="header__dropdown-links">
@@ -812,14 +1294,14 @@ export function App() {
                               >
                                 ×
                               </button>
-                            </div>
+          </div>
                           ))
                         )}
                       </div>
-                    </div>
-                  )}
                 </div>
-                
+              )}
+            </div>
+
                 <button className="header__icon-btn header__icon-btn--add" onClick={startAddFlow} title="Add Template">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -844,6 +1326,13 @@ export function App() {
                     <div className="header__dropdown header__dropdown--compact">
                       <button 
                         className="header__dropdown-menu-item"
+                        onClick={() => { setView('settings'); setShowMoreMenu(false); }}
+                      >
+                        <span>⚙</span> Settings
+                      </button>
+                      <div className="header__dropdown-divider"></div>
+                      <button 
+                        className="header__dropdown-menu-item"
                         onClick={() => { exportTemplates(); setShowMoreMenu(false); }}
                       >
                         <span>↓</span> Export Backup
@@ -862,9 +1351,14 @@ export function App() {
                 </div>
               </>
             ) : (
-              <Button variant="neutral" size="small" onClick={goHome}>
-                ← Back
+              <div className="header__back-section">
+                <Button variant="neutral" size="small" onClick={goHome}>
+                  ← Back
               </Button>
+                <span className="header__view-title">
+                  {view === 'settings' ? 'Settings' : view === 'scaffold' ? 'Create Pages' : view === 'add' ? 'Add Template' : ''}
+                </span>
+              </div>
             )}
           </div>
         </header>
@@ -872,7 +1366,7 @@ export function App() {
         {/* Category Pills (only on home) */}
         {view === 'home' && (
           <div className="category-pills">
-            {categories.map(cat => (
+            {currentCategories.map(cat => (
               <button
                 key={cat.id}
                 className={`category-pill ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
@@ -888,45 +1382,677 @@ export function App() {
       {/* Content */}
       <div className="content">
         {view === 'scaffold' ? (
-          <div className="scaffold-section">
-            <Card bordered={false} shadow="none">
-              <CardContent>
-                <h3 className="step-title">Create Page Structure</h3>
-                <p className="scaffold-desc">
-                  Sets up your file with the SCUX starter kit pattern:
-                </p>
-                <div className="scaffold-preview">
-                  <div className="scaffold-preview__item">Cover Page <span className="scaffold-preview__note">(renames Page 1)</span></div>
-                  <div className="scaffold-preview__item">Read Me</div>
-                  <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">CURRENT DESIGNS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{Release}'} {'{Feature Name}'}</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟡 {'{Release}'} {'{Feature Name}'} • Variation 2</div>
-                  <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">MILESTONES + E2E FLOWS/DEMOS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">🟢 {'{YYYY.MM.DD}'}_Product Demo</div>
-                  <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">ARCHIVED EXPLORATIONS</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">{'{YYYY.MM.DD}'}_{'{Exploration Name}'}</div>
-                  <div className="scaffold-preview__divider">───────────────────</div>
-                  <div className="scaffold-preview__section">BELOW THE LINE</div>
-                  <div className="scaffold-preview__item scaffold-preview__item--indent">❌ {'{Deprecated Feature}'}</div>
+          <div className="scaffold-section scaffold-section--fixed-footer">
+            <div className="scaffold-section__scrollable">
+              <h3 className="scaffold-section__title">Create Page Structure</h3>
+              <p className="scaffold-section__desc">
+                {isEditingScaffold ? 'Edit your page structure below' : 'Creates the team page structure in your Figma file'}
+              </p>
+              
+              {/* Editable or Read-only preview based on mode */}
+              <div className={`scaffold-preview ${isEditingScaffold ? 'scaffold-preview--editable' : 'scaffold-preview--readonly'}`}>
+                {scaffoldSections.map((section, sectionIndex) => (
+                  <div key={section.id} className="scaffold-section-block">
+                    {section.name ? (
+                      <>
+                        {sectionIndex > 0 && <div className="scaffold-preview__divider">───────────────────</div>}
+                        {isEditingScaffold ? (
+                          <div 
+                            className={`scaffold-section-header ${draggedItem?.type === 'scaffold-section' && draggedItem.index === sectionIndex ? 'is-dragging' : ''}`}
+                            draggable={sectionIndex > 0}
+                            onDragStart={(e) => { if (sectionIndex > 0) { setDraggedItem({ type: 'scaffold-section', index: sectionIndex }); e.dataTransfer.effectAllowed = 'move'; }}}
+                            onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
+                            onDragOver={(e) => { e.preventDefault(); if (draggedItem?.type === 'scaffold-section' && draggedItem.index !== sectionIndex && sectionIndex > 0) setDragOverIndex(sectionIndex); }}
+                            onDragLeave={() => setDragOverIndex(null)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (draggedItem?.type === 'scaffold-section' && draggedItem.index !== sectionIndex) {
+                                const newSections = [...scaffoldSections];
+                                const [removed] = newSections.splice(draggedItem.index, 1);
+                                newSections.splice(sectionIndex, 0, removed);
+                                setScaffoldSections(newSections);
+                              }
+                              setDraggedItem(null); setDragOverIndex(null);
+                            }}
+                          >
+                            <div className="gripper-handle">
+                              <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
+                                <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
+                                <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
+                                <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
+                              </svg>
+                            </div>
+                            <input
+                              type="text"
+                              className="scaffold-section-header__input"
+                              value={section.name}
+                              onChange={(e) => {
+                                const newSections = [...scaffoldSections];
+                                newSections[sectionIndex] = { ...section, name: e.target.value };
+                                setScaffoldSections(newSections);
+                              }}
+                            />
+                            <button className="scaffold-section-header__delete" onClick={() => {
+                              if (confirm(`Delete "${section.name}" section?`)) {
+                                setScaffoldSections(scaffoldSections.filter((_, i) => i !== sectionIndex));
+                              }
+                            }}>×</button>
+                          </div>
+                        ) : (
+                          <div className="scaffold-section-header scaffold-section-header--readonly">
+                            <span className="scaffold-section-header__name">{section.name}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : null}
+                    
+                    {section.pages.map((page, pageIndex) => (
+                      <div 
+                        key={page.id} 
+                        className={`scaffold-preview__item ${section.name ? 'scaffold-preview__item--indent' : ''} ${!isEditingScaffold ? 'scaffold-preview__item--readonly' : ''}`}
+                        draggable={isEditingScaffold}
+                        onDragStart={(e) => { if (isEditingScaffold) { setDraggedItem({ type: `page-${sectionIndex}`, index: pageIndex }); e.dataTransfer.effectAllowed = 'move'; }}}
+                        onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
+                        onDragOver={(e) => { if (isEditingScaffold) { e.preventDefault(); if (draggedItem?.type === `page-${sectionIndex}` && draggedItem.index !== pageIndex) setDragOverIndex(pageIndex); }}}
+                        onDragLeave={() => setDragOverIndex(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedItem?.type === `page-${sectionIndex}` && draggedItem.index !== pageIndex) {
+                            const newSections = [...scaffoldSections];
+                            const newPages = [...section.pages];
+                            const [removed] = newPages.splice(draggedItem.index, 1);
+                            newPages.splice(pageIndex, 0, removed);
+                            newSections[sectionIndex] = { ...section, pages: newPages };
+                            setScaffoldSections(newSections);
+                          }
+                          setDraggedItem(null); setDragOverIndex(null);
+                        }}
+                      >
+                        {isEditingScaffold && (
+                          <div className="gripper-handle gripper-handle--small">
+                            <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
+                              <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
+                              <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
+                              <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
+                            </svg>
+                          </div>
+                        )}
+                        {section.name && isEditingScaffold && (
+                          <button
+                            className="scaffold-preview__status-btn"
+                            onClick={() => {
+                              const symbols = [...statusSymbols.map(s => s.symbol), null];
+                              const currentIdx = page.status ? symbols.indexOf(page.status) : symbols.length - 1;
+                              const nextIdx = (currentIdx + 1) % symbols.length;
+                              const newSections = [...scaffoldSections];
+                              const newPages = [...section.pages];
+                              newPages[pageIndex] = { ...page, status: symbols[nextIdx] };
+                              newSections[sectionIndex] = { ...section, pages: newPages };
+                              setScaffoldSections(newSections);
+                            }}
+                          >{page.status || '+'}</button>
+                        )}
+                        {!isEditingScaffold && page.status && <span className="scaffold-preview__status">{page.status}</span>}
+                        {isEditingScaffold ? (
+                          <input
+                            type="text"
+                            className="scaffold-preview__input"
+                            value={page.name}
+                            onChange={(e) => {
+                              const newSections = [...scaffoldSections];
+                              const newPages = [...section.pages];
+                              newPages[pageIndex] = { ...page, name: e.target.value };
+                              newSections[sectionIndex] = { ...section, pages: newPages };
+                              setScaffoldSections(newSections);
+                            }}
+                          />
+                        ) : (
+                          <span className="scaffold-preview__name">{page.name}</span>
+                        )}
+                        {page.isRename && <span className="scaffold-preview__note">(renames Page 1)</span>}
+                        {isEditingScaffold && !page.isRename && (
+                          <button className="scaffold-preview__delete-btn" onClick={() => {
+                            const newSections = [...scaffoldSections];
+                            const newPages = section.pages.filter((_, i) => i !== pageIndex);
+                            newSections[sectionIndex] = { ...section, pages: newPages };
+                            setScaffoldSections(newSections);
+                          }}>×</button>
+                        )}
             </div>
-                <p className="scaffold-hint">
-                  <strong>Status:</strong> 🟢 Ready • 🟡 In Progress • ❌ Deprecated
-                </p>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="brand" 
-                  fullWidth
-                  onClick={() => { scaffoldFileStructure(); }}
-                  loading={isScaffolding}
-                >
-                  Create Pages
-                </Button>
-              </CardFooter>
-            </Card>
+                    ))}
+                    
+                    {isEditingScaffold && (
+                      <button
+                        className="scaffold-preview__add-page-btn"
+                        onClick={() => {
+                          const newSections = [...scaffoldSections];
+                          const newPages = [...section.pages, { id: `page-${Date.now()}`, name: 'New Page', status: section.name ? '🟢' : null }];
+                          newSections[sectionIndex] = { ...section, pages: newPages };
+                          setScaffoldSections(newSections);
+                        }}
+                      >+ Add Page</button>
+                    )}
+                  </div>
+                ))}
+                
+                {isEditingScaffold && (
+                  <button
+                    className="scaffold-preview__add-section-btn"
+                    onClick={() => {
+                      setScaffoldSections([...scaffoldSections, {
+                        id: `section-${Date.now()}`,
+                        name: 'NEW SECTION',
+                        pages: [{ id: `page-${Date.now()}`, name: 'New Page', status: '🟢' }]
+                      }]);
+                    }}
+                  >+ Add Section</button>
+                )}
+              </div>
+              
+              <div className={`scaffold-hint ${isEditingStatusBadges ? 'scaffold-hint--editing' : ''}`}>
+                <div className="scaffold-hint__header">
+                  <strong>Status:</strong>
+                  {!isEditingStatusBadges && (
+                    <span className="scaffold-hint__badges">
+                      {statusSymbols.map((s, i) => (
+                        <span key={s.id}>
+                          {i > 0 && <span className="scaffold-hint__separator"> • </span>}
+                          <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <button 
+                    className="scaffold-hint__edit-btn"
+                    onClick={() => setIsEditingStatusBadges(!isEditingStatusBadges)}
+                  >
+                    {isEditingStatusBadges ? 'Done' : 'Edit'}
+                  </button>
+                </div>
+                
+                {isEditingStatusBadges && (
+                  <div className="scaffold-hint__editor">
+                    {statusSymbols.map((status, index) => (
+                      <div key={status.id} className="scaffold-hint__editor-row">
+                        <input
+                          type="text"
+                          className="scaffold-hint__emoji-input"
+                          value={status.symbol}
+                          onChange={(e) => {
+                            const newSymbols = [...statusSymbols];
+                            newSymbols[index] = { ...status, symbol: e.target.value };
+                            updateStatusSymbols(newSymbols);
+                          }}
+                          maxLength={2}
+                        />
+                        <input
+                          type="text"
+                          className="scaffold-hint__label-input"
+                          value={status.label}
+                          onChange={(e) => {
+                            const newSymbols = [...statusSymbols];
+                            newSymbols[index] = { ...status, label: e.target.value };
+                            updateStatusSymbols(newSymbols);
+                          }}
+                          placeholder="Label"
+                        />
+                        <button
+                          className="scaffold-hint__delete-btn"
+                          onClick={() => {
+                            if (statusSymbols.length > 1) {
+                              updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
+                            }
+                          }}
+                          disabled={statusSymbols.length <= 1}
+                        >×</button>
+                      </div>
+                    ))}
+                    <button
+                      className="scaffold-hint__add-btn"
+                      onClick={() => {
+                        updateStatusSymbols([
+                          ...statusSymbols,
+                          { id: `symbol-${Date.now()}`, symbol: '⭐', label: 'New Status' }
+                        ]);
+                      }}
+                    >+ Add Status</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Fixed Footer with CTAs */}
+            <div className="scaffold-section__footer">
+              <Button 
+                variant="brand"
+                onClick={() => { scaffoldFileStructure(); }}
+                loading={isScaffolding}
+                disabled={scaffoldExists || isEditingScaffold}
+              >
+                {scaffoldExists ? 'Already Exists' : 'Insert Pages'}
+              </Button>
+              <Button
+                variant={isEditingScaffold ? 'brand-outline' : 'neutral'}
+                onClick={() => setIsEditingScaffold(!isEditingScaffold)}
+              >
+                {isEditingScaffold ? 'Done Editing' : 'Edit'}
+              </Button>
+            </div>
+          </div>
+        ) : view === 'settings' ? (
+          <div className="settings-section">
+            <div className="settings-header">
+              <span className="settings-header__title">Settings</span>
+              <button className="settings-header__reset" onClick={resetAllSettings}>
+                Reset All
+              </button>
+      </div>
+
+            <div className="settings-accordions">
+                {/* Clouds & Teams Accordion */}
+                <div className="settings-accordion">
+                  <button 
+                    className={`settings-accordion__header ${expandedSettingsSection === 'clouds' ? 'is-expanded' : ''}`}
+                    onClick={() => setExpandedSettingsSection(expandedSettingsSection === 'clouds' ? null : 'clouds')}
+                  >
+                    <span className="settings-accordion__title">Clouds & Teams</span>
+                    <span className="settings-accordion__subtitle">Set default cloud and manage categories</span>
+                    <svg className="settings-accordion__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                  
+                  {expandedSettingsSection === 'clouds' && (
+                    <div className="settings-accordion__content">
+                      <div className="settings-cloud-list">
+                        {allClouds.map(cloud => (
+                          <div key={cloud.id} className={`settings-cloud-row ${hiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${defaultCloud === cloud.id ? 'is-expanded' : ''}`}>
+                            <div className="settings-cloud-row__header">
+                              <button
+                                className={`settings-cloud-row__main ${defaultCloud === cloud.id ? 'is-default' : ''}`}
+                                onClick={() => {
+                                  if (!hiddenClouds.includes(cloud.id)) {
+                                    setDefaultCloud(cloud.id);
+                                    setSelectedClouds([cloud.id]);
+                                    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: cloud.id } }, '*');
+                                  }
+                                }}
+                              >
+                                <img src={cloud.icon} alt={cloud.name} />
+                                <span className="settings-cloud-row__name">{cloud.name}</span>
+                                {defaultCloud === cloud.id && <span className="settings-cloud-row__badge">Default</span>}
+                              </button>
+                              {defaultCloud !== cloud.id && (
+                                <button
+                                  className={`settings-cloud-row__toggle ${hiddenClouds.includes(cloud.id) ? 'is-off' : 'is-on'}`}
+                                  onClick={() => toggleCloudVisibility(cloud.id)}
+                                  title={hiddenClouds.includes(cloud.id) ? 'Show cloud' : 'Hide cloud'}
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                    {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                            
+                            {/* Nested Categories - only show for default cloud */}
+                            {defaultCloud === cloud.id && (
+                              <div className="settings-cloud-row__categories">
+                                <div className="settings-categories-list settings-categories-list--nested">
+                                  {(cloudCategories[cloud.id] || defaultCategories).map((cat, index) => (
+                                    <div 
+                                      key={cat.id} 
+                                      className={`settings-category-item ${draggedItem?.type === 'category' && draggedItem.index === index ? 'is-dragging' : ''} ${dragOverIndex === index && draggedItem?.type === 'category' ? 'is-drag-over' : ''}`}
+                                      draggable
+                                      onDragStart={(e) => { setDraggedItem({ type: 'category', index }); e.dataTransfer.effectAllowed = 'move'; }}
+                                      onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
+                                      onDragOver={(e) => { e.preventDefault(); if (draggedItem?.type === 'category' && draggedItem.index !== index) setDragOverIndex(index); }}
+                                      onDragLeave={() => setDragOverIndex(null)}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        if (draggedItem?.type === 'category' && draggedItem.index !== index) {
+                                          const cats = [...(cloudCategories[cloud.id] || defaultCategories)];
+                                          const [removed] = cats.splice(draggedItem.index, 1);
+                                          cats.splice(index, 0, removed);
+                                          updateCloudCategories(cloud.id, cats);
+                                        }
+                                        setDraggedItem(null); setDragOverIndex(null);
+                                      }}
+                                    >
+                                      <div className="gripper-handle gripper-handle--small">
+                                        <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
+                                          <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
+                                          <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
+                                          <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
+                                        </svg>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        className="settings-category-item__input"
+                                        value={cat.label}
+                                        onChange={(e) => {
+                                          const cats = [...(cloudCategories[cloud.id] || defaultCategories)];
+                                          cats[index] = { ...cat, label: e.target.value };
+                                          updateCloudCategories(cloud.id, cats);
+                                        }}
+                                      />
+                                      {cat.id !== 'all' && (
+                                        <button className="settings-category-item__delete" onClick={() => {
+                                          const cats = (cloudCategories[cloud.id] || defaultCategories).filter((_, i) => i !== index);
+                                          updateCloudCategories(cloud.id, cats);
+                                        }}>×</button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <button
+                                    className="settings-add-category-btn settings-add-category-btn--small"
+                                    onClick={() => {
+                                      const cats = [...(cloudCategories[cloud.id] || defaultCategories)];
+                                      cats.push({ id: `custom-${Date.now()}`, label: 'New Category' });
+                                      updateCloudCategories(cloud.id, cats);
+                                    }}
+                                  >+ Add Category</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        <button className="settings-add-cloud-btn" onClick={() => setShowAddCloudModal(true)}>
+                          + Add Cloud / Team
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Page Structure Configuration - Accordion */}
+                <div className="settings-accordion">
+                  <button 
+                    className={`settings-accordion__header ${expandedSettingsSection === 'page-structure' ? 'is-expanded' : ''}`}
+                    onClick={() => setExpandedSettingsSection(expandedSettingsSection === 'page-structure' ? null : 'page-structure')}
+                  >
+                    <span className="settings-accordion__title">Page Structure Configuration</span>
+                    <span className="settings-accordion__subtitle">Status symbols, sections & pages for your team</span>
+                    <svg className="settings-accordion__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                  
+                  {expandedSettingsSection === 'page-structure' && (
+                    <div className="settings-accordion__content">
+                      {/* Status Symbols */}
+                      <div className="settings-subgroup">
+                        <h5 className="settings-subgroup__title">Status Symbols</h5>
+                        <div className="settings-symbols-list">
+                    {statusSymbols.map((status, index) => (
+                      <div 
+                        key={status.id} 
+                        className={`settings-symbol-item ${draggedItem?.type === 'symbol' && draggedItem.index === index ? 'is-dragging' : ''} ${dragOverIndex === index && draggedItem?.type === 'symbol' ? 'is-drag-over' : ''}`}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedItem({ type: 'symbol', index });
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnd={() => {
+                          setDraggedItem(null);
+                          setDragOverIndex(null);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (draggedItem?.type === 'symbol' && draggedItem.index !== index) {
+                            setDragOverIndex(index);
+                          }
+                        }}
+                        onDragLeave={() => setDragOverIndex(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedItem?.type === 'symbol' && draggedItem.index !== index) {
+                            const newSymbols = [...statusSymbols];
+                            const [removed] = newSymbols.splice(draggedItem.index, 1);
+                            newSymbols.splice(index, 0, removed);
+                            updateStatusSymbols(newSymbols);
+                          }
+                          setDraggedItem(null);
+                          setDragOverIndex(null);
+                        }}
+                      >
+                        <div className="gripper-handle">
+                          <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
+                            <circle cx="3" cy="2" r="1.5"/>
+                            <circle cx="7" cy="2" r="1.5"/>
+                            <circle cx="3" cy="8" r="1.5"/>
+                            <circle cx="7" cy="8" r="1.5"/>
+                            <circle cx="3" cy="14" r="1.5"/>
+                            <circle cx="7" cy="14" r="1.5"/>
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          className="settings-symbol-item__emoji"
+                          value={status.symbol}
+                          onChange={(e) => {
+                            const newSymbols = [...statusSymbols];
+                            newSymbols[index] = { ...status, symbol: e.target.value };
+                            updateStatusSymbols(newSymbols);
+                          }}
+                          maxLength={2}
+                        />
+                        <input
+                          type="text"
+                          className="settings-symbol-item__label"
+                          value={status.label}
+                          onChange={(e) => {
+                            const newSymbols = [...statusSymbols];
+                            newSymbols[index] = { ...status, label: e.target.value };
+                            updateStatusSymbols(newSymbols);
+                          }}
+                          placeholder="Label"
+                        />
+                        <button
+                          className="settings-symbol-item__delete"
+                          onClick={() => {
+                            if (statusSymbols.length > 1) {
+                              updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
+                            }
+                          }}
+                          disabled={statusSymbols.length <= 1}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      className="settings-add-symbol-btn"
+                      onClick={() => {
+                        updateStatusSymbols([
+                          ...statusSymbols,
+                          { id: `symbol-${Date.now()}`, symbol: '⭐', label: 'New Status' }
+                        ]);
+                      }}
+                          >
+                            + Add Status
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Page Structure Preview */}
+                      <div className="settings-subgroup">
+                        <h5 className="settings-subgroup__title">Page Structure Preview</h5>
+                        <p className="settings-subgroup__desc">Click "Create Pages" to add this structure to your file</p>
+                        
+                        <div className="scaffold-preview scaffold-preview--editable scaffold-preview--settings">
+                          {scaffoldSections.map((section, sectionIndex) => (
+                            <div key={section.id} className="scaffold-section-block">
+                              {section.name ? (
+                                <>
+                                  {sectionIndex > 0 && <div className="scaffold-preview__divider">───────────────────</div>}
+                                  <div 
+                                    className={`scaffold-section-header ${draggedItem?.type === 'scaffold-section' && draggedItem.index === sectionIndex ? 'is-dragging' : ''} ${dragOverIndex === sectionIndex && draggedItem?.type === 'scaffold-section' ? 'is-drag-over' : ''}`}
+                                    draggable={sectionIndex > 0}
+                                    onDragStart={(e) => {
+                                      if (sectionIndex > 0) {
+                                        setDraggedItem({ type: 'scaffold-section', index: sectionIndex });
+                                        e.dataTransfer.effectAllowed = 'move';
+                                      }
+                                    }}
+                                    onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      if (draggedItem?.type === 'scaffold-section' && draggedItem.index !== sectionIndex && sectionIndex > 0) {
+                                        setDragOverIndex(sectionIndex);
+                                      }
+                                    }}
+                                    onDragLeave={() => setDragOverIndex(null)}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      if (draggedItem?.type === 'scaffold-section' && draggedItem.index !== sectionIndex) {
+                                        const newSections = [...scaffoldSections];
+                                        const [removed] = newSections.splice(draggedItem.index, 1);
+                                        newSections.splice(sectionIndex, 0, removed);
+                                        setScaffoldSections(newSections);
+                                      }
+                                      setDraggedItem(null); setDragOverIndex(null);
+                                    }}
+                                  >
+                                    <div className="gripper-handle">
+                                      <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
+                                        <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
+                                        <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
+                                        <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
+                                      </svg>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      className="scaffold-section-header__input"
+                                      value={section.name}
+                                      onChange={(e) => {
+                                        const newSections = [...scaffoldSections];
+                                        newSections[sectionIndex] = { ...section, name: e.target.value };
+                                        setScaffoldSections(newSections);
+                                      }}
+                                    />
+                                    <button
+                                      className="scaffold-section-header__delete"
+                                      onClick={() => {
+                                        if (confirm(`Delete "${section.name}" section?`)) {
+                                          setScaffoldSections(scaffoldSections.filter((_, i) => i !== sectionIndex));
+                                        }
+                                      }}
+                                    >×</button>
+                                  </div>
+                                </>
+                              ) : null}
+                              
+                              {section.pages.map((page, pageIndex) => (
+                                <div 
+                                  key={page.id} 
+                                  className={`scaffold-preview__item ${section.name ? 'scaffold-preview__item--indent' : ''}`}
+                                  draggable
+                                  onDragStart={(e) => { setDraggedItem({ type: `page-${sectionIndex}`, index: pageIndex }); e.dataTransfer.effectAllowed = 'move'; }}
+                                  onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
+                                  onDragOver={(e) => { e.preventDefault(); if (draggedItem?.type === `page-${sectionIndex}` && draggedItem.index !== pageIndex) setDragOverIndex(pageIndex); }}
+                                  onDragLeave={() => setDragOverIndex(null)}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (draggedItem?.type === `page-${sectionIndex}` && draggedItem.index !== pageIndex) {
+                                      const newSections = [...scaffoldSections];
+                                      const newPages = [...section.pages];
+                                      const [removed] = newPages.splice(draggedItem.index, 1);
+                                      newPages.splice(pageIndex, 0, removed);
+                                      newSections[sectionIndex] = { ...section, pages: newPages };
+                                      setScaffoldSections(newSections);
+                                    }
+                                    setDraggedItem(null); setDragOverIndex(null);
+                                  }}
+                                >
+                                  <div className="gripper-handle gripper-handle--small">
+                                    <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
+                                      <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
+                                      <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
+                                      <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
+                                    </svg>
+          </div>
+                                  {section.name && (
+                                    <button
+                                      className="scaffold-preview__status-btn"
+                                      onClick={() => {
+                                        const symbols = [...statusSymbols.map(s => s.symbol), null];
+                                        const currentIdx = page.status ? symbols.indexOf(page.status) : symbols.length - 1;
+                                        const nextIdx = (currentIdx + 1) % symbols.length;
+                                        const newSections = [...scaffoldSections];
+                                        const newPages = [...section.pages];
+                                        newPages[pageIndex] = { ...page, status: symbols[nextIdx] };
+                                        newSections[sectionIndex] = { ...section, pages: newPages };
+                                        setScaffoldSections(newSections);
+                                      }}
+                                    >{page.status || '+'}</button>
+                                  )}
+                                  <input
+                                    type="text"
+                                    className="scaffold-preview__input"
+                                    value={page.name}
+                                    onChange={(e) => {
+                                      const newSections = [...scaffoldSections];
+                                      const newPages = [...section.pages];
+                                      newPages[pageIndex] = { ...page, name: e.target.value };
+                                      newSections[sectionIndex] = { ...section, pages: newPages };
+                                      setScaffoldSections(newSections);
+                                    }}
+                                  />
+                                  {page.isRename && <span className="scaffold-preview__note">(renames Page 1)</span>}
+                                  {!page.isRename && (
+                                    <button
+                                      className="scaffold-preview__delete-btn"
+                                      onClick={() => {
+                                        const newSections = [...scaffoldSections];
+                                        const newPages = section.pages.filter((_, i) => i !== pageIndex);
+                                        newSections[sectionIndex] = { ...section, pages: newPages };
+                                        setScaffoldSections(newSections);
+                                      }}
+                                    >×</button>
+                                  )}
+                                </div>
+                              ))}
+                              
+                              <button
+                                className="scaffold-preview__add-page-btn"
+                                onClick={() => {
+                                  const newSections = [...scaffoldSections];
+                                  const newPages = [...section.pages, { id: `page-${Date.now()}`, name: 'New Page', status: section.name ? '🟢' : null }];
+                                  newSections[sectionIndex] = { ...section, pages: newPages };
+                                  setScaffoldSections(newSections);
+                                }}
+                              >+ Add Page</button>
+                            </div>
+                          ))}
+                          <button
+                            className="scaffold-preview__add-section-btn"
+                            onClick={() => {
+                              setScaffoldSections([...scaffoldSections, {
+                                id: `section-${Date.now()}`,
+                                name: 'NEW SECTION',
+                                pages: [{ id: `page-${Date.now()}`, name: 'New Page', status: '🟢' }]
+                              }]);
+                            }}
+                          >+ Add Section</button>
+                        </div>
+                        
+                        <p className="scaffold-hint">
+                          <strong>Status:</strong>{' '}
+                          {statusSymbols.map((s, i) => (
+                            <span key={s.id}>
+                              {i > 0 && <span className="scaffold-hint__separator"> • </span>}
+                              <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
+                            </span>
+                          ))}
+            </p>
+          </div>
+                    </div>
+                  )}
+                </div>
+            </div>
           </div>
         ) : view === 'add' ? (
           <div className="add-flow">
@@ -963,7 +2089,7 @@ export function App() {
               <div className="loading-state">
                 <Spinner size="large" />
                 <p className="loading-state__text">Getting component info...</p>
-              </div>
+          </div>
             )}
 
             {/* Step: Configure */}
@@ -996,7 +2122,7 @@ export function App() {
                           </div>
                         ))}
           </div>
-                </div>
+        </div>
               )}
                   
                   <div className="form-field">
@@ -1034,8 +2160,8 @@ export function App() {
                       placeholder="Brief description..."
                       value={formDescription}
                       onChange={(e) => setFormDescription(e.target.value)}
-                    />
-                  </div>
+              />
+            </div>
 
                   <div className="form-field">
                     <div className="google-slide-input">
@@ -1046,8 +2172,8 @@ export function App() {
                         value={formGoogleSlideLink}
                         onChange={(e) => setFormGoogleSlideLink(e.target.value)}
                       />
-                    </div>
-                  </div>
+            </div>
+          </div>
                 </CardContent>
                 <CardFooter>
                   <Button variant="neutral" onClick={() => setAddStep('instructions')}>Cancel</Button>
@@ -1091,7 +2217,7 @@ export function App() {
                     <span className="template-item__size">{template.size.width}×{template.size.height}</span>
                   )}
                   <button className="template-item__delete" onClick={() => deleteTemplate(template.id)}>×</button>
-            </div>
+      </div>
 
                 {/* Only show main preview for single components, not component sets */}
                 {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
@@ -1120,7 +2246,7 @@ export function App() {
                         >
                           {allSelected ? 'Clear' : 'Select All'}
                         </button>
-                      </div>
+          </div>
                       <div className={`variant-grid__items variant-grid__items--${
                         template.variants.length === 1 ? 'single' :
                         template.variants.length === 2 ? 'duo' :
@@ -1146,7 +2272,7 @@ export function App() {
                                   <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
                                     <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
                                   </svg>
-                                </div>
+          </div>
                               )}
                               <span className="variant-grid__name">{variant.displayName}</span>
                               {isSelected && (
@@ -1179,13 +2305,63 @@ export function App() {
             );
           })
         )}
-      </div>
+          </div>
 
       {/* Footer */}
       <footer className="app-footer">
         <span>Need help? prantik.banerjee@salesforce.com</span>
         <span>v{VERSION}</span>
       </footer>
+
+      {/* Add Cloud Modal */}
+      {showAddCloudModal && (
+        <div className="modal-overlay" onClick={cancelAddCloud}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Add Cloud / Team</h3>
+              <button className="modal__close" onClick={cancelAddCloud}>×</button>
+          </div>
+            <div className="modal__body">
+              <div 
+                className="modal__icon-upload"
+                onClick={() => cloudIconInputRef.current?.click()}
+              >
+                {newCloudIcon ? (
+                  <img src={newCloudIcon} alt="Icon" className="modal__uploaded-icon" />
+                ) : (
+                  <div className="modal__icon-placeholder">
+                    <span>+</span>
+                    <span className="modal__icon-hint">Upload Icon</span>
+        </div>
+                )}
+                <input
+                  ref={cloudIconInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCloudIconUpload}
+                  style={{ display: 'none' }}
+                />
+              </div>
+              <Input
+                label="Cloud or Team Name"
+                placeholder="e.g. Data Cloud, My Team"
+                value={newCloudName}
+                onChange={(e) => setNewCloudName(e.target.value)}
+              />
+            </div>
+            <div className="modal__footer">
+              <Button variant="neutral" onClick={cancelAddCloud}>Cancel</Button>
+              <Button 
+                variant="brand" 
+                onClick={saveNewCloud}
+                disabled={!newCloudName.trim() || !newCloudIcon}
+              >
+                Add Cloud
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

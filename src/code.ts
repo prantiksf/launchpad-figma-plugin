@@ -100,10 +100,11 @@ figma.ui.onmessage = async (msg) => {
       const state = await figma.clientStorage.getAsync(ONBOARDING_KEY);
       figma.ui.postMessage({ 
         type: 'ONBOARDING_STATE_LOADED', 
-        hasCompleted: state?.hasCompleted || false 
+        hasCompleted: state?.hasCompleted || false,
+        skipSplash: state?.skipSplash || false
       });
     } catch (error) {
-      figma.ui.postMessage({ type: 'ONBOARDING_STATE_LOADED', hasCompleted: false });
+      figma.ui.postMessage({ type: 'ONBOARDING_STATE_LOADED', hasCompleted: false, skipSplash: false });
     }
     return;
   }
@@ -111,9 +112,107 @@ figma.ui.onmessage = async (msg) => {
   // ============ SAVE ONBOARDING STATE ============
   if (msg.type === 'SAVE_ONBOARDING_STATE') {
     try {
-      await figma.clientStorage.setAsync(ONBOARDING_KEY, { hasCompleted: msg.hasCompleted });
+      const existingState: any = await figma.clientStorage.getAsync(ONBOARDING_KEY) || {};
+      const newState: any = {
+        hasCompleted: msg.hasCompleted
+      };
+      if (existingState.skipSplash !== undefined) {
+        newState.skipSplash = existingState.skipSplash;
+      }
+      if (typeof msg.skipSplash !== 'undefined') {
+        newState.skipSplash = msg.skipSplash;
+      }
+      await figma.clientStorage.setAsync(ONBOARDING_KEY, newState);
     } catch (error) {
       figma.notify('⚠️ Failed to save onboarding state', { error: true });
+    }
+    return;
+  }
+
+  // ============ CUSTOM CLOUDS ============
+  const CUSTOM_CLOUDS_KEY = 'starter-kit-custom-clouds';
+  
+  if (msg.type === 'LOAD_CUSTOM_CLOUDS') {
+    try {
+      const clouds = await figma.clientStorage.getAsync(CUSTOM_CLOUDS_KEY);
+      figma.ui.postMessage({ type: 'CUSTOM_CLOUDS_LOADED', clouds: clouds || [] });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'CUSTOM_CLOUDS_LOADED', clouds: [] });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_CUSTOM_CLOUDS') {
+    try {
+      await figma.clientStorage.setAsync(CUSTOM_CLOUDS_KEY, msg.clouds);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save custom clouds', { error: true });
+    }
+    return;
+  }
+  
+  // ============ HIDDEN CLOUDS ============
+  const HIDDEN_CLOUDS_KEY = 'starter-kit-hidden-clouds';
+  
+  if (msg.type === 'LOAD_HIDDEN_CLOUDS') {
+    try {
+      const hiddenClouds = await figma.clientStorage.getAsync(HIDDEN_CLOUDS_KEY);
+      figma.ui.postMessage({ type: 'HIDDEN_CLOUDS_LOADED', hiddenClouds: hiddenClouds || [] });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'HIDDEN_CLOUDS_LOADED', hiddenClouds: [] });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_HIDDEN_CLOUDS') {
+    try {
+      await figma.clientStorage.setAsync(HIDDEN_CLOUDS_KEY, msg.hiddenClouds);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save hidden clouds', { error: true });
+    }
+    return;
+  }
+  
+  // ============ CLOUD CATEGORIES ============
+  const CLOUD_CATEGORIES_KEY = 'starter-kit-cloud-categories';
+  
+  if (msg.type === 'LOAD_CLOUD_CATEGORIES') {
+    try {
+      const categories = await figma.clientStorage.getAsync(CLOUD_CATEGORIES_KEY);
+      figma.ui.postMessage({ type: 'CLOUD_CATEGORIES_LOADED', categories: categories || {} });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'CLOUD_CATEGORIES_LOADED', categories: {} });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_CLOUD_CATEGORIES') {
+    try {
+      await figma.clientStorage.setAsync(CLOUD_CATEGORIES_KEY, msg.categories);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save cloud categories', { error: true });
+    }
+    return;
+  }
+  
+  // ============ STATUS SYMBOLS ============
+  const STATUS_SYMBOLS_KEY = 'starter-kit-status-symbols';
+  
+  if (msg.type === 'LOAD_STATUS_SYMBOLS') {
+    try {
+      const symbols = await figma.clientStorage.getAsync(STATUS_SYMBOLS_KEY);
+      figma.ui.postMessage({ type: 'STATUS_SYMBOLS_LOADED', symbols: symbols || [] });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'STATUS_SYMBOLS_LOADED', symbols: [] });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_STATUS_SYMBOLS') {
+    try {
+      await figma.clientStorage.setAsync(STATUS_SYMBOLS_KEY, msg.symbols);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save status symbols', { error: true });
     }
     return;
   }
@@ -444,58 +543,50 @@ figma.ui.onmessage = async (msg) => {
         console.log('Skipping cover insert - no key or no cover page');
       }
       
-      // Define the file structure based on the SCUX Starter Kit pattern
-      // 🟢 = Ready/Complete, 🟡 = In Progress, ❌ = Below the Line/Deprecated
-      const structure = [
-        // Read Me (Cover Page is renamed from Page 1)
-        'Read Me',
-        
-        // Divider
-        '───────────────────',
-        
-        // Current Designs Section
-        'CURRENT DESIGNS',
-        '🟢 {Release} {Feature Name}',
-        '🟡 {Release} {Feature Name} • Variation 2',
-        '🟡 {Release} {Feature Name} • Variation 3',
-        
-        // Divider
-        '───────────────────',
-        
-        // Milestones & Demos Section
-        'MILESTONES + E2E FLOWS/DEMOS',
-        '🟢 {YYYY.MM.DD}_Product Demo',
-        '🟢 {YYYY.MM.DD}_Walkthrough Recording',
-        '🟢 {YYYY.MM.DD}_Steelthread Proto',
-        
-        // Divider
-        '───────────────────',
-        
-        // Archived Explorations Section
-        'ARCHIVED EXPLORATIONS',
-        '{YYYY.MM.DD}_{Exploration Name}',
-        '{YYYY.MM.DD}_{Exploration Name} 2',
-        '{YYYY.MM.DD}_{Exploration Name} 3',
-        
-        // Divider
-        '───────────────────',
-        
-        // Below the Line Section
-        'BELOW THE LINE',
-        '❌ {Deprecated Feature}',
-        '❌ {Parked Exploration}',
-        '❌ {Old Version}',
-      ];
+      // Use custom pages from UI if provided, otherwise use default structure
+      const customPages = msg.pages as Array<{ name: string; isRename: boolean }> | undefined;
       
       // Create pages
       let createdCount = 0;
       let firstNewPage: PageNode | null = null;
       
-      for (const name of structure) {
-        const page = figma.createPage();
-        page.name = name;
-        if (!firstNewPage) firstNewPage = page;
-        createdCount++;
+      if (customPages && customPages.length > 0) {
+        // Use custom pages from UI
+        for (const pageData of customPages) {
+          if (pageData.isRename) {
+            // Skip the rename page - it's already handled above as Cover Page
+            continue;
+          }
+          const page = figma.createPage();
+          page.name = pageData.name;
+          if (!firstNewPage) firstNewPage = page;
+          createdCount++;
+        }
+      } else {
+        // Use default structure as fallback
+        const structure = [
+          'Read Me',
+          '───────────────────',
+          'CURRENT DESIGNS',
+          '🟢 {Release} {Feature Name}',
+          '🟡 {Release} {Feature Name} • Variation 2',
+          '───────────────────',
+          'MILESTONES + E2E FLOWS/DEMOS',
+          '🟢 {YYYY.MM.DD}_Product Demo',
+          '───────────────────',
+          'ARCHIVED EXPLORATIONS',
+          '{YYYY.MM.DD}_{Exploration Name}',
+          '───────────────────',
+          'BELOW THE LINE',
+          '❌ {Deprecated Feature}',
+        ];
+        
+        for (const name of structure) {
+          const page = figma.createPage();
+          page.name = name;
+          if (!firstNewPage) firstNewPage = page;
+          createdCount++;
+        }
       }
       
       // Navigate to Cover Page (the renamed Page 1)
