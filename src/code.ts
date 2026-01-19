@@ -92,6 +92,32 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
   
+  // ============ LOAD ONBOARDING STATE ============
+  const ONBOARDING_KEY = 'starter-kit-onboarding';
+  
+  if (msg.type === 'LOAD_ONBOARDING_STATE') {
+    try {
+      const state = await figma.clientStorage.getAsync(ONBOARDING_KEY);
+      figma.ui.postMessage({ 
+        type: 'ONBOARDING_STATE_LOADED', 
+        hasCompleted: state?.hasCompleted || false 
+      });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'ONBOARDING_STATE_LOADED', hasCompleted: false });
+    }
+    return;
+  }
+  
+  // ============ SAVE ONBOARDING STATE ============
+  if (msg.type === 'SAVE_ONBOARDING_STATE') {
+    try {
+      await figma.clientStorage.setAsync(ONBOARDING_KEY, { hasCompleted: msg.hasCompleted });
+    } catch (error) {
+      figma.notify('⚠️ Failed to save onboarding state', { error: true });
+    }
+    return;
+  }
+  
   // ============ SHOW TOAST ============
   if (msg.type === 'SHOW_TOAST') {
     figma.notify(`✓ ${msg.message}`, { timeout: 2500 });

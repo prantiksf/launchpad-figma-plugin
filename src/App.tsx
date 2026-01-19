@@ -13,6 +13,9 @@ import {
   RadioGroup,
 } from './design-system/components';
 
+// Import Onboarding
+import { Onboarding } from './components/Onboarding';
+
 // Import cloud icons
 import SalesCloudIcon from './assets/SalesCloud-icon.png';
 import ServiceCloudIcon from './assets/ServiceCloud-icon.png';
@@ -95,6 +98,10 @@ interface ComponentInfo {
 
 // ============ MAIN COMPONENT ============
 export function App() {
+  // Onboarding state
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
+  
   // Core state
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -128,10 +135,29 @@ export function App() {
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
-    parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
-    parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
-    parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
-    parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
+    // Check if running in Figma or standalone browser
+    const isInFigma = window.parent !== window;
+    
+    if (isInFigma) {
+      parent.postMessage({ pluginMessage: { type: 'LOAD_ONBOARDING_STATE' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
+    } else {
+      // Browser preview - skip onboarding
+      setHasCompletedOnboarding(true);
+      setShowSplash(false);
+    }
+    
+    // Fallback timeout for browser preview (stop loading after 1s if no response)
+    const timeout = setTimeout(() => {
+      if (isLoading) {
+        setIsLoading(false);
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timeout);
   }, []);
 
   // Add template flow
@@ -212,6 +238,17 @@ export function App() {
           if (msg.cloudId) {
             setDefaultCloud(msg.cloudId);
             setSelectedClouds([msg.cloudId]);
+          }
+          break;
+
+        case 'ONBOARDING_STATE_LOADED':
+          if (msg.hasCompleted) {
+            setHasCompletedOnboarding(true);
+            // Show splash briefly, then hide
+            setTimeout(() => setShowSplash(false), 800);
+          } else {
+            setHasCompletedOnboarding(false);
+            setShowSplash(false);
           }
           break;
 
@@ -542,6 +579,21 @@ export function App() {
     setHoveredCloud(null);
   }
 
+  // Onboarding completion
+  function completeOnboarding(selectedCloud: string) {
+    setHasCompletedOnboarding(true);
+    setSelectedClouds([selectedCloud]);
+    setDefaultCloud(selectedCloud);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: selectedCloud } }, '*');
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Welcome to Starter Kit!' } }, '*');
+  }
+
+  // Add custom cloud (placeholder - will implement modal later)
+  function handleAddCustomCloud() {
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Coming soon: Add custom cloud!' } }, '*');
+  }
+
   // Scaffold file structure
   function scaffoldFileStructure() {
     setIsScaffolding(true);
@@ -582,9 +634,37 @@ export function App() {
     }, '*');
   }
 
-  const VERSION = '1.7.0';
+  const VERSION = '1.8.0';
 
   // ============ RENDER ============
+  
+  // Show onboarding for first-time users
+  if (hasCompletedOnboarding === false) {
+    return (
+      <Onboarding 
+        onComplete={completeOnboarding}
+        onAddCustomCloud={handleAddCustomCloud}
+      />
+    );
+  }
+
+  // Show splash screen while loading (for returning users)
+  if (showSplash || hasCompletedOnboarding === null) {
+    return (
+      <div className="splash-screen">
+        <div className="splash-screen__logo">
+          <h1 className="splash-screen__title">
+            <span className="onboarding__title-gradient">starter</span>
+            <span className="onboarding__title-kit">KIT</span>
+          </h1>
+        </div>
+        <div className="splash-screen__spinner">
+          <Spinner size="small" />
+        </div>
+      </div>
+    );
+  }
+  
   if (isLoading) {
     return (
       <div className="app">
