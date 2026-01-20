@@ -296,6 +296,7 @@ export function App() {
   const splashMoreDropdownRef = useRef<HTMLDivElement>(null);
   const coverSelectorRef = useRef<HTMLDivElement>(null);
   const moveMenuRef = useRef<HTMLDivElement>(null);
+  const categoryPillsRef = useRef<HTMLDivElement>(null);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
@@ -501,6 +502,47 @@ export function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Category pills scroll detection for gradient indicators
+  useEffect(() => {
+    const pillsContainer = categoryPillsRef.current;
+    if (!pillsContainer) return;
+
+    function updateScrollClasses() {
+      const { scrollLeft, scrollWidth, clientWidth } = pillsContainer;
+      const hasScroll = scrollWidth > clientWidth;
+      
+      if (hasScroll) {
+        if (scrollLeft > 0) {
+          pillsContainer.classList.add('has-scroll-left');
+        } else {
+          pillsContainer.classList.remove('has-scroll-left');
+        }
+        
+        if (scrollLeft < scrollWidth - clientWidth - 1) {
+          pillsContainer.classList.add('has-scroll-right');
+        } else {
+          pillsContainer.classList.remove('has-scroll-right');
+        }
+      } else {
+        pillsContainer.classList.remove('has-scroll-left', 'has-scroll-right');
+      }
+    }
+
+    // Initial check
+    updateScrollClasses();
+
+    // Update on scroll
+    pillsContainer.addEventListener('scroll', updateScrollClasses);
+    
+    // Update on resize
+    window.addEventListener('resize', updateScrollClasses);
+
+    return () => {
+      pillsContainer.removeEventListener('scroll', updateScrollClasses);
+      window.removeEventListener('resize', updateScrollClasses);
+    };
+  }, [currentCategories, view]);
 
 
   // ============ ACTIONS ============
@@ -1561,7 +1603,7 @@ export function App() {
 
         {/* Category Pills (only on home) */}
         {view === 'home' && (
-          <div className="category-pills">
+          <div className="category-pills" ref={categoryPillsRef}>
             {currentCategories.map(cat => (
               <button
                 key={cat.id}
