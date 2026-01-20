@@ -1875,6 +1875,7 @@ fieldset.slds-form-element legend {
   background: white;
   min-height: 100%;
   position: relative;
+  z-index: 1;
 }
 
 .settings-header {
@@ -1882,7 +1883,7 @@ fieldset.slds-form-element legend {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: var(--slds-g-color-neutral-base-100);
+  background: white;
   border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
   position: sticky;
   top: 0;
@@ -1892,6 +1893,7 @@ fieldset.slds-form-element legend {
   border-top: none;
   margin-left: 0;
   margin-right: 0;
+  box-shadow: 0 1px 0 0 var(--slds-g-color-neutral-base-90);
 }
 
 .settings-header__left {
