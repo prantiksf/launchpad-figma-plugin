@@ -2319,6 +2319,7 @@ fieldset.slds-form-element legend {
 .settings-cloud-list {
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .settings-cloud-row {
@@ -2609,6 +2610,7 @@ fieldset.slds-form-element legend {
   color: var(--slds-g-color-brand-base-50);
   border-radius: 6px;
   transition: all 0.15s ease;
+  margin-top: 8px;
 }
 
 .settings-add-cloud-btn:hover {
