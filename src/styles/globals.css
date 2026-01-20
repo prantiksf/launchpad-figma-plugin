@@ -2074,6 +2074,13 @@ fieldset.slds-form-element legend {
   margin-bottom: 0;
 }
 
+.settings-subgroup--preview {
+  background: var(--slds-g-color-neutral-base-97);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 20px;
+}
+
 .settings-subgroup__title {
   font-size: 11px;
   font-weight: 600;

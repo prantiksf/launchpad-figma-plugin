@@ -2155,7 +2155,7 @@ export function App() {
                   {expandedSettingsSection === 'page-structure' && (
                     <div className="settings-accordion__content">
                       {/* Page Structure Preview */}
-                      <div className="settings-subgroup">
+                      <div className="settings-subgroup settings-subgroup--preview">
                         <h5 className="settings-subgroup__title">Page Structure Preview</h5>
                         <p className="settings-subgroup__desc">Click "Create Pages" to add this structure to your file</p>
                         
