@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "ts-node scripts/build.ts --mode=development --watch",
     "build": "ts-node scripts/build.ts --mode=production",
+    "preview": "npm run build && node preview-server.js",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "storybook": "storybook dev -p 6006",
