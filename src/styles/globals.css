@@ -1204,7 +1204,7 @@ fieldset.slds-form-element legend {
 /* ============ WELCOME HEADER ============ */
 .welcome-header {
   padding: 0 20px;
-  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+  box-sizing: content-box;
 }
 
 .welcome-header__title {
