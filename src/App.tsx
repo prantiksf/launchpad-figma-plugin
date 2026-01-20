@@ -2844,7 +2844,7 @@ export function App() {
                               </svg>
                             </div>
                             <div className="template-item__more-submenu">
-                              {categories.filter(c => c.id !== 'all' && c.id !== template.category).map(cat => (
+                              {baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved' && c.id !== template.category).map(cat => (
                                 <button
                                   key={cat.id}
                                   className="template-item__more-option"
