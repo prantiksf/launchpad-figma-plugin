@@ -278,18 +278,24 @@ body {
   flex-direction: column;
   height: 100vh;
   background: var(--slds-g-color-neutral-base-100);
+  overflow: hidden;
+}
+
+.header-container {
+  flex-shrink: 0;
+  background: white;
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+  overflow: visible;
+  z-index: 1;
+}
+
+.view-settings .header-container {
+  border-bottom: none;
 }
 
 .sticky-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: var(--slds-g-color-neutral-base-100);
-  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
-}
-
-.view-settings .sticky-header {
-  border-bottom: none;
+  position: relative;
+  background: white;
 }
 
 .header {
@@ -752,9 +758,15 @@ body {
 }
 
 /* ============ CONTENT ============ */
-.content {
+.content-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  background: white;
+}
+
+.content {
   padding: 20px;
   width: 100%;
   box-sizing: border-box;
@@ -1885,9 +1897,7 @@ fieldset.slds-form-element legend {
   padding: 8px 12px;
   background: white;
   border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  position: relative;
   margin-top: 0;
   margin-bottom: 0;
   border-top: none;

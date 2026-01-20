@@ -1311,8 +1311,9 @@ export function App() {
 
   return (
     <div className={`app ${view === 'settings' ? 'view-settings' : ''}`}>
-      {/* Header */}
-      <div className="sticky-header">
+      {/* Header Container - Fixed, Non-scrollable */}
+      <div className="header-container">
+        <div className="sticky-header">
         <header className="header">
           <div className="header__row">
             <div className="header__left-group" ref={cloudSelectorRef}>
@@ -1600,9 +1601,11 @@ export function App() {
         </div>
         )}
         </div>
+      </div>
 
-      {/* Content */}
-      <div className="content">
+      {/* Content Container - Scrollable */}
+      <div className="content-container">
+        <div className="content">
         {view === 'scaffold' ? (
           <div className="scaffold-section scaffold-section--fixed-footer">
             <div className="scaffold-section__scrollable">
@@ -2875,22 +2878,23 @@ export function App() {
             );
           })
         )}
-          </div>
 
-      {/* Footer */}
-      <footer className="app-footer">
-        <span>Need help? prantik.banerjee@salesforce.com</span>
-        <span>v{VERSION}</span>
-      </footer>
-
-      {/* Add Cloud Modal */}
+        {/* Footer */}
+        <footer className="app-footer">
+          <span>Need help? prantik.banerjee@salesforce.com</span>
+          <span>v{VERSION}</span>
+        </footer>
+      </div>
+      </div>
+      
+      {/* Modals - Outside scroll container - Fixed position */}
       {showAddCloudModal && (
         <div className="modal-overlay" onClick={cancelAddCloud}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
               <h3 className="modal__title">Add Cloud / Team</h3>
               <button className="modal__close" onClick={cancelAddCloud}>×</button>
-          </div>
+            </div>
             <div className="modal__body">
               <div 
                 className="modal__icon-upload"
@@ -2902,7 +2906,7 @@ export function App() {
                   <div className="modal__icon-placeholder">
                     <span>+</span>
                     <span className="modal__icon-hint">Upload Icon</span>
-          </div>
+                  </div>
                 )}
                 <input
                   ref={cloudIconInputRef}
@@ -2911,14 +2915,14 @@ export function App() {
                   onChange={handleCloudIconUpload}
                   style={{ display: 'none' }}
                 />
-          </div>
+              </div>
               <Input
                 label="Cloud or Team Name"
                 placeholder="e.g. Data Cloud, My Team"
                 value={newCloudName}
                 onChange={(e) => setNewCloudName(e.target.value)}
               />
-          </div>
+            </div>
             <div className="modal__footer">
               <Button variant="neutral" onClick={cancelAddCloud}>Cancel</Button>
               <Button 
@@ -2928,24 +2932,23 @@ export function App() {
               >
                 Add Cloud
               </Button>
+            </div>
           </div>
-        </div>
         </div>
       )}
       
-      {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="modal-overlay" onClick={() => setDeleteConfirmId(null)}>
           <div className="modal modal--small" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
               <h3 className="modal__title">Delete Template?</h3>
               <button className="modal__close" onClick={() => setDeleteConfirmId(null)}>×</button>
-          </div>
+            </div>
             <div className="modal__body">
               <p className="modal__text">
                 Are you sure you want to delete "<strong>{templates.find(t => t.id === deleteConfirmId)?.name}</strong>"? This action cannot be undone.
               </p>
-        </div>
+            </div>
             <div className="modal__footer">
               <Button variant="neutral" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
               <Button 
