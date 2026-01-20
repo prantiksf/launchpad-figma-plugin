@@ -1467,9 +1467,10 @@ export function App() {
                           onClick={() => { setView('settings'); setShowMoreMenu(false); }}
                         >
                           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 4h10v8H3V4z"/>
-                            <path d="M3 6h10M3 8h10M3 10h10"/>
-                            <path d="M5 2L3 4l2 2M11 2l2 2-2 2"/>
+                            <rect x="2" y="3" width="12" height="2" rx="0.5"/>
+                            <rect x="2" y="6" width="12" height="2" rx="0.5"/>
+                            <rect x="2" y="9" width="12" height="2" rx="0.5"/>
+                            <rect x="2" y="12" width="8" height="2" rx="0.5"/>
                           </svg>
                           Manage Clouds and Sections
                         </button>
