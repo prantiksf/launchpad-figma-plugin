@@ -1474,22 +1474,30 @@ export function App() {
                 <div className="header__poc-left">
                   <span className="header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
                   <div className="header__poc-list">
-                    {pocs.map((poc, index) => (
-                      <button
-                        key={index}
-                        className="header__poc-link"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (poc.email) {
-                            const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
-                            parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
-                          }
-                        }}
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                      >
-                        {poc.name}
-                      </button>
-                    ))}
+                    {pocs.map((poc, index) => {
+                      const isInFigma = window.parent !== window;
+                      return (
+                        <button
+                          key={index}
+                          className="header__poc-link"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (poc.email) {
+                              const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
+                              if (isInFigma) {
+                                parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
+                              } else {
+                                // Browser preview - try window.open as fallback
+                                window.open(slackUrl, '_blank');
+                              }
+                            }
+                          }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                        >
+                          {poc.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="header__dropdown-container" ref={linksDropdownRef}>
