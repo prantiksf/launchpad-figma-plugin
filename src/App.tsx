@@ -1501,66 +1501,70 @@ export function App() {
                   <div className="header__poc-list">
                     {pocs.map((poc, index) => {
                       return (
-                        <button
-                          key={index}
-                          className="header__poc-link"
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            if (poc.email) {
-                              const isInFigma = window.parent !== window;
-                              
-                              // Copy email to clipboard using multiple methods for reliability
-                              let copySuccess = false;
-                              
-                              // Method 1: Modern Clipboard API
-                              try {
-                                if (navigator.clipboard && navigator.clipboard.writeText) {
-                                  await navigator.clipboard.writeText(poc.email);
-                                  copySuccess = true;
-                                }
-                              } catch (err) {
-                                console.log('Clipboard API failed, trying fallback:', err);
-                              }
-                              
-                              // Method 2: Fallback using temporary textarea
-                              if (!copySuccess) {
+                        <React.Fragment key={index}>
+                          <button
+                            className="header__poc-link"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              if (poc.email) {
+                                const isInFigma = window.parent !== window;
+                                
+                                // Copy email to clipboard using multiple methods for reliability
+                                let copySuccess = false;
+                                
+                                // Method 1: Modern Clipboard API
                                 try {
-                                  const textarea = document.createElement('textarea');
-                                  textarea.value = poc.email;
-                                  textarea.style.position = 'fixed';
-                                  textarea.style.left = '-9999px';
-                                  textarea.style.top = '-9999px';
-                                  document.body.appendChild(textarea);
-                                  textarea.select();
-                                  textarea.setSelectionRange(0, poc.email.length);
-                                  copySuccess = document.execCommand('copy');
-                                  document.body.removeChild(textarea);
+                                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    await navigator.clipboard.writeText(poc.email);
+                                    copySuccess = true;
+                                  }
                                 } catch (err) {
-                                  console.error('Fallback copy failed:', err);
+                                  console.log('Clipboard API failed, trying fallback:', err);
+                                }
+                                
+                                // Method 2: Fallback using temporary textarea
+                                if (!copySuccess) {
+                                  try {
+                                    const textarea = document.createElement('textarea');
+                                    textarea.value = poc.email;
+                                    textarea.style.position = 'fixed';
+                                    textarea.style.left = '-9999px';
+                                    textarea.style.top = '-9999px';
+                                    document.body.appendChild(textarea);
+                                    textarea.select();
+                                    textarea.setSelectionRange(0, poc.email.length);
+                                    copySuccess = document.execCommand('copy');
+                                    document.body.removeChild(textarea);
+                                  } catch (err) {
+                                    console.error('Fallback copy failed:', err);
+                                  }
+                                }
+                                
+                                // Always show toast notification
+                                if (isInFigma && parent && parent.postMessage) {
+                                  const message = copySuccess 
+                                    ? `Email copied: ${poc.email}` 
+                                    : `Email: ${poc.email}`;
+                                  parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message } }, '*');
+                                }
+                                
+                                // Try to open Slack DM
+                                const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
+                                if (isInFigma && parent && parent.postMessage) {
+                                  parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
+                                } else {
+                                  // Browser preview - try window.open as fallback
+                                  window.open(slackUrl, '_blank');
                                 }
                               }
-                              
-                              // Always show toast notification
-                              if (isInFigma && parent && parent.postMessage) {
-                                const message = copySuccess 
-                                  ? `Email copied: ${poc.email}` 
-                                  : `Email: ${poc.email}`;
-                                parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message } }, '*');
-                              }
-                              
-                              // Try to open Slack DM
-                              const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
-                              if (isInFigma && parent && parent.postMessage) {
-                                parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
-                              } else {
-                                // Browser preview - try window.open as fallback
-                                window.open(slackUrl, '_blank');
-                              }
-                            }
-                          }}
-                        >
-                          {poc.name}
-                        </button>
+                            }}
+                          >
+                            {poc.name}
+                          </button>
+                          {index < pocs.length - 1 && (
+                            <span className="header__poc-separator"> | </span>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </div>

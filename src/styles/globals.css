@@ -459,6 +459,12 @@ body {
   text-decoration: underline;
 }
 
+.header__poc-separator {
+  color: var(--slds-g-color-neutral-base-50);
+  margin: 0 4px;
+  font-size: 11px;
+}
+
 .header__actions {
   display: flex;
   align-items: center;
