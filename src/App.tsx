@@ -2173,17 +2173,6 @@ export function App() {
                                   {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
                                 </svg>
                               </button>
-                              {/* Chevron icon for expand/collapse */}
-                              <svg 
-                                className={`settings-cloud-row__chevron ${isExpanded ? 'is-expanded' : ''}`}
-                                viewBox="0 0 24 24" 
-                                fill="none" 
-                                stroke="currentColor" 
-                                strokeWidth="2"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <polyline points="6 9 12 15 18 9"/>
-                              </svg>
                           </div>
                             
                             {/* Nested Categories - only show when expanded */}
