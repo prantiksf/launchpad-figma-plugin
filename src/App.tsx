@@ -1466,11 +1466,11 @@ export function App() {
                 {currentCloudLinks.length > 0 && (
                   <div className="header__dropdown-container" ref={linksDropdownRef}>
                     <button 
-                      className="header__icon-btn"
+                      className="header__icon-btn header__icon-btn--figma"
                       onClick={() => setShowLinksDropdown(!showLinksDropdown)}
                       title="Important Figma links"
                     >
-                      <svg width="16" height="16" viewBox="0 0 38 57" fill="currentColor">
+                      <svg width="14" height="14" viewBox="0 0 38 57" fill="currentColor">
                         <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
                         <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
                         <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
