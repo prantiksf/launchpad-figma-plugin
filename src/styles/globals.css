@@ -1585,6 +1585,29 @@ fieldset.slds-form-element legend {
   padding: 20px;
 }
 
+.scaffold-section__back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  color: var(--slds-g-color-brand-base-50);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.scaffold-section__back:hover {
+  color: var(--slds-g-color-brand-base-40);
+}
+
+.scaffold-section__back svg {
+  width: 12px;
+  height: 12px;
+}
+
 .scaffold-section__title {
   font-size: 14px;
   font-weight: 600;
