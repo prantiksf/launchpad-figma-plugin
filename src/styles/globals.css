@@ -465,6 +465,23 @@ body {
   font-size: 11px;
 }
 
+.header__poc-add-link {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--slds-g-color-brand-base-50);
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  transition: color 0.15s ease;
+}
+
+.header__poc-add-link:hover {
+  color: var(--slds-g-color-brand-base-40);
+}
+
 .header__actions {
   display: flex;
   align-items: center;
@@ -2496,6 +2513,22 @@ fieldset.slds-form-element legend {
   background: var(--slds-g-color-brand-base-90);
   padding: 2px 6px;
   border-radius: 8px;
+}
+
+.settings-cloud-row__set-default-text {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--slds-g-color-brand-base-50);
+  padding: 2px 6px;
+}
+
+.settings-cloud-row__set-default:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-cloud-row__set-default:disabled:hover {
+  background: transparent;
 }
 
 .settings-cloud-row__toggle {

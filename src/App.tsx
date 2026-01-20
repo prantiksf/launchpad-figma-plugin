@@ -1501,18 +1501,19 @@ export function App() {
             </p>
           )}
           
-          {/* POC Row (only on home) */}
+          {/* POC Row (only on home) - Always visible */}
           {view === 'home' && selectedClouds.length > 0 && (() => {
             const currentCloudId = selectedClouds[0];
             const currentCloud = allClouds.find(c => c.id === currentCloudId);
             const pocs = cloudPOCs[currentCloudId] || [];
             const currentCloudLinks = cloudFigmaLinks[currentCloudId] || [];
-            return pocs.length > 0 && (
+            return (
               <div className="header__poc-row">
                 <div className="header__poc-left">
                   <span className="header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
-                  <div className="header__poc-list">
-                    {pocs.map((poc, index) => {
+                  {pocs.length > 0 ? (
+                    <div className="header__poc-list">
+                      {pocs.map((poc, index) => {
                       return (
                         <React.Fragment key={index}>
                           <button
@@ -1580,7 +1581,24 @@ export function App() {
                         </React.Fragment>
                       );
                     })}
-                  </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="header__poc-add-link"
+                      onClick={() => {
+                        setView('settings');
+                        // Scroll to POC section if needed
+                        setTimeout(() => {
+                          const pocSection = document.querySelector('.settings-cloud-row__pocs');
+                          if (pocSection) {
+                            pocSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                        }, 100);
+                      }}
+                    >
+                      Add POC
+                    </button>
+                  )}
                 </div>
                 <div className="header__dropdown-container" ref={linksDropdownRef}>
                   <button 
@@ -2113,15 +2131,23 @@ export function App() {
                                 />
                                 <button
                                   className={`settings-cloud-row__set-default ${defaultCloud === cloud.id ? 'is-default' : ''}`}
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     if (!hiddenClouds.includes(cloud.id)) {
                                       setDefaultCloud(cloud.id);
                                       setSelectedClouds([cloud.id]);
                                       parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: cloud.id } }, '*');
+                                      const cloudName = allClouds.find(c => c.id === cloud.id)?.name || cloud.id;
+                                      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${cloudName} set as default` } }, '*');
                                     }
                                   }}
+                                  disabled={hiddenClouds.includes(cloud.id)}
                                 >
-                                  {defaultCloud === cloud.id && <span className="settings-cloud-row__badge">Default</span>}
+                                  {defaultCloud === cloud.id ? (
+                                    <span className="settings-cloud-row__badge">Default</span>
+                                  ) : (
+                                    <span className="settings-cloud-row__set-default-text">Set Default</span>
+                                  )}
                                 </button>
                               </div>
                               {defaultCloud !== cloud.id && (
