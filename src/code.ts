@@ -5,7 +5,7 @@ const STORAGE_KEY = 'launchpad_templates';
 
 figma.showUI(__html__, { 
   width: 420, 
-  height: 640,
+  height: 720,
   themeColors: true 
 });
 

@@ -3422,9 +3422,10 @@ fieldset.slds-form-element legend {
   flex-direction: column;
   align-items: center;
   padding: 32px 24px 40px;
-  height: 100vh;
+  min-height: 100%;
   background: white;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .onboarding__logo {
@@ -3488,6 +3489,7 @@ fieldset.slds-form-element legend {
   align-items: center;
   width: 100%;
   margin-top: auto;
+  padding-bottom: 20px;
 }
 
 .onboarding__label {
@@ -3559,6 +3561,7 @@ fieldset.slds-form-element legend {
 
 .onboarding__cta {
   margin-top: 24px;
+  margin-bottom: 20px;
   padding: 12px 32px;
   font-size: 14px;
   font-weight: 500;
@@ -3569,6 +3572,7 @@ fieldset.slds-form-element legend {
   cursor: pointer;
   transition: all 0.2s ease;
   animation: fadeInUp 0.3s ease;
+  flex-shrink: 0;
 }
 
 .onboarding__cta:hover {
