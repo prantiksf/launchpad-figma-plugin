@@ -770,11 +770,37 @@ body {
   max-width: 100%;
 }
 
+.add-flow__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.add-flow__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--slds-g-color-neutral-base-50);
+  padding: 0;
+  transition: color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.add-flow__back:hover {
+  color: var(--slds-g-color-neutral-base-20);
+}
+
 .step-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--slds-g-color-neutral-base-10);
-  margin-bottom: 16px;
+  margin: 0;
 }
 
 .checklist {

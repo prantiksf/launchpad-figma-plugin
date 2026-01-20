@@ -2429,7 +2429,14 @@ export function App() {
             {addStep === 'instructions' && (
               <Card bordered={false} shadow="none">
                 <CardContent>
-                  <h3 className="step-title">Prepare your template</h3>
+                  <div className="add-flow__header">
+                    <button className="add-flow__back" onClick={goHome} title="Back">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                      </svg>
+                    </button>
+                    <h3 className="step-title">Prepare your template</h3>
+                  </div>
                   <div className="checklist">
                     <div className="checklist__item">
                       <span className="checklist__bullet">1</span>
