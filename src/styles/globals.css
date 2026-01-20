@@ -1960,7 +1960,7 @@ fieldset.slds-form-element legend {
 }
 
 .settings-accordions {
-  padding: 0;
+  padding: 20px 0 0 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
