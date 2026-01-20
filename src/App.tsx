@@ -2183,8 +2183,8 @@ export function App() {
                               )}
                           </div>
                             
-                            {/* Nested Categories - only show when expanded */}
-                            {isExpanded && (
+                            {/* Nested Categories - always show for default cloud, or when expanded */}
+                            {(defaultCloud === cloud.id || isExpanded) && (
                               <div className="settings-cloud-row__categories">
                                 <div className="settings-categories-list settings-categories-list--nested">
                                   {(cloudCategories[cloud.id] || defaultCategories).map((cat, index) => (
