@@ -1900,7 +1900,7 @@ export function App() {
               </div>
             </div>
         ) : view === 'settings' ? (
-          <>
+          <div className="settings-scroll-container">
             <div className="settings-header">
               <div className="settings-header__left">
                 <button className="settings-header__back" onClick={goHome} title="Back">
@@ -2427,7 +2427,7 @@ export function App() {
                 </div>
             </div>
             </div>
-          </>
+          </div>
         ) : view === 'add' ? (
           <div className="add-flow">
             {/* Step: Instructions */}
