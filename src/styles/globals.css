@@ -2563,6 +2563,19 @@ fieldset.slds-form-element legend {
   opacity: 0.4;
 }
 
+.settings-cloud-row__chevron {
+  width: 16px;
+  height: 16px;
+  stroke: var(--slds-g-color-neutral-base-50);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.settings-cloud-row__chevron.is-expanded {
+  transform: rotate(180deg);
+}
+
 /* Cloud row with nested structure */
 .settings-cloud-row {
   display: flex;

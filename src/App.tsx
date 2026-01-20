@@ -2060,26 +2060,9 @@ export function App() {
               </button>
             </div>
             <div className="settings-section">
-
-            <div className="settings-accordions">
-                {/* Clouds & Teams Accordion */}
-                <div className="settings-accordion">
-                  <button 
-                    className={`settings-accordion__header ${expandedSettingsSection === 'clouds' ? 'is-expanded' : ''}`}
-                    onClick={() => setExpandedSettingsSection(expandedSettingsSection === 'clouds' ? null : 'clouds')}
-                  >
-                    <span className="settings-accordion__title">Clouds & Teams</span>
-                    <span className="settings-accordion__subtitle">Set default cloud and manage categories</span>
-                    <svg className="settings-accordion__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </button>
-                  
-                  {expandedSettingsSection === 'clouds' && (
-                    <div className="settings-accordion__content">
-                      <div className="settings-cloud-list">
+              <div className="settings-cloud-list">
                         {allClouds.map(cloud => {
-                          const isExpanded = expandedCloudId === cloud.id || defaultCloud === cloud.id;
+                          const isExpanded = expandedCloudId === cloud.id;
                           return (
                           <div key={cloud.id} className={`settings-cloud-row ${hiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${isExpanded ? 'is-expanded' : ''}`}>
                             <div 
@@ -2165,26 +2148,36 @@ export function App() {
                                   )}
                                 </button>
                               </div>
-                              {defaultCloud !== cloud.id && !isExpanded && (
-                                <button
-                                  className={`settings-cloud-row__toggle ${hiddenClouds.includes(cloud.id) ? 'is-off' : 'is-on'}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleCloudVisibility(cloud.id);
-                                  }}
-                                  title={hiddenClouds.includes(cloud.id) ? 'Show cloud' : 'Hide cloud'}
-                                >
-                                  <svg viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                    {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
-                                  </svg>
-                                </button>
-                              )}
+                              {/* Visibility toggle - always visible */}
+                              <button
+                                className={`settings-cloud-row__toggle ${hiddenClouds.includes(cloud.id) ? 'is-off' : 'is-on'}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleCloudVisibility(cloud.id);
+                                }}
+                                title={hiddenClouds.includes(cloud.id) ? 'Show cloud' : 'Hide cloud'}
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                  <circle cx="12" cy="12" r="3"/>
+                                  {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
+                                </svg>
+                              </button>
+                              {/* Chevron icon for expand/collapse */}
+                              <svg 
+                                className={`settings-cloud-row__chevron ${isExpanded ? 'is-expanded' : ''}`}
+                                viewBox="0 0 24 24" 
+                                fill="none" 
+                                stroke="currentColor" 
+                                strokeWidth="2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <polyline points="6 9 12 15 18 9"/>
+                              </svg>
                           </div>
                             
-                            {/* Nested Categories - always show for default cloud, or when expanded */}
-                            {(defaultCloud === cloud.id || isExpanded) && (
+                            {/* Nested Categories - only show when expanded */}
+                            {isExpanded && (
                               <div className="settings-cloud-row__categories">
                                 <div className="settings-categories-list settings-categories-list--nested">
                                   {(cloudCategories[cloud.id] || defaultCategories).map((cat, index) => (
@@ -2301,11 +2294,6 @@ export function App() {
                           + Add Cloud / Team
                         </button>
                       </div>
-                </div>
-              )}
-            </div>
-
-            </div>
             </div>
           </div>
         ) : view === 'add' ? (
