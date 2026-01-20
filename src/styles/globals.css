@@ -1257,7 +1257,7 @@ fieldset.slds-form-element legend {
 /* ============ CATEGORY PILLS ============ */
 .category-pills {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   padding: 12px 20px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -1287,42 +1287,49 @@ fieldset.slds-form-element legend {
 .category-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px 4px 8px;
+  padding: 6px 12px;
   font-size: 11px;
   font-weight: 500;
-  color: var(--slds-g-color-neutral-base-50);
+  color: var(--slds-g-color-neutral-base-40);
   background: var(--slds-g-color-neutral-base-100);
-  border: 1px solid var(--slds-g-color-neutral-base-80);
+  border: 1px solid var(--slds-g-color-neutral-base-85);
   border-radius: 100px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   flex-shrink: 0;
   min-height: 28px;
-  min-width: 44px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .category-pill:hover {
-  background: var(--slds-g-color-neutral-base-95);
-  color: var(--slds-g-color-neutral-base-30);
+  background: var(--slds-g-color-neutral-base-97);
+  color: var(--slds-g-color-neutral-base-20);
+  border-color: var(--slds-g-color-neutral-base-75);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
 }
 
 .category-pill--selected {
   background: var(--slds-g-color-brand-base-50);
   color: white;
   border-color: var(--slds-g-color-brand-base-50);
+  box-shadow: 0 2px 6px rgba(0, 123, 255, 0.2);
+  font-weight: 600;
 }
 
 .category-pill--selected:hover {
   background: var(--slds-g-color-brand-base-40);
-  color: white;
+  border-color: var(--slds-g-color-brand-base-40);
+  box-shadow: 0 3px 8px rgba(0, 123, 255, 0.25);
+  transform: translateY(-1px);
 }
 
 /* Saved pill - icon only style */
 .category-pill--icon {
   width: 28px;
   min-width: 28px;
-  padding: 4px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1335,26 +1342,31 @@ fieldset.slds-form-element legend {
 
 .category-pill[data-category="saved"] {
   background: transparent;
-  border-color: var(--slds-g-color-neutral-base-80);
-  color: var(--slds-g-color-neutral-base-50);
+  border-color: var(--slds-g-color-neutral-base-85);
+  color: var(--slds-g-color-neutral-base-40);
 }
 
 .category-pill[data-category="saved"]:hover {
-  background: var(--slds-g-color-neutral-base-95);
-  border-color: var(--slds-g-color-neutral-base-70);
-  color: var(--slds-g-color-neutral-base-30);
+  background: var(--slds-g-color-neutral-base-97);
+  border-color: var(--slds-g-color-neutral-base-75);
+  color: var(--slds-g-color-neutral-base-20);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
 }
 
 .category-pill--selected[data-category="saved"] {
   background: var(--slds-g-color-brand-base-50);
   border-color: var(--slds-g-color-brand-base-50);
   color: white;
+  box-shadow: 0 2px 6px rgba(0, 123, 255, 0.2);
 }
 
 .category-pill--selected[data-category="saved"]:hover {
   background: var(--slds-g-color-brand-base-40);
   border-color: var(--slds-g-color-brand-base-40);
   color: white;
+  box-shadow: 0 3px 8px rgba(0, 123, 255, 0.25);
+  transform: translateY(-1px);
 }
 
 /* ============ APP FOOTER ============ */
