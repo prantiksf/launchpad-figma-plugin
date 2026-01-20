@@ -2425,6 +2425,7 @@ fieldset.slds-form-element legend {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding-left: 20px;
 }
 
 .settings-cloud-row__icon-upload {
