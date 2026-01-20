@@ -2407,7 +2407,7 @@ fieldset.slds-form-element legend {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 4px 0 4px 20px;
+  padding: 4px 0 4px 12px;
   background: var(--slds-g-color-neutral-base-97);
   border-radius: 6px;
   transition: opacity 0.2s ease, background 0.15s ease;
