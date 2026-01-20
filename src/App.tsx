@@ -123,6 +123,10 @@ export function App() {
   const [selectedCoverVariant, setSelectedCoverVariant] = useState<{templateId: string; variantKey?: string; name: string} | null>(null);
   const [showCoverSelector, setShowCoverSelector] = useState(false);
   
+  // Designer info
+  const [designerName, setDesignerName] = useState<string>('');
+  const [designerEmail, setDesignerEmail] = useState<string>('');
+  
   // Editable scaffold structure - organized by sections
   interface ScaffoldPage {
     id: string;
@@ -306,6 +310,7 @@ export function App() {
       parent.postMessage({ pluginMessage: { type: 'LOAD_SAVED_TEMPLATES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'GET_DESIGNER_INFO' } }, '*');
     } else {
       // Browser preview - skip onboarding
       setHasCompletedOnboarding(true);
@@ -449,6 +454,10 @@ export function App() {
           if (msg.symbols && Array.isArray(msg.symbols) && msg.symbols.length > 0) {
             setStatusSymbols(msg.symbols);
           }
+          break;
+        case 'DESIGNER_INFO_LOADED':
+          if (msg.name) setDesignerName(msg.name);
+          if (msg.email) setDesignerEmail(msg.email);
           break;
 
         case 'SCAFFOLD_EXISTS':
@@ -1432,12 +1441,6 @@ export function App() {
               )}
             </div>
 
-                <button className="header__icon-btn header__icon-btn--add" onClick={startAddFlow} title="Add Template">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-                
                 {/* More Menu (Export/Import) */}
                 <div className="header__dropdown-container" ref={moreMenuRef}>
                   <button 
@@ -1454,6 +1457,16 @@ export function App() {
                   
                   {showMoreMenu && (
                     <div className="header__dropdown header__dropdown--compact">
+                      <button 
+                        className="header__dropdown-menu-item"
+                        onClick={() => { startAddFlow(); setShowMoreMenu(false); }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                        Add pattern
+                      </button>
+                      <div className="header__dropdown-divider"></div>
                       <button 
                         className="header__dropdown-menu-item"
                         onClick={() => { setView('settings'); setShowMoreMenu(false); }}
@@ -1496,6 +1509,34 @@ export function App() {
             )}
           </div>
         </header>
+
+        {/* Welcome Header (only on home) */}
+        {view === 'home' && (
+          <div className="welcome-header">
+            <h1 className="welcome-header__title">
+              Welcome to the {selectedClouds.length > 0 && clouds.find(c => c.id === selectedClouds[0]) ? `${clouds.find(c => c.id === selectedClouds[0])!.name} ` : ''}Starter Kit
+            </h1>
+            <p className="welcome-header__subtitle">
+              Design fast. Stay consistent. Use your team's kits—no resource hunting.
+            </p>
+            {designerName && (
+              <div className="welcome-header__poc">
+                <span className="welcome-header__poc-label">Cloud POCs:</span>
+                <a 
+                  href={designerEmail ? `slack://user?email=${encodeURIComponent(designerEmail)}` : '#'}
+                  className="welcome-header__poc-link"
+                  onClick={(e) => {
+                    if (!designerEmail) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  {designerName}
+                </a>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Category Pills (only on home) */}
         {view === 'home' && (

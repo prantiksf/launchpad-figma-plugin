@@ -629,6 +629,25 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
+  // ============ GET DESIGNER INFO ============
+  if (msg.type === 'GET_DESIGNER_INFO') {
+    try {
+      const user = figma.currentUser;
+      figma.ui.postMessage({
+        type: 'DESIGNER_INFO_LOADED',
+        name: user?.name || '',
+        email: user?.email || '',
+      });
+    } catch (error) {
+      figma.ui.postMessage({
+        type: 'DESIGNER_INFO_LOADED',
+        name: '',
+        email: '',
+      });
+    }
+    return;
+  }
+
   // ============ GET PREVIEW ============
   if (msg.type === 'GET_PREVIEW') {
     const { componentKey } = msg.payload;
