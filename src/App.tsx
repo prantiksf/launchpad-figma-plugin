@@ -296,8 +296,6 @@ export function App() {
   const splashMoreDropdownRef = useRef<HTMLDivElement>(null);
   const coverSelectorRef = useRef<HTMLDivElement>(null);
   const moveMenuRef = useRef<HTMLDivElement>(null);
-  const categoryPillsRef = useRef<HTMLDivElement>(null);
-  const [isScrolledRight, setIsScrolledRight] = useState(false);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
@@ -503,30 +501,6 @@ export function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Detect scroll position for category pills fade effect
-  useEffect(() => {
-    const pillsContainer = categoryPillsRef.current;
-    if (!pillsContainer) return;
-
-    function handleScroll() {
-      const isScrolled = pillsContainer.scrollLeft > 0;
-      setIsScrolledRight(isScrolled);
-      
-      // Toggle class for CSS fade effect
-      if (isScrolled) {
-        pillsContainer.classList.add('scrolled-right');
-      } else {
-        pillsContainer.classList.remove('scrolled-right');
-      }
-    }
-
-    pillsContainer.addEventListener('scroll', handleScroll);
-    // Check initial state
-    handleScroll();
-    
-    return () => pillsContainer.removeEventListener('scroll', handleScroll);
-  }, [view, currentCategories]);
 
 
   // ============ ACTIONS ============
@@ -1587,7 +1561,7 @@ export function App() {
 
         {/* Category Pills (only on home) */}
         {view === 'home' && (
-          <div className="category-pills" ref={categoryPillsRef}>
+          <div className="category-pills">
             {currentCategories.map(cat => (
               <button
                 key={cat.id}
