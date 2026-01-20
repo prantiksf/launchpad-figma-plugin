@@ -1310,7 +1310,7 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${view === 'settings' ? 'view-settings' : ''}`}>
       {/* Header */}
       <div className="sticky-header">
         <header className="header">

@@ -288,6 +288,10 @@ body {
   border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
 }
 
+.view-settings .sticky-header {
+  border-bottom: none;
+}
+
 .header {
   display: flex;
   flex-direction: column;
@@ -296,6 +300,11 @@ body {
   position: relative;
   z-index: 10;
   background: white;
+}
+
+.view-settings .header {
+  padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 .header__row {
@@ -1880,6 +1889,9 @@ fieldset.slds-form-element legend {
   z-index: 10;
   margin-top: 0;
   margin-bottom: 0;
+  border-top: none;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .settings-header__left {
