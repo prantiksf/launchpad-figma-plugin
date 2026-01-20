@@ -2395,7 +2395,7 @@ fieldset.slds-form-element legend {
 .settings-cloud-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
 }
 
 .settings-cloud-row {

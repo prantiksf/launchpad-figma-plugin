@@ -247,7 +247,10 @@ export function App() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   
   // Settings accordion state
-  const [expandedSettingsSection, setExpandedSettingsSection] = useState<string | null>(null);
+  const [expandedSettingsSection, setExpandedSettingsSection] = useState<string | null>('clouds');
+  
+  // Expanded cloud state - only one cloud expanded at a time
+  const [expandedCloudId, setExpandedCloudId] = useState<string | null>(null);
   
   // Cloud selector feature
   const [showCloudSelector, setShowCloudSelector] = useState(false);
@@ -1450,15 +1453,6 @@ export function App() {
                           </svg>
                           Add pattern
                         </button>
-                        <button 
-                          className="header__dropdown-menu-item"
-                          onClick={() => { setView('scaffold'); setShowMoreMenu(false); }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm1 1h8v1H4V4zm0 2h8v1H4V6zm0 2h8v1H4V8zm0 2h5v1H4v-1z"/>
-                          </svg>
-                          Create Pages
-                        </button>
                         <div className="header__dropdown-divider"></div>
                         <button 
                           className="header__dropdown-menu-item"
@@ -1468,7 +1462,7 @@ export function App() {
                             <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
                             <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
                           </svg>
-                          Settings
+                          Manage Clouds and Teams
                         </button>
                         <div className="header__dropdown-divider"></div>
                         <button 
@@ -2047,7 +2041,7 @@ export function App() {
                     <path d="M19 12H5M12 19l-7-7 7-7"/>
                   </svg>
                 </button>
-                <span className="settings-header__title">Settings</span>
+                <span className="settings-header__title">Manage Clouds and Teams</span>
               </div>
               <button className="settings-header__reset" onClick={resetAllSettings}>
                 Reset All
@@ -2072,9 +2066,18 @@ export function App() {
                   {expandedSettingsSection === 'clouds' && (
                     <div className="settings-accordion__content">
                       <div className="settings-cloud-list">
-                        {allClouds.map(cloud => (
-                          <div key={cloud.id} className={`settings-cloud-row ${hiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${defaultCloud === cloud.id ? 'is-expanded' : ''}`}>
-                            <div className="settings-cloud-row__header">
+                        {allClouds.map(cloud => {
+                          const isExpanded = expandedCloudId === cloud.id;
+                          return (
+                          <div key={cloud.id} className={`settings-cloud-row ${hiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${isExpanded ? 'is-expanded' : ''}`}>
+                            <div 
+                              className="settings-cloud-row__header"
+                              onClick={() => {
+                                // Toggle: if clicking the same cloud, collapse it; otherwise expand this one and collapse others
+                                setExpandedCloudId(isExpanded ? null : cloud.id);
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            >
                               <div className="settings-cloud-row__main-wrapper">
                                 <label className="settings-cloud-row__icon-upload">
                                   <input
@@ -2150,10 +2153,13 @@ export function App() {
                                   )}
                                 </button>
                               </div>
-                              {defaultCloud !== cloud.id && (
+                              {defaultCloud !== cloud.id && !isExpanded && (
                                 <button
                                   className={`settings-cloud-row__toggle ${hiddenClouds.includes(cloud.id) ? 'is-off' : 'is-on'}`}
-                                  onClick={() => toggleCloudVisibility(cloud.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleCloudVisibility(cloud.id);
+                                  }}
                                   title={hiddenClouds.includes(cloud.id) ? 'Show cloud' : 'Hide cloud'}
                                 >
                                   <svg viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -2162,11 +2168,11 @@ export function App() {
                                     {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
                                   </svg>
                                 </button>
-            )}
-          </div>
+                              )}
+                          </div>
                             
-                            {/* Nested Categories - only show for default cloud */}
-                            {defaultCloud === cloud.id && (
+                            {/* Nested Categories - only show when expanded */}
+                            {isExpanded && (
                               <div className="settings-cloud-row__categories">
                                 <div className="settings-categories-list settings-categories-list--nested">
                                   {(cloudCategories[cloud.id] || defaultCategories).map((cat, index) => (
@@ -2277,7 +2283,8 @@ export function App() {
                               </div>
                             )}
                           </div>
-                        ))}
+                        );
+                        })}
                         <button className="settings-add-cloud-btn" onClick={() => setShowAddCloudModal(true)}>
                           + Add Cloud / Team
                         </button>
@@ -2286,292 +2293,6 @@ export function App() {
               )}
             </div>
 
-                {/* Page Structure Configuration - Accordion */}
-                <div className="settings-accordion">
-                  <button 
-                    className={`settings-accordion__header ${expandedSettingsSection === 'page-structure' ? 'is-expanded' : ''}`}
-                    onClick={() => setExpandedSettingsSection(expandedSettingsSection === 'page-structure' ? null : 'page-structure')}
-                  >
-                    <span className="settings-accordion__title">Page Structure Configuration</span>
-                    <span className="settings-accordion__subtitle">Status symbols, sections & pages for your team</span>
-                    <svg className="settings-accordion__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </button>
-                  
-                  {expandedSettingsSection === 'page-structure' && (
-                    <div className="settings-accordion__content">
-                      {/* Page Structure Preview */}
-                      <div className="settings-subgroup settings-subgroup--preview">
-                        <h5 className="settings-subgroup__title">Page Structure Preview</h5>
-                        <p className="settings-subgroup__desc">Click "Create Pages" to add this structure to your file</p>
-                        
-                        <div className="scaffold-preview scaffold-preview--editable scaffold-preview--settings">
-                          {scaffoldSections.map((section, sectionIndex) => (
-                            <div key={section.id} className="scaffold-section-block">
-                              {section.name ? (
-                                <>
-                                  {sectionIndex > 0 && <div className="scaffold-preview__divider">───────────────────</div>}
-                                  <div 
-                                    className={`scaffold-section-header ${draggedItem?.type === 'scaffold-section' && draggedItem.index === sectionIndex ? 'is-dragging' : ''} ${dragOverIndex === sectionIndex && draggedItem?.type === 'scaffold-section' ? 'is-drag-over' : ''}`}
-                                    draggable={sectionIndex > 0}
-                                    onDragStart={(e) => {
-                                      if (sectionIndex > 0) {
-                                        setDraggedItem({ type: 'scaffold-section', index: sectionIndex });
-                                        e.dataTransfer.effectAllowed = 'move';
-                                      }
-                                    }}
-                                    onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
-                                    onDragOver={(e) => {
-                                      e.preventDefault();
-                                      if (draggedItem?.type === 'scaffold-section' && draggedItem.index !== sectionIndex && sectionIndex > 0) {
-                                        setDragOverIndex(sectionIndex);
-                                      }
-                                    }}
-                                    onDragLeave={() => setDragOverIndex(null)}
-                                    onDrop={(e) => {
-                                      e.preventDefault();
-                                      if (draggedItem?.type === 'scaffold-section' && draggedItem.index !== sectionIndex) {
-                                        const newSections = [...scaffoldSections];
-                                        const [removed] = newSections.splice(draggedItem.index, 1);
-                                        newSections.splice(sectionIndex, 0, removed);
-                                        setScaffoldSections(newSections);
-                                      }
-                                      setDraggedItem(null); setDragOverIndex(null);
-                                    }}
-                                  >
-                                    <div className="gripper-handle">
-                                      <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
-                                        <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
-                                        <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
-                                        <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
-                                      </svg>
-                                    </div>
-                                    <input
-                                      type="text"
-                                      className="scaffold-section-header__input"
-                                      value={section.name}
-                                      onChange={(e) => {
-                                        const newSections = [...scaffoldSections];
-                                        newSections[sectionIndex] = { ...section, name: e.target.value };
-                                        setScaffoldSections(newSections);
-                                      }}
-                                    />
-                                    <button
-                                      className="scaffold-section-header__delete"
-                                      onClick={() => {
-                                        if (confirm(`Delete "${section.name}" section?`)) {
-                                          setScaffoldSections(scaffoldSections.filter((_, i) => i !== sectionIndex));
-                                        }
-                                      }}
-                                    >×</button>
-                                  </div>
-                                </>
-                              ) : null}
-                              
-                              {section.pages.map((page, pageIndex) => (
-                                <div 
-                                  key={page.id} 
-                                  className={`scaffold-preview__item ${section.name ? 'scaffold-preview__item--indent' : ''}`}
-                                  draggable
-                                  onDragStart={(e) => { setDraggedItem({ type: `page-${sectionIndex}`, index: pageIndex }); e.dataTransfer.effectAllowed = 'move'; }}
-                                  onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
-                                  onDragOver={(e) => { e.preventDefault(); if (draggedItem?.type === `page-${sectionIndex}` && draggedItem.index !== pageIndex) setDragOverIndex(pageIndex); }}
-                                  onDragLeave={() => setDragOverIndex(null)}
-                                  onDrop={(e) => {
-                                    e.preventDefault();
-                                    if (draggedItem?.type === `page-${sectionIndex}` && draggedItem.index !== pageIndex) {
-                                      const newSections = [...scaffoldSections];
-                                      const newPages = [...section.pages];
-                                      const [removed] = newPages.splice(draggedItem.index, 1);
-                                      newPages.splice(pageIndex, 0, removed);
-                                      newSections[sectionIndex] = { ...section, pages: newPages };
-                                      setScaffoldSections(newSections);
-                                    }
-                                    setDraggedItem(null); setDragOverIndex(null);
-                                  }}
-                                >
-                                  <div className="gripper-handle gripper-handle--small">
-                                    <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
-                                      <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
-                                      <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
-                                      <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
-                                    </svg>
-          </div>
-                                  {section.name && (
-                                    <button
-                                      className="scaffold-preview__status-btn"
-                                      onClick={() => {
-                                        const symbols = [...statusSymbols.map(s => s.symbol), null];
-                                        const currentIdx = page.status ? symbols.indexOf(page.status) : symbols.length - 1;
-                                        const nextIdx = (currentIdx + 1) % symbols.length;
-                                        const newSections = [...scaffoldSections];
-                                        const newPages = [...section.pages];
-                                        newPages[pageIndex] = { ...page, status: symbols[nextIdx] };
-                                        newSections[sectionIndex] = { ...section, pages: newPages };
-                                        setScaffoldSections(newSections);
-                                      }}
-                                    >{page.status || '+'}</button>
-                                  )}
-                                  <input
-                                    type="text"
-                                    className="scaffold-preview__input"
-                                    value={page.name}
-                                    onChange={(e) => {
-                                      const newSections = [...scaffoldSections];
-                                      const newPages = [...section.pages];
-                                      newPages[pageIndex] = { ...page, name: e.target.value };
-                                      newSections[sectionIndex] = { ...section, pages: newPages };
-                                      setScaffoldSections(newSections);
-                                    }}
-                                  />
-                                  {page.isRename && (
-                                    <div className="scaffold-preview__cover-selector">
-                                      <button 
-                                        className="scaffold-preview__cover-btn"
-                                        onClick={() => setShowCoverSelector(!showCoverSelector)}
-                                      >
-                                        {selectedCoverVariant?.name || 'Select Cover'}
-                                        <svg viewBox="0 0 12 12" fill="currentColor" width="10" height="10">
-                                          <path d="M2 4l4 4 4-4"/>
-                                        </svg>
-                                      </button>
-                                      {showCoverSelector && (
-                                        <div className="scaffold-preview__cover-dropdown">
-                                          <div 
-                                            className={`scaffold-preview__cover-option ${!selectedCoverVariant ? 'is-selected' : ''}`}
-                                            onClick={() => { setSelectedCoverVariant(null); setShowCoverSelector(false); }}
-                                          >
-                                            None (no auto-insert)
-          </div>
-                                          {coverOptions.map((option, idx) => (
-                                            <div 
-                                              key={`${option.templateId}-${option.variantKey || idx}`}
-                                              className={`scaffold-preview__cover-option ${selectedCoverVariant?.templateId === option.templateId && selectedCoverVariant?.variantKey === option.variantKey ? 'is-selected' : ''}`}
-                                              onClick={() => { setSelectedCoverVariant(option); setShowCoverSelector(false); }}
-                                            >
-                                              {option.preview && <img src={option.preview} alt="" className="scaffold-preview__cover-thumb" />}
-                                              <span>{option.name}</span>
-                                            </div>
-                                          ))}
-                                          {coverOptions.length === 0 && (
-                                            <div className="scaffold-preview__cover-empty">No cover templates saved yet</div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  {!page.isRename && (
-                                    <button
-                                      className="scaffold-preview__delete-btn"
-                                      onClick={() => {
-                                        const newSections = [...scaffoldSections];
-                                        const newPages = section.pages.filter((_, i) => i !== pageIndex);
-                                        newSections[sectionIndex] = { ...section, pages: newPages };
-                                        setScaffoldSections(newSections);
-                                      }}
-                                    >×</button>
-            )}
-          </div>
-                              ))}
-                              
-                              <button
-                                className="scaffold-preview__add-page-btn"
-                                onClick={() => {
-                                  const newSections = [...scaffoldSections];
-                                  const newPages = [...section.pages, { id: `page-${Date.now()}`, name: 'New Page', status: section.name ? '🟢' : null }];
-                                  newSections[sectionIndex] = { ...section, pages: newPages };
-                                  setScaffoldSections(newSections);
-                                }}
-                              >+ Add Page</button>
-                            </div>
-                          ))}
-                          <button
-                            className="scaffold-preview__add-section-btn"
-                            onClick={() => {
-                              setScaffoldSections([...scaffoldSections, {
-                                id: `section-${Date.now()}`,
-                                name: 'NEW SECTION',
-                                pages: [{ id: `page-${Date.now()}`, name: 'New Page', status: '🟢' }]
-                              }]);
-                            }}
-                          >+ Add Section</button>
-                        </div>
-                        
-                        <div className={`scaffold-hint ${isEditingStatusBadges ? 'scaffold-hint--editing' : ''}`}>
-                          <div className="scaffold-hint__header">
-                            <strong>Status:</strong>
-                            {!isEditingStatusBadges && (
-                              <span className="scaffold-hint__badges">
-                                {statusSymbols.map((s, i) => (
-                                  <span key={s.id}>
-                                    {i > 0 && <span className="scaffold-hint__separator"> • </span>}
-                                    <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
-                                  </span>
-                                ))}
-                              </span>
-                            )}
-                            <button 
-                              className="scaffold-hint__edit-btn"
-                              onClick={() => setIsEditingStatusBadges(!isEditingStatusBadges)}
-                            >
-                              {isEditingStatusBadges ? 'Done' : 'Edit'}
-                            </button>
-                          </div>
-                          
-                          {isEditingStatusBadges && (
-                            <div className="scaffold-hint__editor">
-                              {statusSymbols.map((status, index) => (
-                                <div key={status.id} className="scaffold-hint__editor-row">
-                                  <input
-                                    type="text"
-                                    className="scaffold-hint__emoji-input"
-                                    value={status.symbol}
-                                    onChange={(e) => {
-                                      const newSymbols = [...statusSymbols];
-                                      newSymbols[index] = { ...status, symbol: e.target.value };
-                                      updateStatusSymbols(newSymbols);
-                                    }}
-                                    maxLength={2}
-                                  />
-                                  <input
-                                    type="text"
-                                    className="scaffold-hint__label-input"
-                                    value={status.label}
-                                    onChange={(e) => {
-                                      const newSymbols = [...statusSymbols];
-                                      newSymbols[index] = { ...status, label: e.target.value };
-                                      updateStatusSymbols(newSymbols);
-                                    }}
-                                    placeholder="Label"
-                                  />
-                                  <button
-                                    className="scaffold-hint__delete-btn"
-                                    onClick={() => {
-                                      if (statusSymbols.length > 1) {
-                                        updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
-                                      }
-                                    }}
-                                    disabled={statusSymbols.length <= 1}
-                                  >×</button>
-                                </div>
-                              ))}
-                              <button
-                                className="scaffold-hint__add-btn"
-                                onClick={() => {
-                                  updateStatusSymbols([
-                                    ...statusSymbols,
-                                    { id: `symbol-${Date.now()}`, symbol: '⭐', label: 'New Status' }
-                                  ]);
-                                }}
-                              >+ Add Status</button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
             </div>
             </div>
           </div>
