@@ -1459,7 +1459,7 @@ export function App() {
           {/* Subtitle (only on home) */}
           {view === 'home' && (
             <p className="header__subtitle">
-              Get set, go with team-ready kits.
+              Get set, go with team-ready kits—fast and consistent.
             </p>
           )}
           
