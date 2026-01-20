@@ -13,7 +13,8 @@ import {
   RadioGroup,
 } from './design-system/components';
 
-// Onboarding component not used - using inline splash screen
+// Import Onboarding component
+import Onboarding from './components/Onboarding';
 
 // Import cloud icons
 import SalesCloudIcon from './assets/SalesCloud-icon.png';
