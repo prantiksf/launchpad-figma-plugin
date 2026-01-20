@@ -560,10 +560,14 @@ export function App() {
   // Count saved items for the pill
   const savedCount = savedItems.length;
 
-  // Get all cover options (templates + variants)
+  // Get all cover options (templates + variants) - filtered by selected cloud
   const coverOptions: Array<{templateId: string; variantKey?: string; name: string; preview?: string}> = [];
   templates
-    .filter(t => t.category === 'cover-pages' || t.name.toLowerCase().includes('cover'))
+    .filter(t => {
+      const isCover = t.category === 'cover-pages' || t.name.toLowerCase().includes('cover');
+      const matchCloud = selectedClouds.length > 0 ? selectedClouds.includes(t.cloudId) : true;
+      return isCover && matchCloud;
+    })
     .forEach(template => {
       if (template.isComponentSet && template.variants && template.variants.length > 0) {
         // Add each variant as an option
