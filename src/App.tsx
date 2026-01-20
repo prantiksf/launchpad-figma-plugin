@@ -1294,23 +1294,24 @@ export function App() {
       {/* Header */}
       <div className="sticky-header">
         <header className="header">
-          <div className="header__brand" ref={cloudSelectorRef}>
-            <button 
-              className="header__cloud-selector"
-              onClick={() => setShowCloudSelector(!showCloudSelector)}
-            >
-              <img 
-                src={allClouds.find(c => c.id === selectedClouds[0])?.icon || SalesCloudIcon} 
-                alt="Cloud" 
-                className="header__icon" 
-              />
-              <span className="header__title">Starter Kit</span>
-              <svg className="header__dropdown-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
-                <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-              </svg>
-            </button>
-            
-            {showCloudSelector && !showAddCloudModal && (
+          <div className="header__left">
+            <div className="header__brand" ref={cloudSelectorRef}>
+              <button 
+                className="header__cloud-selector"
+                onClick={() => setShowCloudSelector(!showCloudSelector)}
+              >
+                <img 
+                  src={allClouds.find(c => c.id === selectedClouds[0])?.icon || SalesCloudIcon} 
+                  alt="Cloud" 
+                  className="header__icon" 
+                />
+                <span className="header__title">Starter Kit</span>
+                <svg className="header__dropdown-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+                  <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                </svg>
+              </button>
+              
+              {showCloudSelector && !showAddCloudModal && (
               <div className="cloud-selector-dropdown">
                 <div className="cloud-selector-dropdown__header">Select Cloud</div>
                 {visibleClouds.map(cloud => (
@@ -1345,7 +1346,19 @@ export function App() {
               </div>
               </div>
             )}
+            </div>
             
+            {/* Back button below Starter Kit dropdown */}
+            {view !== 'home' && (
+              <div className="header__back-section">
+                <Button variant="neutral" size="small" onClick={goHome}>
+                  ← Back
+                </Button>
+                <span className="header__view-title">
+                  {view === 'settings' ? 'Settings' : view === 'scaffold' ? 'Create Pages' : view === 'add' ? 'Add Template' : ''}
+                </span>
+              </div>
+            )}
           </div>
           <div className="header__actions">
             {view === 'home' ? (
@@ -1497,16 +1510,7 @@ export function App() {
                   )}
                 </div>
               </>
-            ) : (
-              <div className="header__back-section">
-                <Button variant="neutral" size="small" onClick={goHome}>
-                  ← Back
-              </Button>
-                <span className="header__view-title">
-                  {view === 'settings' ? 'Settings' : view === 'scaffold' ? 'Create Pages' : view === 'add' ? 'Add Template' : ''}
-                </span>
-              </div>
-            )}
+            ) : null}
           </div>
         </header>
 
