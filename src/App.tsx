@@ -1466,12 +1466,13 @@ export function App() {
                           className="header__dropdown-menu-item"
                           onClick={() => { setView('settings'); setShowMoreMenu(false); }}
                         >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
-                            <path d="M4 6c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v6c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V6z"/>
-                            <path d="M2 4h12M2 8h12M2 12h12" strokeLinecap="round"/>
-                            <circle cx="4" cy="6" r="0.8" fill="currentColor"/>
-                            <circle cx="4" cy="8" r="0.8" fill="currentColor"/>
-                            <circle cx="4" cy="10" r="0.8" fill="currentColor"/>
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 4h10v8H3V4z"/>
+                            <path d="M3 6h10M3 9h10"/>
+                            <path d="M5.5 2.5L3 4l2.5 1.5M10.5 2.5L13 4l-2.5 1.5"/>
+                            <circle cx="5" cy="7.5" r="0.8" fill="currentColor"/>
+                            <circle cx="8" cy="7.5" r="0.8" fill="currentColor"/>
+                            <circle cx="11" cy="7.5" r="0.8" fill="currentColor"/>
                           </svg>
                           Manage Clouds and Sections
                         </button>
