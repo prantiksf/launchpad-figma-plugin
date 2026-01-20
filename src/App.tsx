@@ -1475,7 +1475,6 @@ export function App() {
                   <span className="header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
                   <div className="header__poc-list">
                     {pocs.map((poc, index) => {
-                      const isInFigma = window.parent !== window;
                       return (
                         <button
                           key={index}
@@ -1483,11 +1482,13 @@ export function App() {
                           onClick={async (e) => {
                             e.preventDefault();
                             if (poc.email) {
+                              const isInFigma = window.parent !== window;
+                              
                               // Copy email to clipboard
                               try {
                                 await navigator.clipboard.writeText(poc.email);
-                                // Show toast notification
-                                if (isInFigma) {
+                                // Show toast notification - always try to show
+                                if (isInFigma && parent && parent.postMessage) {
                                   parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Email copied: ${poc.email}` } }, '*');
                                 }
                               } catch (err) {
@@ -1496,7 +1497,7 @@ export function App() {
                               
                               // Try to open Slack DM
                               const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
-                              if (isInFigma) {
+                              if (isInFigma && parent && parent.postMessage) {
                                 parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
                               } else {
                                 // Browser preview - try window.open as fallback
