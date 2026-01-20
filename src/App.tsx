@@ -1897,7 +1897,7 @@ export function App() {
               </div>
             </div>
         ) : view === 'settings' ? (
-          <div className="settings-section">
+          <>
             <div className="settings-header">
               <div className="settings-header__left">
                 <button className="settings-header__back" onClick={goHome} title="Back">
@@ -1910,7 +1910,8 @@ export function App() {
               <button className="settings-header__reset" onClick={resetAllSettings}>
                 Reset All
               </button>
-          </div>
+            </div>
+            <div className="settings-section">
 
             <div className="settings-accordions">
                 {/* Clouds & Teams Accordion */}
@@ -2422,7 +2423,8 @@ export function App() {
                   )}
                 </div>
             </div>
-          </div>
+            </div>
+          </>
         ) : view === 'add' ? (
           <div className="add-flow">
             {/* Step: Instructions */}

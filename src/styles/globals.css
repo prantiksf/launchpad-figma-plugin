@@ -1861,8 +1861,11 @@ fieldset.slds-form-element legend {
 /* ============ SETTINGS VIEW ============ */
 .settings-section {
   padding: 0;
+  margin-top: 0;
+  margin-bottom: 0;
   background: white;
   min-height: 100%;
+  position: relative;
 }
 
 .settings-header {
@@ -1875,6 +1878,8 @@ fieldset.slds-form-element legend {
   position: sticky;
   top: 0;
   z-index: 10;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .settings-header__left {
