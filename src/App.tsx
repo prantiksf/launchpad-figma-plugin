@@ -1347,8 +1347,8 @@ export function App() {
                 onClick={() => setShowCloudSelector(!showCloudSelector)}
               >
                 <span className="header__welcome-text">
-                  Welcome to the {selectedClouds.length > 0 && clouds.find(c => c.id === selectedClouds[0]) ? (
-                    <span className="header__cloud-name">{clouds.find(c => c.id === selectedClouds[0])!.name}</span>
+                  Welcome to the {selectedClouds.length > 0 && allClouds.find(c => c.id === selectedClouds[0]) ? (
+                    <span className="header__cloud-name">{allClouds.find(c => c.id === selectedClouds[0])!.name}</span>
                   ) : ''} Starter Kit
                 </span>
                 <svg className="header__dropdown-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
@@ -1466,7 +1466,7 @@ export function App() {
           {/* POC Row (only on home) */}
           {view === 'home' && selectedClouds.length > 0 && (() => {
             const currentCloudId = selectedClouds[0];
-            const currentCloud = clouds.find(c => c.id === currentCloudId);
+            const currentCloud = allClouds.find(c => c.id === currentCloudId);
             const pocs = cloudPOCs[currentCloudId] || [];
             const currentCloudLinks = cloudFigmaLinks[currentCloudId] || [];
             return pocs.length > 0 && (
