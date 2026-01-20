@@ -1978,7 +1978,7 @@ fieldset.slds-form-element legend {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 20px;
+  padding: 8px 0;
   background: white;
   border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
   position: sticky;
