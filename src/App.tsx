@@ -652,12 +652,15 @@ export function App() {
     // Update local state
     setTemplates(updated);
     
-    // Navigate to the template's category tab
+    // Switch to the cloud and category where the template was saved
+    setSelectedClouds([formCloud]);
     setActiveCategory(formCategory);
     
-    // Make sure the cloud filter includes the template's cloud
-    if (!selectedClouds.includes(formCloud)) {
-      setSelectedClouds([...selectedClouds, formCloud]);
+    // Set as default cloud if not already set
+    const currentDefaultCloud = selectedClouds[0];
+    if (currentDefaultCloud !== formCloud) {
+      setDefaultCloud(formCloud);
+      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: formCloud } }, '*');
     }
     
     // Scroll to the new template after render
