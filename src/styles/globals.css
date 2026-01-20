@@ -2401,7 +2401,7 @@ fieldset.slds-form-element legend {
 .settings-cloud-row {
   display: flex;
   gap: 4px;
-  padding: 4px 8px 4px 4px;
+  padding: 4px 8px 4px 0;
   background: var(--slds-g-color-neutral-base-97);
   border-radius: 6px;
   transition: opacity 0.2s ease, background 0.15s ease;
