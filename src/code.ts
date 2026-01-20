@@ -721,6 +721,16 @@ figma.ui.onmessage = async (msg) => {
     }
   }
 
+  // ============ OPEN EXTERNAL URL ============
+  if (msg.type === 'OPEN_EXTERNAL_URL') {
+    try {
+      await figma.openExternal(msg.url);
+    } catch (error) {
+      figma.notify('Failed to open link', { error: true });
+    }
+    return;
+  }
+
   // ============ GET SELECTED FRAME BRANDING ============
   if (msg.type === 'GET_SELECTED_FRAME_BRANDING') {
     try {

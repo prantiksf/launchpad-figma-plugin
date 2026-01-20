@@ -1475,18 +1475,20 @@ export function App() {
                   <span className="header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
                   <div className="header__poc-list">
                     {pocs.map((poc, index) => (
-                      <a
+                      <button
                         key={index}
-                        href={poc.email ? `slack://user?email=${encodeURIComponent(poc.email)}` : '#'}
                         className="header__poc-link"
                         onClick={(e) => {
-                          if (!poc.email) {
-                            e.preventDefault();
+                          e.preventDefault();
+                          if (poc.email) {
+                            const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
+                            parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
                           }
                         }}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                       >
                         {poc.name}
-                      </a>
+                      </button>
                     ))}
                   </div>
                 </div>
