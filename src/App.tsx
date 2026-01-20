@@ -1316,7 +1316,9 @@ export function App() {
                 onClick={() => setShowCloudSelector(!showCloudSelector)}
               >
                 <span className="header__welcome-text">
-                  Welcome to the {selectedClouds.length > 0 && clouds.find(c => c.id === selectedClouds[0]) ? `${clouds.find(c => c.id === selectedClouds[0])!.name} ` : ''}Starter Kit
+                  Welcome to the {selectedClouds.length > 0 && clouds.find(c => c.id === selectedClouds[0]) ? (
+                    <span className="header__cloud-name">{clouds.find(c => c.id === selectedClouds[0])!.name}</span>
+                  ) : ''} Starter Kit
                 </span>
                 <svg className="header__dropdown-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
                   <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
@@ -1463,29 +1465,29 @@ export function App() {
                     ))}
                   </div>
                 </div>
-                {currentCloudLinks.length > 0 && (
-                  <div className="header__dropdown-container" ref={linksDropdownRef}>
-                    <button 
-                      className="header__icon-btn header__icon-btn--figma"
-                      onClick={() => setShowLinksDropdown(!showLinksDropdown)}
-                      title="Figma resources"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 38 57" fill="currentColor">
-                        <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
-                      </svg>
-                    </button>
-                    
-                    {showLinksDropdown && (
-                      <div className="header__dropdown header__dropdown--readonly">
-                        <div className="header__dropdown-header">
-                          <span className="header__dropdown-title">Important Figma links</span>
-                        </div>
-                        <div className="header__dropdown-links">
-                          {currentCloudLinks.map(link => (
+                <div className="header__dropdown-container" ref={linksDropdownRef}>
+                  <button 
+                    className="header__icon-btn header__icon-btn--figma"
+                    onClick={() => setShowLinksDropdown(!showLinksDropdown)}
+                    title="important team figma links"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 38 57" fill="currentColor">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
+                    </svg>
+                  </button>
+                  
+                  {showLinksDropdown && (
+                    <div className="header__dropdown header__dropdown--readonly">
+                      <div className="header__dropdown-header">
+                        <span className="header__dropdown-title">Important Figma links</span>
+                      </div>
+                      <div className="header__dropdown-links">
+                        {currentCloudLinks.length > 0 ? (
+                          currentCloudLinks.map(link => (
                             <div key={link.id} className="header__dropdown-link">
                               <button 
                                 className="header__dropdown-link-btn"
@@ -1494,12 +1496,14 @@ export function App() {
                                 {link.name}
                               </button>
                             </div>
-                          ))}
-                        </div>
+                          ))
+                        ) : (
+                          <p className="header__dropdown-empty">No links added yet</p>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()}
