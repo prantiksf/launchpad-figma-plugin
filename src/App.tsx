@@ -316,9 +316,10 @@ export function App() {
       parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_POCS' } }, '*');
     } else {
-      // Browser preview - skip onboarding
+      // Browser preview - skip onboarding and loading immediately
       setHasCompletedOnboarding(true);
       setShowSplash(false);
+      setIsLoading(false);
     }
     
     // Fallback timeout - if no response in 2s, assume first-time user
