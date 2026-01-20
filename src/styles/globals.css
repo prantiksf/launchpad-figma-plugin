@@ -2495,6 +2495,8 @@ fieldset.slds-form-element legend {
   transition: background 0.15s ease;
   display: flex;
   align-items: center;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .settings-cloud-row__set-default:hover {
@@ -2605,6 +2607,9 @@ fieldset.slds-form-element legend {
 
 .settings-cloud-row__toggle {
   margin-left: auto;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .settings-cloud-row.is-expanded {
