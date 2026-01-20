@@ -301,7 +301,7 @@ body {
 .header {
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 20px 20px 8px 20px;
   gap: 0;
   position: relative;
   z-index: 10;
