@@ -1304,18 +1304,20 @@ export function App() {
       {/* Header */}
       <div className="sticky-header">
         <header className="header">
-          <div className="header__left">
-            <div className="header__brand" ref={cloudSelectorRef}>
+          <div className="header__row">
+            <div className="header__left-group" ref={cloudSelectorRef}>
+              <img 
+                src={allClouds.find(c => c.id === selectedClouds[0])?.icon || SalesCloudIcon} 
+                alt="Cloud" 
+                className="header__logo" 
+              />
               <button 
                 className="header__cloud-selector"
                 onClick={() => setShowCloudSelector(!showCloudSelector)}
               >
-                <img 
-                  src={allClouds.find(c => c.id === selectedClouds[0])?.icon || SalesCloudIcon} 
-                  alt="Cloud" 
-                  className="header__icon" 
-                />
-                <span className="header__title">Starter Kit</span>
+                <span className="header__welcome-text">
+                  Welcome to the {selectedClouds.length > 0 && clouds.find(c => c.id === selectedClouds[0]) ? `${clouds.find(c => c.id === selectedClouds[0])!.name} ` : ''}Starter Kit
+                </span>
                 <svg className="header__dropdown-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
                   <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                 </svg>
@@ -1358,191 +1360,98 @@ export function App() {
             )}
             </div>
             
-            {/* Back button below Starter Kit dropdown */}
-            {view !== 'home' && (
-              <div className="header__back-section">
-                <Button variant="neutral" size="small" onClick={goHome}>
-                  ← Back
-                </Button>
-              </div>
-            )}
-          </div>
-          <div className="header__actions">
-            {view === 'home' ? (
-              <>
-                {showPagesCreatedMessage && (
-                  <span className="header__success-msg">✓ Pages Created</span>
-                )}
-                {!scaffoldExists && (
-                  <button 
-                    className="header__text-btn"
-                    onClick={() => setView('scaffold')}
-                  >
-                    Create Pages
-                  </button>
-                )}
-                
-                {/* Figma Links Dropdown */}
-                <div className="header__dropdown-container" ref={linksDropdownRef}>
-                  <button 
-                    className="header__icon-btn"
-                    onClick={() => setShowLinksDropdown(!showLinksDropdown)}
-                    title="Figma Links"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 38 57" fill="currentColor">
-                      <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
-                    </svg>
-                  </button>
-                  
-                  {showLinksDropdown && (
-                    <div className="header__dropdown">
-                      <div className="header__dropdown-header">
-                        <span className="header__dropdown-title">Figma Links</span>
+            <div className="header__actions">
+              {view === 'home' ? (
+                <>
+                  {/* More Menu (Export/Import) */}
+                  <div className="header__dropdown-container" ref={moreMenuRef}>
+                    <button 
+                      className="header__icon-btn"
+                      onClick={() => setShowMoreMenu(!showMoreMenu)}
+                      title="More options"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <circle cx="8" cy="3" r="1.5"/>
+                        <circle cx="8" cy="8" r="1.5"/>
+                        <circle cx="8" cy="13" r="1.5"/>
+                      </svg>
+                    </button>
+                    
+                    {showMoreMenu && (
+                      <div className="header__dropdown header__dropdown--compact">
                         <button 
-                          className="header__dropdown-add"
-                          onClick={() => setIsAddingLink(!isAddingLink)}
+                          className="header__dropdown-menu-item"
+                          onClick={() => { startAddFlow(); setShowMoreMenu(false); }}
                         >
-                          {isAddingLink ? '×' : '+'}
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          </svg>
+                          Add pattern
                         </button>
-              </div>
-                      
-                      {isAddingLink && (
-                        <div className="header__dropdown-form">
-                          <input
-                            type="text"
-                            placeholder="Link name"
-                            value={newLinkName}
-                            onChange={(e) => setNewLinkName(e.target.value)}
-                            className="header__dropdown-input"
+                        <div className="header__dropdown-divider"></div>
+                        <button 
+                          className="header__dropdown-menu-item"
+                          onClick={() => { setView('settings'); setShowMoreMenu(false); }}
+                        >
+                          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                          </svg>
+                          Settings
+                        </button>
+                        <div className="header__dropdown-divider"></div>
+                        <button 
+                          className="header__dropdown-menu-item"
+                          onClick={() => { exportTemplates(); setShowMoreMenu(false); }}
+                        >
+                          <span>↓</span> Export Backup
+                        </button>
+                        <label className="header__dropdown-menu-item">
+                          <span>↑</span> Import Backup
+                          <input 
+                            type="file" 
+                            accept=".json" 
+                            onChange={(e) => { importTemplates(e); setShowMoreMenu(false); }} 
+                            style={{ display: 'none' }} 
                           />
-                          <input
-                            type="text"
-                            placeholder="Figma URL"
-                            value={newLinkUrl}
-                            onChange={(e) => setNewLinkUrl(e.target.value)}
-                            className="header__dropdown-input"
-                          />
-                          <button 
-                            className="header__dropdown-save"
-                            onClick={addFigmaLink}
-                          >
-                            Save
-                          </button>
-            </div>
-                      )}
-                      
-                      <div className="header__dropdown-links">
-                        {figmaLinks.length === 0 && !isAddingLink ? (
-                          <p className="header__dropdown-empty">No links added yet</p>
-                        ) : (
-                          figmaLinks.map(link => (
-                            <div key={link.id} className="header__dropdown-link">
-                              <button 
-                                className="header__dropdown-link-btn"
-                                onClick={() => openFigmaLink(link.url)}
-                              >
-                                {link.name}
-                              </button>
-                              <button 
-                                className="header__dropdown-link-delete"
-                                onClick={() => removeFigmaLink(link.id)}
-                              >
-                                ×
-                              </button>
-          </div>
-                          ))
-                        )}
+                        </label>
                       </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="header__back-section">
+                  <Button variant="neutral" size="small" onClick={goHome}>
+                    ← Back
+                  </Button>
                 </div>
               )}
             </div>
-
-                {/* More Menu (Export/Import) */}
-                <div className="header__dropdown-container" ref={moreMenuRef}>
-                  <button 
-                    className="header__icon-btn"
-                    onClick={() => setShowMoreMenu(!showMoreMenu)}
-                    title="More options"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                      <circle cx="8" cy="3" r="1.5"/>
-                      <circle cx="8" cy="8" r="1.5"/>
-                      <circle cx="8" cy="13" r="1.5"/>
-                    </svg>
-                  </button>
-                  
-                  {showMoreMenu && (
-                    <div className="header__dropdown header__dropdown--compact">
-                      <button 
-                        className="header__dropdown-menu-item"
-                        onClick={() => { startAddFlow(); setShowMoreMenu(false); }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                        </svg>
-                        Add pattern
-                      </button>
-                      <div className="header__dropdown-divider"></div>
-                      <button 
-                        className="header__dropdown-menu-item"
-                        onClick={() => { setView('settings'); setShowMoreMenu(false); }}
-                      >
-                        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-                          <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-                          <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
-                        </svg>
-                        Settings
-                      </button>
-                      <div className="header__dropdown-divider"></div>
-                      <button 
-                        className="header__dropdown-menu-item"
-                        onClick={() => { exportTemplates(); setShowMoreMenu(false); }}
-                      >
-                        <span>↓</span> Export Backup
-                      </button>
-                      <label className="header__dropdown-menu-item">
-                        <span>↑</span> Import Backup
-                        <input 
-                          type="file" 
-                          accept=".json" 
-                          onChange={(e) => { importTemplates(e); setShowMoreMenu(false); }} 
-                          style={{ display: 'none' }} 
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : null}
           </div>
-        </header>
-
-        {/* Welcome Header (only on home) */}
-        {view === 'home' && (
-          <div className="welcome-header">
-            <h1 className="welcome-header__title">
-              Welcome to the {selectedClouds.length > 0 && clouds.find(c => c.id === selectedClouds[0]) ? `${clouds.find(c => c.id === selectedClouds[0])!.name} ` : ''}Starter Kit
-            </h1>
-            <p className="welcome-header__subtitle">
+          
+          {/* Subtitle (only on home) */}
+          {view === 'home' && (
+            <p className="header__subtitle">
               Design fast. Stay consistent. Use your team's kits—no resource hunting.
             </p>
-            {selectedClouds.length > 0 && (() => {
-              const currentCloudId = selectedClouds[0];
-              const currentCloud = clouds.find(c => c.id === currentCloudId);
-              const pocs = cloudPOCs[currentCloudId] || [];
-              return pocs.length > 0 && (
-                <div className="welcome-header__poc">
-                  <span className="welcome-header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
-                  <div className="welcome-header__poc-list">
+          )}
+          
+          {/* POC Row (only on home) */}
+          {view === 'home' && selectedClouds.length > 0 && (() => {
+            const currentCloudId = selectedClouds[0];
+            const currentCloud = clouds.find(c => c.id === currentCloudId);
+            const pocs = cloudPOCs[currentCloudId] || [];
+            const currentCloudLinks = cloudFigmaLinks[currentCloudId] || [];
+            return pocs.length > 0 && (
+              <div className="header__poc-row">
+                <div className="header__poc-left">
+                  <span className="header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
+                  <div className="header__poc-list">
                     {pocs.map((poc, index) => (
                       <a
                         key={index}
                         href={poc.email ? `slack://user?email=${encodeURIComponent(poc.email)}` : '#'}
-                        className="welcome-header__poc-link"
+                        className="header__poc-link"
                         onClick={(e) => {
                           if (!poc.email) {
                             e.preventDefault();
@@ -1554,10 +1463,47 @@ export function App() {
                     ))}
                   </div>
                 </div>
-              );
-            })()}
-          </div>
-        )}
+                {currentCloudLinks.length > 0 && (
+                  <div className="header__dropdown-container" ref={linksDropdownRef}>
+                    <button 
+                      className="header__icon-btn"
+                      onClick={() => setShowLinksDropdown(!showLinksDropdown)}
+                      title="Important Figma links"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 38 57" fill="currentColor">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
+                      </svg>
+                    </button>
+                    
+                    {showLinksDropdown && (
+                      <div className="header__dropdown header__dropdown--readonly">
+                        <div className="header__dropdown-header">
+                          <span className="header__dropdown-title">Important Figma links</span>
+                        </div>
+                        <div className="header__dropdown-links">
+                          {currentCloudLinks.map(link => (
+                            <div key={link.id} className="header__dropdown-link">
+                              <button 
+                                className="header__dropdown-link-btn"
+                                onClick={() => openFigmaLink(link.url)}
+                              >
+                                {link.name}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </header>
 
         {/* Category Pills (only on home) */}
         {view === 'home' && (
