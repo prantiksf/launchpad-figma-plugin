@@ -2878,14 +2878,14 @@ export function App() {
             );
           })
         )}
+        </div>
+      </div>
 
-        {/* Footer */}
-        <footer className="app-footer">
-          <span>Need help? prantik.banerjee@salesforce.com</span>
-          <span>v{VERSION}</span>
-        </footer>
-      </div>
-      </div>
+      {/* Footer - Fixed at bottom for all views */}
+      <footer className="app-footer">
+        <span>Need help? prantik.banerjee@salesforce.com</span>
+        <span>v{VERSION}</span>
+      </footer>
       
       {/* Modals - Outside scroll container - Fixed position */}
       {showAddCloudModal && (

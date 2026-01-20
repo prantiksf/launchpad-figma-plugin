@@ -764,12 +764,18 @@ body {
   overflow-x: hidden;
   min-height: 0;
   background: white;
+  display: flex;
+  flex-direction: column;
 }
 
 .content {
   padding: 20px;
   width: 100%;
   box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .loading-state {
@@ -1484,6 +1490,9 @@ fieldset.slds-form-element legend {
   font-size: 10px;
   color: var(--slds-g-color-neutral-base-60);
   border-top: 1px solid var(--slds-g-color-neutral-base-90);
+  background: white;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .header__dropdown--compact {
@@ -1888,6 +1897,7 @@ fieldset.slds-form-element legend {
   overflow-y: auto;
   overflow-x: hidden;
   background: white;
+  padding-bottom: 0;
 }
 
 .settings-header {
