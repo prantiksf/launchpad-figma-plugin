@@ -2060,7 +2060,7 @@ fieldset.slds-form-element legend {
 }
 
 .settings-accordion__content {
-  padding: 8px 0;
+  padding: 20px 0 8px 0;
   background: transparent;
   border-top: none;
 }
