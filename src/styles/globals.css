@@ -616,6 +616,9 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  display: block;
 }
 
 /* ============ CONTENT ============ */
@@ -788,6 +791,10 @@ fieldset.slds-form-element legend {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  object-fit: contain;
+  display: block;
 }
 
 .template-item__title {
@@ -1875,6 +1882,9 @@ fieldset.slds-form-element legend {
   width: 32px;
   height: 32px;
   object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  display: block;
 }
 
 .settings-cloud-btn span {
@@ -2057,6 +2067,9 @@ fieldset.slds-form-element legend {
   width: 24px;
   height: 24px;
   object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  display: block;
 }
 
 .settings-cloud-row__name {
@@ -2677,6 +2690,10 @@ fieldset.slds-form-element legend {
   height: 20px;
   flex-shrink: 0;
   margin-right: 10px;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  object-fit: contain;
+  display: block;
 }
 
 .cloud-selector-dropdown__name {
@@ -3423,6 +3440,9 @@ fieldset.slds-form-element legend {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  display: block;
 }
 
 .splash-screen__more-btn {
@@ -3491,6 +3511,9 @@ fieldset.slds-form-element legend {
   width: 20px;
   height: 20px;
   object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  display: block;
 }
 
 .splash-screen__dropdown-add {
