@@ -338,7 +338,7 @@ body {
 .header__left-group {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
   position: relative;
@@ -356,7 +356,7 @@ body {
 .header__cloud-selector {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   padding: 0;
   background: transparent;
   border: none;
