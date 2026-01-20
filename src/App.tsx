@@ -1480,9 +1480,21 @@ export function App() {
                         <button
                           key={index}
                           className="header__poc-link"
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.preventDefault();
                             if (poc.email) {
+                              // Copy email to clipboard
+                              try {
+                                await navigator.clipboard.writeText(poc.email);
+                                // Show toast notification
+                                if (isInFigma) {
+                                  parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Email copied: ${poc.email}` } }, '*');
+                                }
+                              } catch (err) {
+                                console.error('Failed to copy email:', err);
+                              }
+                              
+                              // Try to open Slack DM
                               const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
                               if (isInFigma) {
                                 parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
