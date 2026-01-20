@@ -1303,9 +1303,9 @@ fieldset.slds-form-element legend {
 }
 
 .category-pill:hover {
-  background: var(--slds-g-color-neutral-base-97);
-  color: var(--slds-g-color-neutral-base-20);
-  border-color: var(--slds-g-color-neutral-base-75);
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+  border-color: var(--slds-g-color-brand-base-50);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
 }
@@ -1347,9 +1347,9 @@ fieldset.slds-form-element legend {
 }
 
 .category-pill[data-category="saved"]:hover {
-  background: var(--slds-g-color-neutral-base-97);
-  border-color: var(--slds-g-color-neutral-base-75);
-  color: var(--slds-g-color-neutral-base-20);
+  background: var(--slds-g-color-brand-base-50);
+  border-color: var(--slds-g-color-brand-base-50);
+  color: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
 }
