@@ -309,6 +309,7 @@ export function App() {
       parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CUSTOM_CLOUDS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_EDITABLE_CLOUDS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_HIDDEN_CLOUDS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_SAVED_TEMPLATES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
@@ -438,6 +439,12 @@ export function App() {
         case 'CUSTOM_CLOUDS_LOADED':
           if (msg.clouds && Array.isArray(msg.clouds)) {
             setCustomClouds(msg.clouds);
+          }
+          break;
+          
+        case 'EDITABLE_CLOUDS_LOADED':
+          if (msg.clouds) {
+            setEditableClouds(msg.clouds);
           }
           break;
 
@@ -941,11 +948,14 @@ export function App() {
     setShowAddCloudModal(false);
   }
 
+  // Editable default clouds state
+  const [editableClouds, setEditableClouds] = useState(clouds);
+  
   // Custom clouds state
   const [customClouds, setCustomClouds] = useState<Array<{id: string; name: string; icon: string; isCustom?: boolean}>>([]);
 
   // Combined clouds list (default + custom)
-  const allClouds = [...clouds, ...customClouds];
+  const allClouds = [...editableClouds, ...customClouds];
   
   // Visible clouds (excluding hidden ones)
   const visibleClouds = allClouds.filter(cloud => !hiddenClouds.includes(cloud.id));
@@ -1421,13 +1431,7 @@ export function App() {
                     )}
                   </div>
                 </>
-              ) : (
-                <div className="header__back-section">
-                  <Button variant="neutral" size="small" onClick={goHome}>
-                    ← Back
-                  </Button>
-                </div>
-              )}
+              ) : null}
             </div>
           </div>
           
@@ -1895,7 +1899,14 @@ export function App() {
         ) : view === 'settings' ? (
           <div className="settings-section">
             <div className="settings-header">
-              <span className="settings-header__title">Settings</span>
+              <div className="settings-header__left">
+                <button className="settings-header__back" onClick={goHome} title="Back">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                  </svg>
+                </button>
+                <span className="settings-header__title">Settings</span>
+              </div>
               <button className="settings-header__reset" onClick={resetAllSettings}>
                 Reset All
               </button>
@@ -1921,20 +1932,73 @@ export function App() {
                         {allClouds.map(cloud => (
                           <div key={cloud.id} className={`settings-cloud-row ${hiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${defaultCloud === cloud.id ? 'is-expanded' : ''}`}>
                             <div className="settings-cloud-row__header">
-                              <button
-                                className={`settings-cloud-row__main ${defaultCloud === cloud.id ? 'is-default' : ''}`}
-                                onClick={() => {
-                                  if (!hiddenClouds.includes(cloud.id)) {
-                                    setDefaultCloud(cloud.id);
-                                    setSelectedClouds([cloud.id]);
-                                    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: cloud.id } }, '*');
-                                  }
-                                }}
-                              >
-                                <img src={cloud.icon} alt={cloud.name} />
-                                <span className="settings-cloud-row__name">{cloud.name}</span>
-                                {defaultCloud === cloud.id && <span className="settings-cloud-row__badge">Default</span>}
-                              </button>
+                              <div className="settings-cloud-row__main-wrapper">
+                                <label className="settings-cloud-row__icon-upload">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        const reader = new FileReader();
+                                        reader.onload = (event) => {
+                                          const iconUrl = event.target?.result as string;
+                                          if (cloud.isCustom) {
+                                            const updatedCustom = customClouds.map(c => 
+                                              c.id === cloud.id ? { ...c, icon: iconUrl } : c
+                                            );
+                                            setCustomClouds(updatedCustom);
+                                            parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedCustom } }, '*');
+                                          } else {
+                                            const updated = editableClouds.map(c => 
+                                              c.id === cloud.id ? { ...c, icon: iconUrl } : c
+                                            );
+                                            setEditableClouds(updated);
+                                            parent.postMessage({ pluginMessage: { type: 'SAVE_EDITABLE_CLOUDS', clouds: updated } }, '*');
+                                          }
+                                        };
+                                        reader.readAsDataURL(file);
+                                      }
+                                    }}
+                                  />
+                                  <img src={cloud.icon} alt={cloud.name} className="settings-cloud-row__icon" />
+                                  <div className="settings-cloud-row__icon-overlay">📷</div>
+                                </label>
+                                <input
+                                  type="text"
+                                  className="settings-cloud-row__name-input"
+                                  value={cloud.name}
+                                  onChange={(e) => {
+                                    if (cloud.isCustom) {
+                                      const updatedCustom = customClouds.map(c => 
+                                        c.id === cloud.id ? { ...c, name: e.target.value } : c
+                                      );
+                                      setCustomClouds(updatedCustom);
+                                      parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedCustom } }, '*');
+                                    } else {
+                                      const updated = editableClouds.map(c => 
+                                        c.id === cloud.id ? { ...c, name: e.target.value } : c
+                                      );
+                                      setEditableClouds(updated);
+                                      parent.postMessage({ pluginMessage: { type: 'SAVE_EDITABLE_CLOUDS', clouds: updated } }, '*');
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <button
+                                  className={`settings-cloud-row__set-default ${defaultCloud === cloud.id ? 'is-default' : ''}`}
+                                  onClick={() => {
+                                    if (!hiddenClouds.includes(cloud.id)) {
+                                      setDefaultCloud(cloud.id);
+                                      setSelectedClouds([cloud.id]);
+                                      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: cloud.id } }, '*');
+                                    }
+                                  }}
+                                >
+                                  {defaultCloud === cloud.id && <span className="settings-cloud-row__badge">Default</span>}
+                                </button>
+                              </div>
                               {defaultCloud !== cloud.id && (
                                 <button
                                   className={`settings-cloud-row__toggle ${hiddenClouds.includes(cloud.id) ? 'is-off' : 'is-on'}`}

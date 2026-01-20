@@ -1835,13 +1835,15 @@ fieldset.slds-form-element legend {
 /* ============ SETTINGS VIEW ============ */
 .settings-section {
   padding: 0;
+  background: white;
+  min-height: 100%;
 }
 
 .settings-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 8px 12px;
   background: var(--slds-g-color-neutral-base-100);
   border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
   position: sticky;
@@ -1849,11 +1851,36 @@ fieldset.slds-form-element legend {
   z-index: 10;
 }
 
+.settings-header__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-header__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--slds-g-color-neutral-base-50);
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.settings-header__back:hover {
+  color: var(--slds-g-color-neutral-base-20);
+}
+
 .settings-accordions {
-  padding: 20px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  background: white;
 }
 
 .settings-header__title {
@@ -1946,7 +1973,7 @@ fieldset.slds-form-element legend {
 }
 
 .settings-accordion__content {
-  padding: 12px;
+  padding: 8px;
   background: var(--slds-g-color-neutral-base-97);
   border-top: 1px solid var(--slds-g-color-neutral-base-90);
 }
@@ -2209,8 +2236,8 @@ fieldset.slds-form-element legend {
 
 .settings-cloud-row {
   display: flex;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 4px 6px;
   background: var(--slds-g-color-neutral-base-97);
   border-radius: 6px;
   transition: opacity 0.2s ease;
@@ -2220,28 +2247,35 @@ fieldset.slds-form-element legend {
   opacity: 0.4;
 }
 
-.settings-cloud-row__main {
+.settings-cloud-row__main-wrapper {
   flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: none;
-  border: none;
+}
+
+.settings-cloud-row__icon-upload {
+  position: relative;
   cursor: pointer;
-  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
+  overflow: hidden;
   transition: background 0.15s ease;
 }
 
-.settings-cloud-row__main:hover {
+.settings-cloud-row__icon-upload:hover {
   background: var(--slds-g-color-neutral-base-90);
 }
 
-.settings-cloud-row__main.is-default {
-  background: var(--slds-g-color-brand-base-95);
+.settings-cloud-row__icon-upload:hover .settings-cloud-row__icon-overlay {
+  opacity: 1;
 }
 
-.settings-cloud-row__main img {
+.settings-cloud-row__icon {
   width: 24px;
   height: 24px;
   object-fit: contain;
@@ -2250,10 +2284,61 @@ fieldset.slds-form-element legend {
   display: block;
 }
 
-.settings-cloud-row__name {
+.settings-cloud-row__icon-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  font-size: 10px;
+}
+
+.settings-cloud-row__name-input {
+  flex: 1;
   font-size: 12px;
   font-weight: 500;
   color: var(--slds-g-color-neutral-base-10);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 4px;
+  min-width: 0;
+  transition: border-color 0.15s ease;
+}
+
+.settings-cloud-row__name-input:hover {
+  border-color: var(--slds-g-color-neutral-base-80);
+}
+
+.settings-cloud-row__name-input:focus {
+  outline: none;
+  border-color: var(--slds-g-color-brand-base-50);
+  background: white;
+}
+
+.settings-cloud-row__set-default {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+  display: flex;
+  align-items: center;
+}
+
+.settings-cloud-row__set-default:hover {
+  background: var(--slds-g-color-neutral-base-90);
+}
+
+.settings-cloud-row__set-default.is-default {
+  background: var(--slds-g-color-brand-base-95);
 }
 
 .settings-cloud-row__badge {
@@ -2330,14 +2415,14 @@ fieldset.slds-form-element legend {
 .settings-cloud-row__categories {
   margin-top: 4px;
   margin-left: 20px;
-  padding-left: 12px;
+  padding-left: 8px;
   border-left: 2px solid var(--slds-g-color-neutral-base-85);
 }
 
 .settings-cloud-row__pocs {
-  margin-top: 8px;
+  margin-top: 6px;
   margin-left: 20px;
-  padding-left: 12px;
+  padding-left: 8px;
   border-left: 2px solid var(--slds-g-color-neutral-base-85);
 }
 

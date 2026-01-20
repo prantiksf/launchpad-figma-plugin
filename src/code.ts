@@ -173,6 +173,28 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
   
+  // ============ EDITABLE CLOUDS ============
+  const EDITABLE_CLOUDS_KEY = 'starter-kit-editable-clouds';
+  
+  if (msg.type === 'LOAD_EDITABLE_CLOUDS') {
+    try {
+      const clouds = await figma.clientStorage.getAsync(EDITABLE_CLOUDS_KEY);
+      figma.ui.postMessage({ type: 'EDITABLE_CLOUDS_LOADED', clouds: clouds || null });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'EDITABLE_CLOUDS_LOADED', clouds: null });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_EDITABLE_CLOUDS') {
+    try {
+      await figma.clientStorage.setAsync(EDITABLE_CLOUDS_KEY, msg.clouds);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save clouds', { error: true });
+    }
+    return;
+  }
+  
   // ============ HIDDEN CLOUDS ============
   const HIDDEN_CLOUDS_KEY = 'starter-kit-hidden-clouds';
   
