@@ -112,6 +112,7 @@ export function App() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [insertingId, setInsertingId] = useState<string | null>(null);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+  const [moveMenuOpen, setMoveMenuOpen] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
   const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
   const [isScaffolding, setIsScaffolding] = useState(false);
@@ -119,6 +120,8 @@ export function App() {
   const [showPagesCreatedMessage, setShowPagesCreatedMessage] = useState(false);
   const [isEditingScaffold, setIsEditingScaffold] = useState(false);
   const [isEditingStatusBadges, setIsEditingStatusBadges] = useState(false);
+  const [selectedCoverVariant, setSelectedCoverVariant] = useState<{templateId: string; variantKey?: string; name: string} | null>(null);
+  const [showCoverSelector, setShowCoverSelector] = useState(false);
   
   // Editable scaffold structure - organized by sections
   interface ScaffoldPage {
@@ -246,6 +249,13 @@ export function App() {
   const [newCloudName, setNewCloudName] = useState('');
   const [newCloudIcon, setNewCloudIcon] = useState<string | null>(null);
   
+  // Delete confirmation
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  
+  // Saved templates/variants (simple bookmark feature)
+  // Format: [{templateId: string, variantKey?: string}, ...]
+  const [savedItems, setSavedItems] = useState<Array<{templateId: string; variantKey?: string}>>([]);
+  
   // Cloud visibility and per-cloud settings
   const [hiddenClouds, setHiddenClouds] = useState<string[]>([]);
   const [cloudCategories, setCloudCategories] = useState<Record<string, Array<{id: string; label: string}>>>({});
@@ -277,6 +287,8 @@ export function App() {
   const cloudSelectorRef = useRef<HTMLDivElement>(null);
   const cloudIconInputRef = useRef<HTMLInputElement>(null);
   const splashMoreDropdownRef = useRef<HTMLDivElement>(null);
+  const coverSelectorRef = useRef<HTMLDivElement>(null);
+  const moveMenuRef = useRef<HTMLDivElement>(null);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
@@ -291,6 +303,7 @@ export function App() {
       parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CUSTOM_CLOUDS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_HIDDEN_CLOUDS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_SAVED_TEMPLATES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
     } else {
@@ -334,6 +347,15 @@ export function App() {
 
         case 'TEMPLATES_SAVED':
           // Templates saved confirmation
+          break;
+          
+        case 'SAVED_TEMPLATES_LOADED':
+          // Handle both old format (array of strings) and new format (array of objects)
+          const loaded = msg.savedItems || msg.savedIds || [];
+          const normalized = Array.isArray(loaded) && loaded.length > 0 && typeof loaded[0] === 'string'
+            ? loaded.map(id => ({ templateId: id }))
+            : loaded;
+          setSavedItems(normalized);
           break;
 
         case 'COMPONENT_INFO':
@@ -457,6 +479,12 @@ export function App() {
       if (splashMoreDropdownRef.current && !splashMoreDropdownRef.current.contains(event.target as Node)) {
         setShowMoreCloudsInSplash(false);
       }
+      if (coverSelectorRef.current && !coverSelectorRef.current.contains(event.target as Node)) {
+        setShowCoverSelector(false);
+      }
+      if (moveMenuRef.current && !moveMenuRef.current.contains(event.target as Node)) {
+        setMoveMenuOpen(null);
+      }
     }
     
     document.addEventListener('mousedown', handleClickOutside);
@@ -469,9 +497,52 @@ export function App() {
   // Filter templates
   const filteredTemplates = templates.filter(t => {
     const matchCloud = selectedClouds.includes(t.cloudId);
+    
+    if (activeCategory === 'saved') {
+      // Show template if any variant is saved, or if template itself is saved
+      return matchCloud && savedItems.some(s => s.templateId === t.id);
+    }
+    
     const matchCategory = activeCategory === 'all' || t.category === activeCategory;
     return matchCloud && matchCategory;
   });
+  
+  // Count saved items for the pill
+  const savedCount = savedItems.length;
+
+  // Get all cover options (templates + variants)
+  const coverOptions: Array<{templateId: string; variantKey?: string; name: string; preview?: string}> = [];
+  templates
+    .filter(t => t.category === 'cover-pages' || t.name.toLowerCase().includes('cover'))
+    .forEach(template => {
+      if (template.isComponentSet && template.variants && template.variants.length > 0) {
+        // Add each variant as an option
+        template.variants.forEach(variant => {
+          coverOptions.push({
+            templateId: template.id,
+            variantKey: variant.key,
+            name: variant.displayName || variant.name,
+            preview: variant.preview
+          });
+        });
+      } else {
+        // Single component
+        coverOptions.push({
+          templateId: template.id,
+          name: template.name,
+          preview: template.preview
+        });
+      }
+    });
+  
+  // Set default cover if none selected and covers exist
+  if (!selectedCoverVariant && coverOptions.length > 0) {
+    // Find "Default" variant or use first option
+    const defaultOption = coverOptions.find(o => 
+      o.name.toLowerCase() === 'default' || o.name.toLowerCase().includes('default')
+    ) || coverOptions[0];
+    setSelectedCoverVariant(defaultOption);
+  }
 
   // Toggle cloud filter
   function toggleCloud(id: string) {
@@ -657,11 +728,62 @@ export function App() {
     }));
   }
 
-  // Delete template
+  // Delete template (with confirmation)
+  function confirmDeleteTemplate(id: string) {
+    setDeleteConfirmId(id);
+    setMoveMenuOpen(null);
+  }
+  
   function deleteTemplate(id: string) {
     const updated = templates.filter(t => t.id !== id);
     setTemplates(updated);
     parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
+    // Also remove from saved (all variants of this template)
+    const updatedSaved = savedItems.filter(item => item.templateId !== id);
+    setSavedItems(updatedSaved);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_SAVED_TEMPLATES', savedItems: updatedSaved } }, '*');
+    setDeleteConfirmId(null);
+  }
+  
+  // Save/Unsave template or variant
+  function toggleSaveTemplate(templateId: string, variantKey?: string) {
+    const item = { templateId, variantKey };
+    const isSaved = savedItems.some(s => 
+      s.templateId === templateId && s.variantKey === variantKey
+    );
+    const updated = isSaved 
+      ? savedItems.filter(s => !(s.templateId === templateId && s.variantKey === variantKey))
+      : [...savedItems, item];
+    setSavedItems(updated);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_SAVED_TEMPLATES', savedItems: updated } }, '*');
+    setMoveMenuOpen(null);
+  }
+  
+  function isTemplateSaved(templateId: string, variantKey?: string) {
+    return savedItems.some(s => 
+      s.templateId === templateId && s.variantKey === variantKey
+    );
+  }
+  
+  function isAnyVariantSaved(templateId: string) {
+    return savedItems.some(s => s.templateId === templateId);
+  }
+  
+  function getSavedVariantsCount(templateId: string) {
+    return savedItems.filter(s => s.templateId === templateId).length;
+  }
+
+  // Move template to different category
+  function moveTemplateToCategory(templateId: string, newCategory: string) {
+    const updated = templates.map(t => 
+      t.id === templateId ? { ...t, category: newCategory } : t
+    );
+    setTemplates(updated);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
+    setMoveMenuOpen(null);
+    
+    // Auto-switch to the new category to show the moved item
+    setActiveCategory(newCategory);
   }
 
   // Export templates to JSON file
@@ -818,9 +940,21 @@ export function App() {
   const visibleClouds = allClouds.filter(cloud => !hiddenClouds.includes(cloud.id));
   
   // Get categories for current selected cloud
-  const currentCategories = selectedClouds[0] && cloudCategories[selectedClouds[0]] 
+  const baseCategories = selectedClouds[0] && cloudCategories[selectedClouds[0]] 
     ? cloudCategories[selectedClouds[0]] 
     : defaultCategories;
+  
+  // Add "Saved" icon pill at the end only when there are saved items
+  const currentCategories = savedCount > 0 
+    ? [...baseCategories, { id: 'saved', label: 'Saved', iconOnly: true }]
+    : baseCategories;
+  
+  // Auto-fallback to "all" if saved category is empty
+  useEffect(() => {
+    if (activeCategory === 'saved' && savedCount === 0) {
+      setActiveCategory('all');
+    }
+  }, [savedCount, activeCategory]);
     
   // Helper functions for settings
   function toggleCloudVisibility(cloudId: string) {
@@ -886,33 +1020,29 @@ export function App() {
   function scaffoldFileStructure() {
     setIsScaffolding(true);
     
-    // Find cover template - prefer component sets over single components
-    // First try to find a component set with 'cover' in name, then fall back to any cover
-    const coverTemplates = templates.filter(t => 
-      t.category === 'cover-pages' || t.name.toLowerCase().includes('cover')
-    );
+    // Use selected cover variant directly
+    let coverComponentKey: string | undefined;
     
-    // Prefer component sets (they have more variants to choose from)
-    const coverTemplate = coverTemplates.find(t => t.isComponentSet) || coverTemplates[0];
+    if (selectedCoverVariant) {
+      if (selectedCoverVariant.variantKey) {
+        // Direct variant key
+        coverComponentKey = selectedCoverVariant.variantKey;
+      } else {
+        // Single component - get its key
+        const template = templates.find(t => t.id === selectedCoverVariant.templateId);
+        coverComponentKey = template?.componentKey;
+      }
+      console.log('Using selected cover:', selectedCoverVariant.name, 'key:', coverComponentKey);
+    }
+    
+    // Find cover template for logging
+    const coverTemplate = selectedCoverVariant 
+      ? templates.find(t => t.id === selectedCoverVariant.templateId) 
+      : null;
     
     console.log('Found cover template:', coverTemplate?.name, 'category:', coverTemplate?.category);
     console.log('Has variants:', coverTemplate?.isComponentSet, 'count:', coverTemplate?.variants?.length);
-    
-    let coverComponentKey: string | undefined;
-    if (coverTemplate?.isComponentSet && coverTemplate?.variants && coverTemplate.variants.length > 0) {
-      // Find the "Default" variant
-      const defaultVariant = coverTemplate.variants.find(v => 
-        v.displayName.toLowerCase() === 'default' || 
-        v.name.toLowerCase().includes('default')
-      );
-      console.log('Default variant found:', defaultVariant?.displayName, 'key:', defaultVariant?.key);
-      coverComponentKey = defaultVariant?.key || coverTemplate.variants[0]?.key;
-      console.log('Using component key:', coverComponentKey);
-    } else if (coverTemplate) {
-      // Single component cover
-      coverComponentKey = coverTemplate.componentKey;
-      console.log('Using single component key:', coverComponentKey);
-    }
+    console.log('Final cover component key:', coverComponentKey);
     
     // Build pages list from editable scaffold sections
     const pages: Array<{ name: string; isRename: boolean }> = [];
@@ -1130,12 +1260,12 @@ export function App() {
           <h1 className="splash-screen__title">
             <span className="onboarding__title-gradient">starter</span>
             <span className="onboarding__title-kit">KIT</span>
-          </h1>
-        </div>
+            </h1>
+          </div>
         <div className="splash-screen__spinner">
           <Spinner size="small" />
         </div>
-      </div>
+        </div>
     );
   }
   
@@ -1195,7 +1325,7 @@ export function App() {
                         Make Default
                       </button>
                     )}
-                  </div>
+            </div>
                 ))}
                 <div 
                   className="cloud-selector-dropdown__add"
@@ -1328,7 +1458,11 @@ export function App() {
                         className="header__dropdown-menu-item"
                         onClick={() => { setView('settings'); setShowMoreMenu(false); }}
                       >
-                        <span>⚙</span> Settings
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                          <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+                          <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
+                        </svg>
+                        Settings
                       </button>
                       <div className="header__dropdown-divider"></div>
                       <button 
@@ -1369,10 +1503,18 @@ export function App() {
             {currentCategories.map(cat => (
               <button
                 key={cat.id}
-                className={`category-pill ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
+                className={`category-pill ${cat.iconOnly ? 'category-pill--icon' : ''} ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
+                data-category={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
+                title={cat.iconOnly ? 'Saved' : cat.label}
               >
-                {cat.label}
+                {cat.iconOnly ? (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                  </svg>
+                ) : (
+                  cat.label
+                )}
               </button>
             ))}
         </div>
@@ -1441,8 +1583,8 @@ export function App() {
                         ) : (
                           <div className="scaffold-section-header scaffold-section-header--readonly">
                             <span className="scaffold-section-header__name">{section.name}</span>
-                          </div>
-                        )}
+                </div>
+              )}
                       </>
                     ) : null}
                     
@@ -1475,7 +1617,7 @@ export function App() {
                               <circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/>
                               <circle cx="3" cy="14" r="1.5"/><circle cx="7" cy="14" r="1.5"/>
                             </svg>
-                          </div>
+            </div>
                         )}
                         {section.name && isEditingScaffold && (
                           <button
@@ -1509,7 +1651,42 @@ export function App() {
                         ) : (
                           <span className="scaffold-preview__name">{page.name}</span>
                         )}
-                        {page.isRename && <span className="scaffold-preview__note">(renames Page 1)</span>}
+                        {page.isRename && (
+                          <div className="scaffold-preview__cover-selector" ref={coverSelectorRef}>
+                            <button 
+                              className="scaffold-preview__cover-btn"
+                              onClick={() => setShowCoverSelector(!showCoverSelector)}
+                            >
+                              {selectedCoverVariant?.name || 'Select Cover'}
+                              <svg viewBox="0 0 12 12" fill="currentColor" width="10" height="10">
+                                <path d="M2 4l4 4 4-4"/>
+                              </svg>
+                            </button>
+                            {showCoverSelector && (
+                              <div className="scaffold-preview__cover-dropdown">
+                                <div 
+                                  className={`scaffold-preview__cover-option ${!selectedCoverVariant ? 'is-selected' : ''}`}
+                                  onClick={() => { setSelectedCoverVariant(null); setShowCoverSelector(false); }}
+                                >
+                                  None (no auto-insert)
+                                </div>
+                                {coverOptions.map((option, idx) => (
+                                  <div 
+                                    key={`${option.templateId}-${option.variantKey || idx}`}
+                                    className={`scaffold-preview__cover-option ${selectedCoverVariant?.templateId === option.templateId && selectedCoverVariant?.variantKey === option.variantKey ? 'is-selected' : ''}`}
+                                    onClick={() => { setSelectedCoverVariant(option); setShowCoverSelector(false); }}
+                                  >
+                                    {option.preview && <img src={option.preview} alt="" className="scaffold-preview__cover-thumb" />}
+                                    <span>{option.name}</span>
+                                  </div>
+                                ))}
+                                {coverOptions.length === 0 && (
+                                  <div className="scaffold-preview__cover-empty">No cover templates saved yet</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {isEditingScaffold && !page.isRename && (
                           <button className="scaffold-preview__delete-btn" onClick={() => {
                             const newSections = [...scaffoldSections];
@@ -1568,8 +1745,8 @@ export function App() {
                   >
                     {isEditingStatusBadges ? 'Done' : 'Edit'}
                   </button>
-                </div>
-                
+              </div>
+
                 {isEditingStatusBadges && (
                   <div className="scaffold-hint__editor">
                     {statusSymbols.map((status, index) => (
@@ -1623,22 +1800,22 @@ export function App() {
 
             {/* Fixed Footer with CTAs */}
             <div className="scaffold-section__footer">
-              <Button 
+                <Button 
                 variant="brand"
                 onClick={() => { scaffoldFileStructure(); }}
                 loading={isScaffolding}
                 disabled={scaffoldExists || isEditingScaffold}
               >
                 {scaffoldExists ? 'Already Exists' : 'Insert Pages'}
-              </Button>
-              <Button
+                </Button>
+                <Button 
                 variant={isEditingScaffold ? 'brand-outline' : 'neutral'}
                 onClick={() => setIsEditingScaffold(!isEditingScaffold)}
-              >
+                >
                 {isEditingScaffold ? 'Done Editing' : 'Edit'}
-              </Button>
+                </Button>
+              </div>
             </div>
-          </div>
         ) : view === 'settings' ? (
           <div className="settings-section">
             <div className="settings-header">
@@ -1646,7 +1823,7 @@ export function App() {
               <button className="settings-header__reset" onClick={resetAllSettings}>
                 Reset All
               </button>
-      </div>
+          </div>
 
             <div className="settings-accordions">
                 {/* Clouds & Teams Accordion */}
@@ -1694,8 +1871,8 @@ export function App() {
                                     {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
                                   </svg>
                                 </button>
-                              )}
-                            </div>
+            )}
+          </div>
                             
                             {/* Nested Categories - only show for default cloud */}
                             {defaultCloud === cloud.id && (
@@ -1763,10 +1940,10 @@ export function App() {
                           + Add Cloud / Team
                         </button>
                       </div>
-                    </div>
-                  )}
                 </div>
-                
+              )}
+            </div>
+
                 {/* Page Structure Configuration - Accordion */}
                 <div className="settings-accordion">
                   <button 
@@ -1782,101 +1959,6 @@ export function App() {
                   
                   {expandedSettingsSection === 'page-structure' && (
                     <div className="settings-accordion__content">
-                      {/* Status Symbols */}
-                      <div className="settings-subgroup">
-                        <h5 className="settings-subgroup__title">Status Symbols</h5>
-                        <div className="settings-symbols-list">
-                    {statusSymbols.map((status, index) => (
-                      <div 
-                        key={status.id} 
-                        className={`settings-symbol-item ${draggedItem?.type === 'symbol' && draggedItem.index === index ? 'is-dragging' : ''} ${dragOverIndex === index && draggedItem?.type === 'symbol' ? 'is-drag-over' : ''}`}
-                        draggable
-                        onDragStart={(e) => {
-                          setDraggedItem({ type: 'symbol', index });
-                          e.dataTransfer.effectAllowed = 'move';
-                        }}
-                        onDragEnd={() => {
-                          setDraggedItem(null);
-                          setDragOverIndex(null);
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          if (draggedItem?.type === 'symbol' && draggedItem.index !== index) {
-                            setDragOverIndex(index);
-                          }
-                        }}
-                        onDragLeave={() => setDragOverIndex(null)}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (draggedItem?.type === 'symbol' && draggedItem.index !== index) {
-                            const newSymbols = [...statusSymbols];
-                            const [removed] = newSymbols.splice(draggedItem.index, 1);
-                            newSymbols.splice(index, 0, removed);
-                            updateStatusSymbols(newSymbols);
-                          }
-                          setDraggedItem(null);
-                          setDragOverIndex(null);
-                        }}
-                      >
-                        <div className="gripper-handle">
-                          <svg className="gripper-handle__icon" viewBox="0 0 10 16" fill="currentColor">
-                            <circle cx="3" cy="2" r="1.5"/>
-                            <circle cx="7" cy="2" r="1.5"/>
-                            <circle cx="3" cy="8" r="1.5"/>
-                            <circle cx="7" cy="8" r="1.5"/>
-                            <circle cx="3" cy="14" r="1.5"/>
-                            <circle cx="7" cy="14" r="1.5"/>
-                          </svg>
-                        </div>
-                        <input
-                          type="text"
-                          className="settings-symbol-item__emoji"
-                          value={status.symbol}
-                          onChange={(e) => {
-                            const newSymbols = [...statusSymbols];
-                            newSymbols[index] = { ...status, symbol: e.target.value };
-                            updateStatusSymbols(newSymbols);
-                          }}
-                          maxLength={2}
-                        />
-                        <input
-                          type="text"
-                          className="settings-symbol-item__label"
-                          value={status.label}
-                          onChange={(e) => {
-                            const newSymbols = [...statusSymbols];
-                            newSymbols[index] = { ...status, label: e.target.value };
-                            updateStatusSymbols(newSymbols);
-                          }}
-                          placeholder="Label"
-                        />
-                        <button
-                          className="settings-symbol-item__delete"
-                          onClick={() => {
-                            if (statusSymbols.length > 1) {
-                              updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
-                            }
-                          }}
-                          disabled={statusSymbols.length <= 1}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      className="settings-add-symbol-btn"
-                      onClick={() => {
-                        updateStatusSymbols([
-                          ...statusSymbols,
-                          { id: `symbol-${Date.now()}`, symbol: '⭐', label: 'New Status' }
-                        ]);
-                      }}
-                          >
-                            + Add Status
-                          </button>
-                        </div>
-                      </div>
-                      
                       {/* Page Structure Preview */}
                       <div className="settings-subgroup">
                         <h5 className="settings-subgroup__title">Page Structure Preview</h5>
@@ -2001,7 +2083,42 @@ export function App() {
                                       setScaffoldSections(newSections);
                                     }}
                                   />
-                                  {page.isRename && <span className="scaffold-preview__note">(renames Page 1)</span>}
+                                  {page.isRename && (
+                                    <div className="scaffold-preview__cover-selector">
+                                      <button 
+                                        className="scaffold-preview__cover-btn"
+                                        onClick={() => setShowCoverSelector(!showCoverSelector)}
+                                      >
+                                        {selectedCoverVariant?.name || 'Select Cover'}
+                                        <svg viewBox="0 0 12 12" fill="currentColor" width="10" height="10">
+                                          <path d="M2 4l4 4 4-4"/>
+                                        </svg>
+                                      </button>
+                                      {showCoverSelector && (
+                                        <div className="scaffold-preview__cover-dropdown">
+                                          <div 
+                                            className={`scaffold-preview__cover-option ${!selectedCoverVariant ? 'is-selected' : ''}`}
+                                            onClick={() => { setSelectedCoverVariant(null); setShowCoverSelector(false); }}
+                                          >
+                                            None (no auto-insert)
+          </div>
+                                          {coverOptions.map((option, idx) => (
+                                            <div 
+                                              key={`${option.templateId}-${option.variantKey || idx}`}
+                                              className={`scaffold-preview__cover-option ${selectedCoverVariant?.templateId === option.templateId && selectedCoverVariant?.variantKey === option.variantKey ? 'is-selected' : ''}`}
+                                              onClick={() => { setSelectedCoverVariant(option); setShowCoverSelector(false); }}
+                                            >
+                                              {option.preview && <img src={option.preview} alt="" className="scaffold-preview__cover-thumb" />}
+                                              <span>{option.name}</span>
+                                            </div>
+                                          ))}
+                                          {coverOptions.length === 0 && (
+                                            <div className="scaffold-preview__cover-empty">No cover templates saved yet</div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                   {!page.isRename && (
                                     <button
                                       className="scaffold-preview__delete-btn"
@@ -2012,8 +2129,8 @@ export function App() {
                                         setScaffoldSections(newSections);
                                       }}
                                     >×</button>
-                                  )}
-                                </div>
+            )}
+          </div>
                               ))}
                               
                               <button
@@ -2039,16 +2156,77 @@ export function App() {
                           >+ Add Section</button>
                         </div>
                         
-                        <p className="scaffold-hint">
-                          <strong>Status:</strong>{' '}
-                          {statusSymbols.map((s, i) => (
-                            <span key={s.id}>
-                              {i > 0 && <span className="scaffold-hint__separator"> • </span>}
-                              <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
-                            </span>
-                          ))}
-            </p>
-          </div>
+                        <div className={`scaffold-hint ${isEditingStatusBadges ? 'scaffold-hint--editing' : ''}`}>
+                          <div className="scaffold-hint__header">
+                            <strong>Status:</strong>
+                            {!isEditingStatusBadges && (
+                              <span className="scaffold-hint__badges">
+                                {statusSymbols.map((s, i) => (
+                                  <span key={s.id}>
+                                    {i > 0 && <span className="scaffold-hint__separator"> • </span>}
+                                    <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                            <button 
+                              className="scaffold-hint__edit-btn"
+                              onClick={() => setIsEditingStatusBadges(!isEditingStatusBadges)}
+                            >
+                              {isEditingStatusBadges ? 'Done' : 'Edit'}
+                            </button>
+                          </div>
+                          
+                          {isEditingStatusBadges && (
+                            <div className="scaffold-hint__editor">
+                              {statusSymbols.map((status, index) => (
+                                <div key={status.id} className="scaffold-hint__editor-row">
+                                  <input
+                                    type="text"
+                                    className="scaffold-hint__emoji-input"
+                                    value={status.symbol}
+                                    onChange={(e) => {
+                                      const newSymbols = [...statusSymbols];
+                                      newSymbols[index] = { ...status, symbol: e.target.value };
+                                      updateStatusSymbols(newSymbols);
+                                    }}
+                                    maxLength={2}
+                                  />
+                                  <input
+                                    type="text"
+                                    className="scaffold-hint__label-input"
+                                    value={status.label}
+                                    onChange={(e) => {
+                                      const newSymbols = [...statusSymbols];
+                                      newSymbols[index] = { ...status, label: e.target.value };
+                                      updateStatusSymbols(newSymbols);
+                                    }}
+                                    placeholder="Label"
+                                  />
+                                  <button
+                                    className="scaffold-hint__delete-btn"
+                                    onClick={() => {
+                                      if (statusSymbols.length > 1) {
+                                        updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
+                                      }
+                                    }}
+                                    disabled={statusSymbols.length <= 1}
+                                  >×</button>
+                                </div>
+                              ))}
+                              <button
+                                className="scaffold-hint__add-btn"
+                                onClick={() => {
+                                  updateStatusSymbols([
+                                    ...statusSymbols,
+                                    { id: `symbol-${Date.now()}`, symbol: '⭐', label: 'New Status' }
+                                  ]);
+                                }}
+                              >+ Add Status</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2140,8 +2318,8 @@ export function App() {
                           {cloud.name}
                         </button>
                       ))}
-                    </div>
-                  </div>
+            </div>
+          </div>
 
                   <div className="form-field">
                     <RadioGroup
@@ -2151,7 +2329,7 @@ export function App() {
                       value={formCategory}
                       onChange={setFormCategory}
                       direction="horizontal"
-                    />
+              />
             </div>
 
                   <div className="form-field">
@@ -2203,6 +2381,16 @@ export function App() {
                 <div className="template-item__header">
                   {cloud && <img src={cloud.icon} alt={cloud.name} className="template-item__icon" />}
                   <span className="template-item__title">{template.name}</span>
+                  {isAnyVariantSaved(template.id) && activeCategory !== 'saved' && (
+                    <span className="template-item__saved-badge" title={`${getSavedVariantsCount(template.id)} saved`}>
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                      </svg>
+                      {template.isComponentSet && getSavedVariantsCount(template.id) > 1 && (
+                        <span className="template-item__saved-count">{getSavedVariantsCount(template.id)}</span>
+                      )}
+                    </span>
+                  )}
                   {template.googleSlideLink ? (
                     <a 
                       href={template.googleSlideLink} 
@@ -2216,44 +2404,62 @@ export function App() {
                   ) : (
                     <span className="template-item__size">{template.size.width}×{template.size.height}</span>
                   )}
-                  <button className="template-item__delete" onClick={() => deleteTemplate(template.id)}>×</button>
-      </div>
-
-                {/* Only show main preview for single components, not component sets */}
-                {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
-                  <div className="template-item__preview">
-                    <img src={template.preview} alt={template.name} />
-                  </div>
-                )}
-
+          </div>
+          
                 {/* Variant Grid - Visual slide selector */}
                 {template.isComponentSet && template.variants && template.variants.length > 1 && (() => {
+                  // Filter variants: in saved category, only show saved variants
+                  const displayVariants = activeCategory === 'saved'
+                    ? template.variants.filter(v => isTemplateSaved(template.id, v.key))
+                    : template.variants;
+                  
+                  // If only one variant saved in saved category, show as full preview
+                  if (activeCategory === 'saved' && displayVariants.length === 1 && displayVariants[0].preview) {
+                    const savedVariant = displayVariants[0];
+                    return (
+                      <div className="template-item__preview">
+                        <img src={savedVariant.preview} alt={savedVariant.displayName} />
+                        <button 
+                          className="template-item__preview-saved"
+                          onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id, savedVariant.key); }}
+                          title="Unsave"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  }
+                  
                   const selected = selectedSlides[template.id] || [];
-                  const allSelected = selected.length === template.variants.length;
+                  const allSelected = selected.length === displayVariants.length;
                   
                   return (
                     <div className="variant-grid">
-                      <div className="variant-grid__header">
-                        <span className="variant-grid__title">
-                          {selected.length > 0 ? `${selected.length} selected` : 'Click to select'}
-                        </span>
-                        <button 
-                          className="variant-grid__toggle-all"
-                          onClick={() => allSelected 
-                            ? deselectAllSlides(template.id) 
-                            : selectAllSlides(template.id, template.variants!.map(v => v.key))
-                          }
-                        >
-                          {allSelected ? 'Clear' : 'Select All'}
-                        </button>
-          </div>
+                      {activeCategory !== 'saved' && (
+                        <div className="variant-grid__header">
+                          <span className="variant-grid__title">
+                            {selected.length > 0 ? `${selected.length} selected` : 'Click to select'}
+                          </span>
+                          <button 
+                            className="variant-grid__toggle-all"
+                            onClick={() => allSelected 
+                              ? deselectAllSlides(template.id) 
+                              : selectAllSlides(template.id, displayVariants.map(v => v.key))
+                            }
+                          >
+                            {allSelected ? 'Clear' : 'Select All'}
+                          </button>
+                        </div>
+                      )}
                       <div className={`variant-grid__items variant-grid__items--${
-                        template.variants.length === 1 ? 'single' :
-                        template.variants.length === 2 ? 'duo' :
-                        template.variants.length === 4 ? 'quad' :
+                        displayVariants.length === 1 ? 'single' :
+                        displayVariants.length === 2 ? 'duo' :
+                        displayVariants.length === 4 ? 'quad' :
                         'default'
                       }`}>
-                        {template.variants.map(variant => {
+                        {displayVariants.map(variant => {
                           const isSelected = selected.includes(variant.key);
                           return (
                             <div 
@@ -2261,19 +2467,32 @@ export function App() {
                               className={`variant-grid__item ${isSelected ? 'is-selected' : ''}`}
                               onClick={() => toggleSlideSelection(template.id, variant.key)}
                             >
-                              {variant.preview ? (
-                                <img 
-                                  src={variant.preview} 
-                                  alt={variant.displayName}
-                                  className="variant-grid__thumb"
-                                />
-                              ) : (
-                                <div className="variant-grid__thumb variant-grid__thumb--empty">
-                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
-                                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
-                                  </svg>
-          </div>
-                              )}
+                              <div className="variant-grid__thumb-wrapper">
+                                {variant.preview ? (
+                                  <img 
+                                    src={variant.preview} 
+                                    alt={variant.displayName}
+                                    className="variant-grid__thumb"
+                                  />
+                                ) : (
+                                  <div className="variant-grid__thumb variant-grid__thumb--empty">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                                      <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                                    </svg>
+                                  </div>
+                                )}
+                                {isTemplateSaved(template.id, variant.key) && (
+                                  <button 
+                                    className="variant-grid__saved"
+                                    onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id, variant.key); }}
+                                    title="Unsave"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                      <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
                               <span className="variant-grid__name">{variant.displayName}</span>
                               {isSelected && (
                                 <div className="variant-grid__check">
@@ -2290,6 +2509,24 @@ export function App() {
                   );
                 })()}
 
+                {/* Only show main preview for single components, not component sets */}
+                {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
+                  <div className="template-item__preview">
+                    <img src={template.preview} alt={template.name} />
+                    {isTemplateSaved(template.id) && (
+                      <button 
+                        className="template-item__preview-saved"
+                        onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id); }}
+                        title="Unsave"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                        </svg>
+                      </button>
+                    )}
+          </div>
+                )}
+
                 <div className="template-item__footer">
                   <p className="template-item__desc">{template.description}</p>
               <Button 
@@ -2297,9 +2534,142 @@ export function App() {
                     size="small"
                     onClick={() => insertTemplate(template)}
                     loading={insertingId === template.id}
-              >
+                  >
                     Insert
               </Button>
+                  <div className="template-item__more" ref={moveMenuOpen === template.id ? moveMenuRef : null}>
+                    <button 
+                      className="template-item__more-btn" 
+                      onClick={() => setMoveMenuOpen(moveMenuOpen === template.id ? null : template.id)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
+                      </svg>
+                    </button>
+                    {moveMenuOpen === template.id && (
+                      <div className="template-item__more-dropdown">
+                        {activeCategory === 'saved' ? (
+                          /* When viewing Saved category - only Unsave option */
+                          <>
+                            {template.isComponentSet && template.variants && template.variants.length > 1 ? (
+                              /* Component set - show unsave for each saved variant */
+                              template.variants
+                                .filter(v => isTemplateSaved(template.id, v.key))
+                                .map(variant => (
+                                  <button
+                                    key={variant.key}
+                                    className="template-item__more-option"
+                                    onClick={() => toggleSaveTemplate(template.id, variant.key)}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                      <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                                    </svg>
+                                    Unsave {variant.displayName}
+                                  </button>
+                                ))
+                            ) : (
+                              /* Single component */
+                              <button
+                                className="template-item__more-option"
+                                onClick={() => toggleSaveTemplate(template.id)}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                                </svg>
+                                Unsave
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          /* Normal view - all options */
+                          <>
+                            {/* Save/Unsave - for component sets, this saves all variants */}
+                            {template.isComponentSet && template.variants && template.variants.length > 1 ? (
+                              <>
+                                <div className="template-item__more-option template-item__more-option--header">
+                                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                                  </svg>
+                                  <span>Save variant</span>
+                                  <svg className="template-item__more-chevron" width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                    <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                                  </svg>
+                                </div>
+                                <div className="template-item__more-submenu">
+                                  {template.variants.map(variant => (
+                                    <button
+                                      key={variant.key}
+                                      className={`template-item__more-option ${isTemplateSaved(template.id, variant.key) ? 'is-saved' : ''}`}
+                                      onClick={() => toggleSaveTemplate(template.id, variant.key)}
+                                    >
+                                      {isTemplateSaved(template.id, variant.key) && (
+                                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                          <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+                                        </svg>
+                                      )}
+                                      {variant.displayName}
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            ) : (
+                              <button
+                                className={`template-item__more-option ${isTemplateSaved(template.id) ? 'is-saved' : ''}`}
+                                onClick={() => toggleSaveTemplate(template.id)}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                  {isTemplateSaved(template.id) ? (
+                                    <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                                  ) : (
+                                    <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                                  )}
+                                </svg>
+                                {isTemplateSaved(template.id) ? 'Saved' : 'Save'}
+                              </button>
+                            )}
+                            
+                            <div className="template-item__more-divider"></div>
+                            
+                            {/* Move to Category */}
+                            <div className="template-item__more-option template-item__more-option--header">
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path fillRule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
+                              </svg>
+                              <span>Move to</span>
+                              <svg className="template-item__more-chevron" width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                              </svg>
+                            </div>
+                            <div className="template-item__more-submenu">
+                              {categories.filter(c => c.id !== 'all' && c.id !== template.category).map(cat => (
+                                <button
+                                  key={cat.id}
+                                  className="template-item__more-option"
+                                  onClick={() => moveTemplateToCategory(template.id, cat.id)}
+                                >
+                                  {cat.label}
+                                </button>
+                              ))}
+                            </div>
+                            
+                            <div className="template-item__more-divider"></div>
+                            
+                            {/* Delete */}
+                            <button
+                              className="template-item__more-option template-item__more-option--danger"
+                              onClick={() => confirmDeleteTemplate(template.id)}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                              </svg>
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
             </div>
           </div>
             );
@@ -2332,7 +2702,7 @@ export function App() {
                   <div className="modal__icon-placeholder">
                     <span>+</span>
                     <span className="modal__icon-hint">Upload Icon</span>
-        </div>
+          </div>
                 )}
                 <input
                   ref={cloudIconInputRef}
@@ -2341,14 +2711,14 @@ export function App() {
                   onChange={handleCloudIconUpload}
                   style={{ display: 'none' }}
                 />
-              </div>
+          </div>
               <Input
                 label="Cloud or Team Name"
                 placeholder="e.g. Data Cloud, My Team"
                 value={newCloudName}
                 onChange={(e) => setNewCloudName(e.target.value)}
               />
-            </div>
+          </div>
             <div className="modal__footer">
               <Button variant="neutral" onClick={cancelAddCloud}>Cancel</Button>
               <Button 
@@ -2357,6 +2727,32 @@ export function App() {
                 disabled={!newCloudName.trim() || !newCloudIcon}
               >
                 Add Cloud
+              </Button>
+          </div>
+        </div>
+        </div>
+      )}
+      
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirmId(null)}>
+          <div className="modal modal--small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Delete Template?</h3>
+              <button className="modal__close" onClick={() => setDeleteConfirmId(null)}>×</button>
+          </div>
+            <div className="modal__body">
+              <p className="modal__text">
+                Are you sure you want to delete "<strong>{templates.find(t => t.id === deleteConfirmId)?.name}</strong>"? This action cannot be undone.
+              </p>
+        </div>
+            <div className="modal__footer">
+              <Button variant="neutral" onClick={() => setDeleteConfirmId(null)}>Cancel</Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => deleteTemplate(deleteConfirmId)}
+              >
+                Delete
               </Button>
             </div>
           </div>

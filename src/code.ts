@@ -217,6 +217,26 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
   
+  // ============ SAVED TEMPLATES ============
+  if (msg.type === 'LOAD_SAVED_TEMPLATES') {
+    try {
+      const savedItems = await figma.clientStorage.getAsync('starter-kit-saved') || [];
+      figma.ui.postMessage({ type: 'SAVED_TEMPLATES_LOADED', savedItems });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'SAVED_TEMPLATES_LOADED', savedItems: [] });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_SAVED_TEMPLATES') {
+    try {
+      await figma.clientStorage.setAsync('starter-kit-saved', msg.savedItems);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save', { error: true });
+    }
+    return;
+  }
+  
   // ============ SHOW TOAST ============
   if (msg.type === 'SHOW_TOAST') {
     figma.notify(`✓ ${msg.message}`, { timeout: 2500 });
