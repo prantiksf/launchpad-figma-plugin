@@ -2419,7 +2419,7 @@ fieldset.slds-form-element legend {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .settings-cloud-row__icon-upload {
