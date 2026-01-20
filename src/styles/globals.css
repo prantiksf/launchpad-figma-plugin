@@ -781,7 +781,7 @@ body {
   background: white;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 0;
   box-sizing: border-box;
 }
 
@@ -792,6 +792,7 @@ body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  padding: 20px;
 }
 
 .loading-state {
@@ -1914,7 +1915,7 @@ fieldset.slds-form-element legend {
   overflow-y: auto;
   overflow-x: hidden;
   background: white;
-  padding-bottom: 0;
+  padding: 0;
   width: 100%;
   box-sizing: border-box;
 }
@@ -1923,7 +1924,7 @@ fieldset.slds-form-element legend {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: 8px 20px;
   background: white;
   border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
   position: sticky;
@@ -1932,22 +1933,21 @@ fieldset.slds-form-element legend {
   margin-top: 0;
   margin-bottom: 0;
   border-top: none;
-  margin-left: -20px;
-  margin-right: -20px;
-  padding-left: 20px;
-  padding-right: 20px;
+  margin-left: 0;
+  margin-right: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
 }
 
 .settings-section {
-  padding: 0;
+  padding: 20px;
   margin-top: 0;
   margin-bottom: 0;
   background: white;
   flex: 1;
   min-height: 0;
   position: relative;
+  box-sizing: border-box;
 }
 
 .settings-header__left {
