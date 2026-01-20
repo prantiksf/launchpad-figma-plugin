@@ -2703,7 +2703,7 @@ fieldset.slds-form-element legend {
 
 .settings-add-poc-btn {
   background: none;
-  border: 1px dashed var(--slds-g-color-neutral-base-70);
+  border: none;
   cursor: pointer;
   padding: 4px 8px;
   font-size: 10px;
@@ -2715,7 +2715,6 @@ fieldset.slds-form-element legend {
 }
 
 .settings-add-poc-btn:hover {
-  border-color: var(--slds-g-color-brand-base-50);
   background: var(--slds-g-color-brand-base-95);
 }
 
@@ -2748,7 +2747,7 @@ fieldset.slds-form-element legend {
 
 .settings-add-cloud-btn {
   background: none;
-  border: 1px dashed var(--slds-g-color-neutral-base-70);
+  border: none;
   cursor: pointer;
   padding: 8px;
   font-size: 11px;
@@ -2759,7 +2758,6 @@ fieldset.slds-form-element legend {
 }
 
 .settings-add-cloud-btn:hover {
-  border-color: var(--slds-g-color-brand-base-50);
   background: var(--slds-g-color-brand-base-95);
 }
 
