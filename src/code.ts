@@ -69,6 +69,28 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
   
+  // ============ CLOUD-SPECIFIC FIGMA LINKS ============
+  const CLOUD_FIGMA_LINKS_KEY = 'starter-kit-cloud-figma-links';
+  
+  if (msg.type === 'LOAD_CLOUD_FIGMA_LINKS') {
+    try {
+      const links = await figma.clientStorage.getAsync(CLOUD_FIGMA_LINKS_KEY);
+      figma.ui.postMessage({ type: 'CLOUD_FIGMA_LINKS_LOADED', links: links || {} });
+    } catch (error) {
+      figma.ui.postMessage({ type: 'CLOUD_FIGMA_LINKS_LOADED', links: {} });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_CLOUD_FIGMA_LINKS') {
+    try {
+      await figma.clientStorage.setAsync(CLOUD_FIGMA_LINKS_KEY, msg.links);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save links', { error: true });
+    }
+    return;
+  }
+  
   // ============ LOAD DEFAULT CLOUD ============
   const DEFAULT_CLOUD_KEY = 'starter-kit-default-cloud';
   

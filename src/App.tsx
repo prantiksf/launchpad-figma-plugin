@@ -1481,12 +1481,65 @@ export function App() {
                   </button>
                   
                   {showLinksDropdown && (
-                    <div className="header__dropdown header__dropdown--readonly">
+                    <div className="header__dropdown">
                       <div className="header__dropdown-header">
                         <span className="header__dropdown-title">Important Figma links</span>
+                        <button 
+                          className="header__dropdown-add"
+                          onClick={() => setIsAddingLink(!isAddingLink)}
+                        >
+                          {isAddingLink ? '×' : '+'}
+                        </button>
                       </div>
+                      
+                      {isAddingLink && (
+                        <div className="header__dropdown-form">
+                          <input
+                            type="text"
+                            placeholder="Link name"
+                            value={newLinkName}
+                            onChange={(e) => setNewLinkName(e.target.value)}
+                            className="header__dropdown-input"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Figma URL"
+                            value={newLinkUrl}
+                            onChange={(e) => setNewLinkUrl(e.target.value)}
+                            className="header__dropdown-input"
+                          />
+                          <button 
+                            className="header__dropdown-save"
+                            onClick={() => {
+                              const currentCloudId = selectedClouds[0];
+                              if (!newLinkName.trim() || !newLinkUrl.trim()) return;
+                              
+                              const newLink = {
+                                id: Date.now().toString(),
+                                name: newLinkName.trim(),
+                                url: newLinkUrl.trim()
+                              };
+                              
+                              const currentLinks = cloudFigmaLinks[currentCloudId] || [];
+                              const updatedLinks = [...currentLinks, newLink];
+                              const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
+                              setCloudFigmaLinks(updatedCloudLinks);
+                              parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
+                              
+                              setNewLinkName('');
+                              setNewLinkUrl('');
+                              setIsAddingLink(false);
+                            }}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      )}
+                      
                       <div className="header__dropdown-links">
-                        {currentCloudLinks.length > 0 ? (
+                        {currentCloudLinks.length === 0 && !isAddingLink ? (
+                          <p className="header__dropdown-empty">No links added yet</p>
+                        ) : (
                           currentCloudLinks.map(link => (
                             <div key={link.id} className="header__dropdown-link">
                               <button 
@@ -1495,10 +1548,21 @@ export function App() {
                               >
                                 {link.name}
                               </button>
+                              <button 
+                                className="header__dropdown-link-delete"
+                                onClick={() => {
+                                  const currentCloudId = selectedClouds[0];
+                                  const currentLinks = cloudFigmaLinks[currentCloudId] || [];
+                                  const updatedLinks = currentLinks.filter(l => l.id !== link.id);
+                                  const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
+                                  setCloudFigmaLinks(updatedCloudLinks);
+                                  parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
+                                }}
+                              >
+                                ×
+                              </button>
                             </div>
                           ))
-                        ) : (
-                          <p className="header__dropdown-empty">No links added yet</p>
                         )}
                       </div>
                     </div>
