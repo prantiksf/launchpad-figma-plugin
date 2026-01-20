@@ -1468,7 +1468,7 @@ export function App() {
                     <button 
                       className="header__icon-btn header__icon-btn--figma"
                       onClick={() => setShowLinksDropdown(!showLinksDropdown)}
-                      title="Important Figma links"
+                      title="Figma resources"
                     >
                       <svg width="14" height="14" viewBox="0 0 38 57" fill="currentColor">
                         <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
