@@ -306,24 +306,42 @@ export function App() {
     // Check if running in Figma or standalone browser
     const isInFigma = window.parent !== window;
     
+    // Add error handler
+    const handleError = (error: ErrorEvent) => {
+      console.error('Plugin error:', error);
+      setIsLoading(false);
+      setHasCompletedOnboarding(false);
+      setShowSplash(false);
+    };
+    
+    window.addEventListener('error', handleError);
+    
     if (isInFigma) {
-      parent.postMessage({ pluginMessage: { type: 'LOAD_ONBOARDING_STATE' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_CUSTOM_CLOUDS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_EDITABLE_CLOUDS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_HIDDEN_CLOUDS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_SAVED_TEMPLATES' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_POCS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'GET_SELECTED_FRAME_BRANDING' } }, '*');
+      try {
+        parent.postMessage({ pluginMessage: { type: 'LOAD_ONBOARDING_STATE' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_CUSTOM_CLOUDS' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_EDITABLE_CLOUDS' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_HIDDEN_CLOUDS' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_SAVED_TEMPLATES' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_POCS' } }, '*');
+        parent.postMessage({ pluginMessage: { type: 'GET_SELECTED_FRAME_BRANDING' } }, '*');
+      } catch (error) {
+        console.error('Failed to send initial messages:', error);
+        setIsLoading(false);
+        setHasCompletedOnboarding(false);
+        setShowSplash(false);
+      }
     } else {
       // Browser preview - skip onboarding
       setHasCompletedOnboarding(true);
       setShowSplash(false);
+      setIsLoading(false);
     }
     
     // Fallback timeout - if no response in 2s, assume first-time user
@@ -333,7 +351,10 @@ export function App() {
       setHasCompletedOnboarding(prev => prev === null ? false : prev);
     }, 2000);
     
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('error', handleError);
+    };
   }, []);
 
   // Add template flow
