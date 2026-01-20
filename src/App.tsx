@@ -1492,7 +1492,6 @@ export function App() {
                               }
                             }
                           }}
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
                         >
                           {poc.name}
                         </button>
