@@ -263,6 +263,10 @@ export function App() {
   // Format: [{templateId: string, variantKey?: string}, ...]
   const [savedItems, setSavedItems] = useState<Array<{templateId: string; variantKey?: string}>>([]);
   
+  // Plugin branding from selected frame
+  const [pluginBranding, setPluginBranding] = useState<string | null>(null);
+  const [frameName, setFrameName] = useState<string | null>(null);
+  
   // Cloud visibility and per-cloud settings
   const [hiddenClouds, setHiddenClouds] = useState<string[]>([]);
   const [cloudCategories, setCloudCategories] = useState<Record<string, Array<{id: string; label: string}>>>({});
@@ -315,6 +319,7 @@ export function App() {
       parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_POCS' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'GET_SELECTED_FRAME_BRANDING' } }, '*');
     } else {
       // Browser preview - skip onboarding
       setHasCompletedOnboarding(true);
@@ -356,6 +361,11 @@ export function App() {
 
         case 'TEMPLATES_SAVED':
           // Templates saved confirmation
+          break;
+          
+        case 'SELECTED_FRAME_BRANDING_LOADED':
+          setPluginBranding(msg.branding || null);
+          setFrameName(msg.frameName || null);
           break;
           
         case 'SAVED_TEMPLATES_LOADED':
@@ -1315,6 +1325,16 @@ export function App() {
       <div className="header-container">
         <div className="sticky-header">
         <header className="header">
+          {/* Plugin Branding from Selected Frame */}
+          {pluginBranding && (
+            <div className="header__branding">
+              <img 
+                src={pluginBranding} 
+                alt={frameName || 'Plugin Branding'} 
+                className="header__branding-image"
+              />
+            </div>
+          )}
           <div className="header__row">
             <div className="header__left-group" ref={cloudSelectorRef}>
               <img 

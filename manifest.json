@@ -1,5 +1,5 @@
 {
-  "name": "My Figma Plugin",
+  "name": "Starter Kit",
   "id": "000000000000000000",
   "api": "1.0.0",
   "main": "dist/code.js",

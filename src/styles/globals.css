@@ -313,6 +313,21 @@ body {
   margin-bottom: 0;
 }
 
+.header__branding {
+  width: 100%;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+}
+
+.header__branding-image {
+  width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+}
+
 .header__row {
   display: flex;
   align-items: center;

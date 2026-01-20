@@ -720,4 +720,58 @@ figma.ui.onmessage = async (msg) => {
       figma.ui.postMessage({ type: 'PREVIEW_NOT_AVAILABLE', componentKey });
     }
   }
+
+  // ============ GET SELECTED FRAME BRANDING ============
+  if (msg.type === 'GET_SELECTED_FRAME_BRANDING') {
+    try {
+      const selection = figma.currentPage.selection;
+      if (selection.length > 0) {
+        const node = selection[0];
+        // Check if it's a frame or can be exported
+        if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE') {
+          const bytes = await node.exportAsync({
+            format: 'PNG',
+            constraint: { type: 'WIDTH', value: 200 }
+          });
+          const imageData = `data:image/png;base64,${figma.base64Encode(bytes)}`;
+          figma.ui.postMessage({ 
+            type: 'SELECTED_FRAME_BRANDING_LOADED', 
+            branding: imageData,
+            frameName: node.name
+          });
+        } else {
+          figma.ui.postMessage({ type: 'SELECTED_FRAME_BRANDING_LOADED', branding: null });
+        }
+      } else {
+        figma.ui.postMessage({ type: 'SELECTED_FRAME_BRANDING_LOADED', branding: null });
+      }
+    } catch (error) {
+      figma.ui.postMessage({ type: 'SELECTED_FRAME_BRANDING_LOADED', branding: null });
+    }
+    return;
+  }
 };
+
+// Listen for selection changes to update branding
+figma.on('selectionchange', async () => {
+  const selection = figma.currentPage.selection;
+  if (selection.length > 0) {
+    const node = selection[0];
+    if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE') {
+      try {
+        const bytes = await node.exportAsync({
+          format: 'PNG',
+          constraint: { type: 'WIDTH', value: 200 }
+        });
+        const imageData = `data:image/png;base64,${figma.base64Encode(bytes)}`;
+        figma.ui.postMessage({ 
+          type: 'SELECTED_FRAME_BRANDING_LOADED', 
+          branding: imageData,
+          frameName: node.name
+        });
+      } catch {
+        // Ignore errors
+      }
+    }
+  }
+});
