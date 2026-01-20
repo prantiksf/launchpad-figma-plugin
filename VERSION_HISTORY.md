@@ -14,6 +14,13 @@
 - ✅ Improved toast notification reliability
   - Toast now always displays regardless of clipboard API success
   - Better error handling and user feedback
+- ✅ UI/UX Improvements
+  - Removed dashed borders from Add Category, Add POC, and Add Cloud/Team buttons
+  - Reduced settings header padding for tighter, cleaner layout
+  - Grouped dropdown menu items (Add pattern, Create Pages, Manage Clouds and Sections)
+  - Improved icon design for "Manage Clouds and Sections" (stacked layers)
+  - Renamed "Manage Clouds and Teams" to "Manage Clouds and Sections"
+  - Better visual grouping and consistency across UI elements
 
 ### Bug Fixes
 - Fixed Save feature visibility in template ellipsis menu
@@ -24,6 +31,7 @@
 - Enhanced clipboard copy with multiple fallback methods
 - Improved error handling for clipboard operations
 - Better user feedback for all actions
+- Cleaner CSS with consistent button styling
 
 ---
 
