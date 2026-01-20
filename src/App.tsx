@@ -123,9 +123,12 @@ export function App() {
   const [selectedCoverVariant, setSelectedCoverVariant] = useState<{templateId: string; variantKey?: string; name: string} | null>(null);
   const [showCoverSelector, setShowCoverSelector] = useState(false);
   
-  // Designer info
-  const [designerName, setDesignerName] = useState<string>('');
-  const [designerEmail, setDesignerEmail] = useState<string>('');
+  // Cloud POCs (Point of Contact) - per cloud
+  interface CloudPOC {
+    name: string;
+    email: string;
+  }
+  const [cloudPOCs, setCloudPOCs] = useState<Record<string, CloudPOC[]>>({});
   
   // Editable scaffold structure - organized by sections
   interface ScaffoldPage {
@@ -310,7 +313,7 @@ export function App() {
       parent.postMessage({ pluginMessage: { type: 'LOAD_SAVED_TEMPLATES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'GET_DESIGNER_INFO' } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_POCS' } }, '*');
     } else {
       // Browser preview - skip onboarding
       setHasCompletedOnboarding(true);
@@ -455,9 +458,8 @@ export function App() {
             setStatusSymbols(msg.symbols);
           }
           break;
-        case 'DESIGNER_INFO_LOADED':
-          if (msg.name) setDesignerName(msg.name);
-          if (msg.email) setDesignerEmail(msg.email);
+        case 'CLOUD_POCS_LOADED':
+          if (msg.pocs) setCloudPOCs(msg.pocs || {});
           break;
 
         case 'SCAFFOLD_EXISTS':
@@ -985,8 +987,14 @@ export function App() {
     parent.postMessage({ pluginMessage: { type: 'SAVE_STATUS_SYMBOLS', symbols: newSymbols } }, '*');
   }
   
+  function updateCloudPOCs(cloudId: string, pocs: CloudPOC[]) {
+    const newPOCs = { ...cloudPOCs, [cloudId]: pocs };
+    setCloudPOCs(newPOCs);
+    parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_POCS', pocs: newPOCs } }, '*');
+  }
+  
   function resetAllSettings() {
-    if (confirm('Reset all settings to default? This will:\n• Show all clouds\n• Reset categories to default\n• Clear custom clouds\n• Reset default cloud\n• Reset status symbols\n• Reset page structure')) {
+    if (confirm('Reset all settings to default? This will:\n• Show all clouds\n• Reset categories to default\n• Clear custom clouds\n• Reset default cloud\n• Reset status symbols\n• Reset page structure\n• Clear cloud POCs')) {
       setHiddenClouds([]);
       setCloudCategories({});
       setDefaultCloud('sales');
@@ -995,12 +1003,14 @@ export function App() {
       setStatusSymbols(defaultStatusSymbols);
       setScaffoldSections(defaultScaffoldSections);
       setCloudFigmaLinks({});
+      setCloudPOCs({});
       parent.postMessage({ pluginMessage: { type: 'SAVE_HIDDEN_CLOUDS', hiddenClouds: [] } }, '*');
       parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_CATEGORIES', categories: {} } }, '*');
       parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: 'sales' } }, '*');
       parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: [] } }, '*');
       parent.postMessage({ pluginMessage: { type: 'SAVE_STATUS_SYMBOLS', symbols: defaultStatusSymbols } }, '*');
       parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: {} } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_POCS', pocs: {} } }, '*');
     }
   }
 
@@ -1354,9 +1364,6 @@ export function App() {
                 <Button variant="neutral" size="small" onClick={goHome}>
                   ← Back
                 </Button>
-                <span className="header__view-title">
-                  {view === 'settings' ? 'Settings' : view === 'scaffold' ? 'Create Pages' : view === 'add' ? 'Add Template' : ''}
-                </span>
               </div>
             )}
           </div>
@@ -1523,22 +1530,32 @@ export function App() {
             <p className="welcome-header__subtitle">
               Design fast. Stay consistent. Use your team's kits—no resource hunting.
             </p>
-            {designerName && (
-              <div className="welcome-header__poc">
-                <span className="welcome-header__poc-label">Cloud POCs:</span>
-                <a 
-                  href={designerEmail ? `slack://user?email=${encodeURIComponent(designerEmail)}` : '#'}
-                  className="welcome-header__poc-link"
-                  onClick={(e) => {
-                    if (!designerEmail) {
-                      e.preventDefault();
-                    }
-                  }}
-                >
-                  {designerName}
-                </a>
-              </div>
-            )}
+            {selectedClouds.length > 0 && (() => {
+              const currentCloudId = selectedClouds[0];
+              const currentCloud = clouds.find(c => c.id === currentCloudId);
+              const pocs = cloudPOCs[currentCloudId] || [];
+              return pocs.length > 0 && (
+                <div className="welcome-header__poc">
+                  <span className="welcome-header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
+                  <div className="welcome-header__poc-list">
+                    {pocs.map((poc, index) => (
+                      <a
+                        key={index}
+                        href={poc.email ? `slack://user?email=${encodeURIComponent(poc.email)}` : '#'}
+                        className="welcome-header__poc-link"
+                        onClick={(e) => {
+                          if (!poc.email) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        {poc.name}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -1976,6 +1993,57 @@ export function App() {
                                       updateCloudCategories(cloud.id, cats);
                                     }}
                                   >+ Add Category</button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* POC Management - only show for default cloud */}
+                            {defaultCloud === cloud.id && (
+                              <div className="settings-cloud-row__pocs">
+                                <div className="settings-pocs-list">
+                                  {(cloudPOCs[cloud.id] || []).map((poc, index) => (
+                                    <div key={index} className="settings-poc-item">
+                                      <input
+                                        type="text"
+                                        className="settings-poc-item__input"
+                                        placeholder="Name"
+                                        value={poc.name}
+                                        onChange={(e) => {
+                                          const pocs = [...(cloudPOCs[cloud.id] || [])];
+                                          pocs[index] = { ...poc, name: e.target.value };
+                                          updateCloudPOCs(cloud.id, pocs);
+                                        }}
+                                      />
+                                      <input
+                                        type="email"
+                                        className="settings-poc-item__input"
+                                        placeholder="Email"
+                                        value={poc.email}
+                                        onChange={(e) => {
+                                          const pocs = [...(cloudPOCs[cloud.id] || [])];
+                                          pocs[index] = { ...poc, email: e.target.value };
+                                          updateCloudPOCs(cloud.id, pocs);
+                                        }}
+                                      />
+                                      <button 
+                                        className="settings-poc-item__delete" 
+                                        onClick={() => {
+                                          const pocs = (cloudPOCs[cloud.id] || []).filter((_, i) => i !== index);
+                                          updateCloudPOCs(cloud.id, pocs);
+                                        }}
+                                      >×</button>
+                                    </div>
+                                  ))}
+                                  {(cloudPOCs[cloud.id] || []).length < 2 && (
+                                    <button
+                                      className="settings-add-poc-btn"
+                                      onClick={() => {
+                                        const pocs = [...(cloudPOCs[cloud.id] || [])];
+                                        pocs.push({ name: '', email: '' });
+                                        updateCloudPOCs(cloud.id, pocs);
+                                      }}
+                                    >+ Add POC</button>
+                                  )}
                                 </div>
                               </div>
                             )}

@@ -294,13 +294,17 @@ body {
   justify-content: space-between;
   padding: 12px;
   gap: 12px;
+  position: relative;
+  z-index: 10;
+  background: white;
 }
 
 .header__left {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   flex: 1;
+  min-width: 0;
 }
 
 .header__brand {
@@ -433,7 +437,7 @@ body {
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .header__dropdown-header {
@@ -1197,7 +1201,7 @@ fieldset.slds-form-element legend {
 
 /* ============ WELCOME HEADER ============ */
 .welcome-header {
-  padding: 20px 16px 16px;
+  padding: 12px;
   border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
 }
 
@@ -1205,14 +1209,14 @@ fieldset.slds-form-element legend {
   font-size: 12px;
   font-weight: 600;
   color: var(--slds-g-color-neutral-base-10);
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
   line-height: 1.3;
 }
 
 .welcome-header__subtitle {
   font-size: 12px;
   color: var(--slds-g-color-neutral-base-50);
-  margin: 0 0 10px 0;
+  margin: 0 0 8px 0;
   line-height: 1.4;
 }
 
@@ -1220,12 +1224,20 @@ fieldset.slds-form-element legend {
   font-size: 12px;
   color: var(--slds-g-color-neutral-base-50);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
 }
 
 .welcome-header__poc-label {
   font-weight: 500;
+  flex-shrink: 0;
+}
+
+.welcome-header__poc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .welcome-header__poc-link {
@@ -2066,7 +2078,7 @@ fieldset.slds-form-element legend {
 .header__back-section {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .header__view-title {
@@ -2208,6 +2220,73 @@ fieldset.slds-form-element legend {
   margin-left: 20px;
   padding-left: 12px;
   border-left: 2px solid var(--slds-g-color-neutral-base-85);
+}
+
+.settings-cloud-row__pocs {
+  margin-top: 8px;
+  margin-left: 20px;
+  padding-left: 12px;
+  border-left: 2px solid var(--slds-g-color-neutral-base-85);
+}
+
+.settings-pocs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-poc-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.settings-poc-item__input {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid var(--slds-g-color-neutral-base-80);
+  border-radius: 4px;
+  outline: none;
+}
+
+.settings-poc-item__input:focus {
+  border-color: var(--slds-g-color-brand-base-50);
+}
+
+.settings-poc-item__delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 16px;
+  color: var(--slds-g-color-neutral-base-60);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.settings-poc-item__delete:hover {
+  background: var(--slds-g-color-error-base-90);
+  color: var(--slds-g-color-error-base-40);
+}
+
+.settings-add-poc-btn {
+  background: none;
+  border: 1px dashed var(--slds-g-color-neutral-base-70);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--slds-g-color-brand-base-50);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  margin-top: 4px;
+  width: fit-content;
+}
+
+.settings-add-poc-btn:hover {
+  border-color: var(--slds-g-color-brand-base-50);
+  background: var(--slds-g-color-brand-base-95);
 }
 
 .settings-categories-list--nested {
@@ -2704,7 +2783,7 @@ fieldset.slds-form-element legend {
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   z-index: 1000;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .cloud-selector-dropdown__header {

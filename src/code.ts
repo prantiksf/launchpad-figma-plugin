@@ -629,21 +629,24 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
-  // ============ GET DESIGNER INFO ============
-  if (msg.type === 'GET_DESIGNER_INFO') {
+  // ============ CLOUD POCs ============
+  const CLOUD_POCS_KEY = 'starter-kit-cloud-pocs';
+  
+  if (msg.type === 'LOAD_CLOUD_POCS') {
     try {
-      const user = figma.currentUser;
-      figma.ui.postMessage({
-        type: 'DESIGNER_INFO_LOADED',
-        name: user?.name || '',
-        email: user?.email || '',
-      });
+      const pocs = await figma.clientStorage.getAsync(CLOUD_POCS_KEY);
+      figma.ui.postMessage({ type: 'CLOUD_POCS_LOADED', pocs: pocs || {} });
     } catch (error) {
-      figma.ui.postMessage({
-        type: 'DESIGNER_INFO_LOADED',
-        name: '',
-        email: '',
-      });
+      figma.ui.postMessage({ type: 'CLOUD_POCS_LOADED', pocs: {} });
+    }
+    return;
+  }
+  
+  if (msg.type === 'SAVE_CLOUD_POCS') {
+    try {
+      await figma.clientStorage.setAsync(CLOUD_POCS_KEY, msg.pocs);
+    } catch (error) {
+      figma.notify('⚠️ Failed to save POCs', { error: true });
     }
     return;
   }
