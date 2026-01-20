@@ -2079,7 +2079,7 @@ export function App() {
                     <div className="settings-accordion__content">
                       <div className="settings-cloud-list">
                         {allClouds.map(cloud => {
-                          const isExpanded = expandedCloudId === cloud.id;
+                          const isExpanded = expandedCloudId === cloud.id || defaultCloud === cloud.id;
                           return (
                           <div key={cloud.id} className={`settings-cloud-row ${hiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${isExpanded ? 'is-expanded' : ''}`}>
                             <div 
