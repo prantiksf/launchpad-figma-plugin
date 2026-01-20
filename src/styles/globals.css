@@ -2569,11 +2569,16 @@ fieldset.slds-form-element legend {
   stroke: var(--slds-g-color-neutral-base-50);
   transition: transform 0.2s ease;
   flex-shrink: 0;
-  margin-left: 8px;
+  margin-right: 6px;
+  cursor: pointer;
 }
 
 .settings-cloud-row__chevron.is-expanded {
   transform: rotate(180deg);
+}
+
+.settings-cloud-row__chevron:hover {
+  stroke: var(--slds-g-color-neutral-base-30);
 }
 
 /* Cloud row with nested structure */
@@ -2591,6 +2596,7 @@ fieldset.slds-form-element legend {
   display: flex;
   align-items: center;
   width: 100%;
+  gap: 0;
 }
 
 .settings-cloud-row__main {
