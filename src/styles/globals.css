@@ -2005,8 +2005,8 @@ fieldset.slds-form-element legend {
 }
 
 .settings-cloud-list {
-  margin-left: 0;
-  padding-left: 0;
+  margin-left: -20px;
+  padding-left: 20px;
 }
 
 .settings-header__left {
