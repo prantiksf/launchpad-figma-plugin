@@ -2602,12 +2602,7 @@ fieldset.slds-form-element legend {
   stroke: var(--slds-g-color-neutral-base-30);
 }
 
-/* Cloud row with nested structure */
-.settings-cloud-row {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 12px;
-}
+/* Cloud row with nested structure - this is already defined above, removing duplicate */
 
 .settings-cloud-row:last-of-type {
   margin-bottom: 0;
