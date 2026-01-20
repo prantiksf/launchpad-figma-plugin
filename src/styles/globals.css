@@ -2644,9 +2644,6 @@ fieldset.slds-form-element legend {
   flex-shrink: 0;
 }
 
-.settings-cloud-row.is-expanded {
-  margin-bottom: 16px;
-}
 
 .settings-cloud-row__categories {
   margin-top: 4px;
