@@ -1462,19 +1462,18 @@ export function App() {
                           </svg>
                           Create Pages
                         </button>
-                        <div className="header__dropdown-divider"></div>
                         <button 
                           className="header__dropdown-menu-item"
                           onClick={() => { setView('settings'); setShowMoreMenu(false); }}
                         >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM1 8a7 7 0 0 1 7-7v14a7 7 0 0 1-7-7zm14 0a7 7 0 0 1-7 7V1a7 7 0 0 1 7 7z"/>
-                            <circle cx="5.5" cy="5.5" r="1.5"/>
-                            <circle cx="10.5" cy="5.5" r="1.5"/>
-                            <circle cx="5.5" cy="10.5" r="1.5"/>
-                            <circle cx="10.5" cy="10.5" r="1.5"/>
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+                            <path d="M4 6c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v6c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2V6z"/>
+                            <path d="M2 4h12M2 8h12M2 12h12" strokeLinecap="round"/>
+                            <circle cx="4" cy="6" r="0.8" fill="currentColor"/>
+                            <circle cx="4" cy="8" r="0.8" fill="currentColor"/>
+                            <circle cx="4" cy="10" r="0.8" fill="currentColor"/>
                           </svg>
-                          Manage Clouds and Teams
+                          Manage Clouds and Sections
                         </button>
                         <div className="header__dropdown-divider"></div>
                         <button 
@@ -2053,7 +2052,7 @@ export function App() {
                     <path d="M19 12H5M12 19l-7-7 7-7"/>
                   </svg>
                 </button>
-                <span className="settings-header__title">Manage Clouds and Teams</span>
+                <span className="settings-header__title">Manage Clouds and Sections</span>
               </div>
               <button className="settings-header__reset" onClick={resetAllSettings}>
                 Reset All
