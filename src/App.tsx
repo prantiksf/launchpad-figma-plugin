@@ -1347,8 +1347,8 @@ export function App() {
       <div className="header-container">
         <div className="sticky-header">
         <header className="header">
-          {/* Plugin Branding from Selected Frame */}
-          {pluginBranding && (
+          {/* Plugin Branding from Selected Frame - Hidden for now */}
+          {false && pluginBranding && (
             <div className="header__branding">
               <img 
                 src={pluginBranding} 
