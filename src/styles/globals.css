@@ -1271,17 +1271,39 @@ fieldset.slds-form-element legend {
   display: none; /* Chrome, Safari, Opera */
 }
 
+/* Left fade - shows when scrolled right */
+.category-pills::before {
+  content: '';
+  position: sticky;
+  left: 0;
+  width: 20px;
+  height: 100%;
+  background: linear-gradient(to right, white, transparent);
+  pointer-events: none;
+  z-index: 1;
+  margin-right: -20px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.category-pills.scrolled-right::before {
+  opacity: 1;
+}
+
+/* Right fade - shows when there's more content */
 .category-pills::after {
   content: '';
   position: sticky;
   right: 0;
-  width: 40px;
+  width: 20px;
   height: 100%;
-  background: linear-gradient(to right, transparent, white 80%);
+  background: linear-gradient(to left, white, transparent);
   pointer-events: none;
   z-index: 1;
-  margin-left: -40px;
+  margin-left: -20px;
   flex-shrink: 0;
+  opacity: 1;
 }
 
 .category-pill {
