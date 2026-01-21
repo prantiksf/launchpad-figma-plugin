@@ -2,12 +2,20 @@
 // Helps designers quickly insert pre-built templates from Team Library
 
 const STORAGE_KEY = 'launchpad_templates';
-// Build hash injected at build time for cache busting
-const BUILD_HASH = typeof BUILD_HASH !== 'undefined' ? BUILD_HASH : 'dev';
-const BUILD_TIME = typeof BUILD_TIMESTAMP !== 'undefined' ? BUILD_TIMESTAMP : Date.now();
+const PLUGIN_VERSION = '1.10.0';
 
-// Log build info for debugging cache issues
-console.log(`[Starter Kit] Build ${BUILD_HASH} at ${new Date(BUILD_TIME).toISOString()}`);
+// Check stored version vs current version
+figma.clientStorage.getAsync('plugin_version').then(storedVersion => {
+  if (storedVersion && storedVersion !== PLUGIN_VERSION) {
+    // Version mismatch - notify user to reload
+    figma.notify(`Plugin updated! Please close and reopen to get version ${PLUGIN_VERSION}`, { timeout: 5000 });
+  }
+  // Always update stored version
+  figma.clientStorage.setAsync('plugin_version', PLUGIN_VERSION);
+}).catch(() => {
+  // First time - just store version
+  figma.clientStorage.setAsync('plugin_version', PLUGIN_VERSION);
+});
 
 figma.showUI(__html__, { 
   width: 420, 
