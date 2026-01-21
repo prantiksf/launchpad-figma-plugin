@@ -10,7 +10,6 @@
   "editorType": ["figma", "figjam"],
   "networkAccess": {
     "allowedDomains": ["https://*.herokuapp.com", "https://api.figma.com"]
-  },
-  "version": "1.10.0"
+  }
 }
 
