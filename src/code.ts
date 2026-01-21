@@ -3,6 +3,7 @@
 
 const STORAGE_KEY = 'launchpad_templates';
 
+// Show UI - each build has unique HTML content (cache-busted via build timestamp)
 figma.showUI(__html__, { 
   width: 420, 
   height: 720,

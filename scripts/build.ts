@@ -62,6 +62,12 @@ async function buildAll(mode: Mode): Promise<void> {
   const uiJs = readFileSync(join(ROOT, 'dist', 'ui.js'), 'utf8');
   const uiCss = readFileSync(join(ROOT, 'dist', 'ui.css'), 'utf8');
   
+  // Add build timestamp for cache busting (as HTML comment)
+  const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const version = packageJson.version || '1.10.0';
+  const buildTimestamp = Date.now();
+  const cacheBuster = `<!-- Plugin v${version} built at ${buildTimestamp} -->`;
+  
   // Inline CSS
   const cssTag = `<style>${uiCss}</style>`;
   
@@ -84,8 +90,9 @@ async function buildAll(mode: Mode): Promise<void> {
     '}})();</script>',
   ].join('');
   
-  // Insert CSS before </head> and JS before </body
-  let inlineHtml = srcHtml.replace('</head>', `${cssTag}</head>`);
+  // Insert cache buster comment, CSS before </head> and JS before </body>
+  let inlineHtml = srcHtml.replace('<head>', `<head>${cacheBuster}`);
+  inlineHtml = inlineHtml.replace('</head>', `${cssTag}</head>`);
   inlineHtml = inlineHtml.replace(/<script\s+src=["']ui\.js["']><\/script>/, loader);
 
   // 4) Build controller with __html__ defined at build time
