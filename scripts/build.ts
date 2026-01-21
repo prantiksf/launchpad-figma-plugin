@@ -62,11 +62,12 @@ async function buildAll(mode: Mode): Promise<void> {
   const uiJs = readFileSync(join(ROOT, 'dist', 'ui.js'), 'utf8');
   const uiCss = readFileSync(join(ROOT, 'dist', 'ui.css'), 'utf8');
   
-  // Add build timestamp for cache busting (as HTML comment)
+  // Generate unique build identifiers for cache busting
   const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   const version = packageJson.version || '1.10.0';
-  const buildTimestamp = Date.now();
-  const cacheBuster = `<!-- Plugin v${version} built at ${buildTimestamp} -->`;
+  const buildTime = Date.now();
+  const buildHash = buildTime.toString(36); // Convert to base36 for shorter hash
+  const cacheBuster = `<!-- Plugin v${version} built at ${buildTime} (${buildHash}) -->`;
   
   // Inline CSS
   const cssTag = `<style>${uiCss}</style>`;
@@ -90,12 +91,14 @@ async function buildAll(mode: Mode): Promise<void> {
     '}})();</script>',
   ].join('');
   
-  // Insert cache buster comment, CSS before </head> and JS before </body>
+  // Insert cache buster comment, CSS before </head> and JS before </body
   let inlineHtml = srcHtml.replace('<head>', `<head>${cacheBuster}`);
   inlineHtml = inlineHtml.replace('</head>', `${cssTag}</head>`);
   inlineHtml = inlineHtml.replace(/<script\s+src=["']ui\.js["']><\/script>/, loader);
 
   // 4) Build controller with __html__ defined at build time
+  // Inject build hash and timestamp into code for cache busting
+  
   await build({
     entryPoints: [join(ROOT, 'src/code.ts')],
     bundle: true,
@@ -107,6 +110,11 @@ async function buildAll(mode: Mode): Promise<void> {
     legalComments: 'none',
     define: {
       __html__: JSON.stringify(inlineHtml),
+      'BUILD_TIMESTAMP': JSON.stringify(buildTime),
+      'BUILD_HASH': JSON.stringify(buildHash),
+    },
+    banner: {
+      js: `/* Starter Kit Plugin v${version} - Build ${buildHash} - ${new Date(buildTime).toISOString()} */`,
     },
   });
 

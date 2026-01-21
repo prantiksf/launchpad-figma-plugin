@@ -2,8 +2,13 @@
 // Helps designers quickly insert pre-built templates from Team Library
 
 const STORAGE_KEY = 'launchpad_templates';
+// Build hash injected at build time for cache busting
+const BUILD_HASH = typeof BUILD_HASH !== 'undefined' ? BUILD_HASH : 'dev';
+const BUILD_TIME = typeof BUILD_TIMESTAMP !== 'undefined' ? BUILD_TIMESTAMP : Date.now();
 
-// Show UI - each build has unique HTML content (cache-busted via build timestamp)
+// Log build info for debugging cache issues
+console.log(`[Starter Kit] Build ${BUILD_HASH} at ${new Date(BUILD_TIME).toISOString()}`);
+
 figma.showUI(__html__, { 
   width: 420, 
   height: 720,
