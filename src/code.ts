@@ -2,12 +2,41 @@
 // Helps designers quickly insert pre-built templates from Team Library
 
 const STORAGE_KEY = 'launchpad_templates';
+const PLUGIN_VERSION = '1.10.0'; // Update this with each release to bust cache
+
+// Check if plugin version has changed and force reload if needed
+async function checkVersionAndReload() {
+  try {
+    const storedVersion = await figma.clientStorage.getAsync('plugin_version');
+    if (storedVersion && storedVersion !== PLUGIN_VERSION) {
+      // Version changed - store new version and notify UI to reload
+      await figma.clientStorage.setAsync('plugin_version', PLUGIN_VERSION);
+      console.log(`🔄 Plugin version updated: ${storedVersion} → ${PLUGIN_VERSION}`);
+    } else if (!storedVersion) {
+      // First time - store version
+      await figma.clientStorage.setAsync('plugin_version', PLUGIN_VERSION);
+    }
+  } catch (error) {
+    console.warn('⚠️ Version check failed:', error);
+  }
+}
+
+// Run version check before showing UI
+checkVersionAndReload();
 
 figma.showUI(__html__, { 
   width: 420, 
   height: 720,
   themeColors: true 
 });
+
+// Send version to UI immediately for cache detection
+setTimeout(() => {
+  figma.ui.postMessage({ 
+    type: 'PLUGIN_VERSION', 
+    version: PLUGIN_VERSION 
+  });
+}, 100);
 
 // Helper to generate preview from a node
 async function generatePreview(node: SceneNode): Promise<string | null> {

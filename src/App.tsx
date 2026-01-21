@@ -305,6 +305,29 @@ export function App() {
   const coverSelectorRef = useRef<HTMLDivElement>(null);
   const moveMenuRef = useRef<HTMLDivElement>(null);
 
+  // Version check for cache busting
+  useEffect(() => {
+    if (isInFigma && typeof window !== 'undefined') {
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data.pluginMessage?.type === 'PLUGIN_VERSION') {
+          const receivedVersion = event.data.pluginMessage.version;
+          const storedVersion = localStorage.getItem('plugin_version');
+          
+          if (storedVersion && storedVersion !== receivedVersion) {
+            console.log(`🔄 Plugin version mismatch: ${storedVersion} → ${receivedVersion}. Reloading...`);
+            localStorage.setItem('plugin_version', receivedVersion);
+            window.location.reload();
+          } else if (!storedVersion) {
+            localStorage.setItem('plugin_version', receivedVersion);
+          }
+        }
+      };
+      
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, [isInFigma]);
+
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
     // Check if running in Figma or standalone browser
