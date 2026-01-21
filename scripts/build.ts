@@ -69,11 +69,17 @@ async function buildAll(mode: Mode): Promise<void> {
   const buildHash = buildTime.toString(36); // Convert to base36 for shorter hash
   const cacheBuster = `<!-- Plugin v${version} built at ${buildTime} (${buildHash}) -->`;
   
-  // Inline CSS
-  const cssTag = `<style>${uiCss}</style>`;
+  // Inject build hash into UI JS to make it unique
+  const uiJsWithBuildId = uiJs.replace(
+    /\/\* BUILD_ID_PLACEHOLDER \*\//g,
+    `/* BUILD_ID: ${buildHash} - ${buildTime} */`
+  );
+  
+  // Inline CSS with build hash comment
+  const cssTag = `<style>/* Build: ${buildHash} */\n${uiCss}</style>`;
   
   // Inline JS via base64 to avoid </script> parse issues
-  const uiB64 = Buffer.from(uiJs, 'utf8').toString('base64');
+  const uiB64 = Buffer.from(uiJsWithBuildId, 'utf8').toString('base64');
   const loader = [
     '<script>(function(){try{',
     'var js = atob("',
@@ -92,9 +98,11 @@ async function buildAll(mode: Mode): Promise<void> {
   ].join('');
   
   // Insert cache buster comment, CSS before </head> and JS before </body
+  // Also add data attribute to body for cache busting
   let inlineHtml = srcHtml.replace('<head>', `<head>${cacheBuster}`);
   inlineHtml = inlineHtml.replace('</head>', `${cssTag}</head>`);
   inlineHtml = inlineHtml.replace(/<script\s+src=["']ui\.js["']><\/script>/, loader);
+  inlineHtml = inlineHtml.replace('<body', `<body data-build="${buildHash}" data-build-time="${buildTime}"`);
 
   // 4) Build controller with __html__ defined at build time
   // Inject build hash and timestamp into code for cache busting

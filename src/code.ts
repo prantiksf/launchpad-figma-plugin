@@ -4,6 +4,18 @@
 const STORAGE_KEY = 'launchpad_templates';
 const PLUGIN_VERSION = '1.10.0';
 
+// Build identifiers injected at build time - these make each build unique
+// This ensures Figma's CDN recognizes each build as a new version
+declare const BUILD_TIMESTAMP: string;
+declare const BUILD_HASH: string;
+
+// Use build hash in execution to ensure code.js content is unique
+const BUILD_ID = typeof BUILD_HASH !== 'undefined' ? BUILD_HASH : Date.now().toString(36);
+const BUILD_TIME = typeof BUILD_TIMESTAMP !== 'undefined' ? BUILD_TIMESTAMP : Date.now().toString();
+
+// Store build ID in a way that forces code uniqueness
+const _buildCacheBuster = `${BUILD_ID}-${BUILD_TIME}`;
+
 // Check stored version vs current version
 figma.clientStorage.getAsync('plugin_version').then(storedVersion => {
   if (storedVersion && storedVersion !== PLUGIN_VERSION) {
@@ -16,6 +28,9 @@ figma.clientStorage.getAsync('plugin_version').then(storedVersion => {
   // First time - just store version
   figma.clientStorage.setAsync('plugin_version', PLUGIN_VERSION);
 });
+
+// Store build ID for cache invalidation
+figma.clientStorage.setAsync('plugin_build_id', _buildCacheBuster).catch(() => {});
 
 figma.showUI(__html__, { 
   width: 420, 
