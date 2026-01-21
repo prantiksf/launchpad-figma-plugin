@@ -3887,13 +3887,13 @@ fieldset.slds-form-element legend {
 .splash-screen--launcher .splash-screen__more-container { animation-delay: 0.8s; }
 
 .splash-screen--launcher .splash-screen__cta {
-  animation: slideUpFade 0.5s ease 0.9s forwards;
-  opacity: 0;
+  opacity: 1;
+  animation: none;
 }
 
 .splash-screen--launcher .splash-screen__skip {
-  animation: fadeIn 0.5s ease 1s forwards;
-  opacity: 0;
+  opacity: 1;
+  animation: none;
 }
 
 .splash-screen__illustration {

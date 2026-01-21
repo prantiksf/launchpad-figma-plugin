@@ -1280,7 +1280,12 @@ export function App() {
           </div>
         </div>
 
-        <button className="splash-screen__cta" onClick={enterFromSplash}>
+        <button 
+          className="splash-screen__cta" 
+          onClick={enterFromSplash}
+          disabled={!selectedClouds[0]}
+          style={{ opacity: selectedClouds[0] ? 1 : 0.5, cursor: selectedClouds[0] ? 'pointer' : 'not-allowed' }}
+        >
           Get Started →
         </button>
 
