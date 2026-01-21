@@ -38,6 +38,10 @@ figma.showUI(__html__, {
   themeColors: true 
 });
 
+// Send ready signal immediately to ensure UI knows plugin is loaded
+// This is critical for published plugins where initialization might be delayed
+figma.ui.postMessage({ type: 'PLUGIN_READY' });
+
 // Helper to generate preview from a node
 async function generatePreview(node: SceneNode): Promise<string | null> {
   try {

@@ -308,20 +308,24 @@ export function App() {
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
     // Check if running in Figma or standalone browser
-    const isInFigma = window.parent !== window;
+    const isInFigma = window.parent !== window && typeof parent.postMessage === 'function';
     
     // Add error handler
     const handleError = (error: ErrorEvent) => {
       console.error('Plugin error:', error);
       setIsLoading(false);
-      setHasCompletedOnboarding(false);
+      setHasCompletedOnboarding(prev => prev === null ? false : prev);
       setShowSplash(false);
     };
     
     window.addEventListener('error', handleError);
     
-    if (isInFigma) {
+    // Function to send initialization messages
+    const sendInitMessages = () => {
+      if (!isInFigma) return;
+      
       try {
+        // Send all initialization messages
         parent.postMessage({ pluginMessage: { type: 'LOAD_ONBOARDING_STATE' } }, '*');
         parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
         parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
@@ -337,10 +341,32 @@ export function App() {
         parent.postMessage({ pluginMessage: { type: 'GET_SELECTED_FRAME_BRANDING' } }, '*');
       } catch (error) {
         console.error('Failed to send initial messages:', error);
+        // Don't fail completely - allow UI to render
         setIsLoading(false);
-        setHasCompletedOnboarding(false);
+        setHasCompletedOnboarding(prev => prev === null ? false : prev);
         setShowSplash(false);
       }
+    };
+    
+    if (isInFigma) {
+      // Wait for PLUGIN_READY signal before sending messages
+      // This ensures code.ts is fully loaded (critical for published plugins)
+      const readyHandler = (event: MessageEvent) => {
+        const msg = event.data?.pluginMessage;
+        if (msg?.type === 'PLUGIN_READY') {
+          window.removeEventListener('message', readyHandler);
+          // Small delay to ensure code.ts message handlers are registered
+          setTimeout(sendInitMessages, 50);
+        }
+      };
+      
+      window.addEventListener('message', readyHandler);
+      
+      // Fallback: if PLUGIN_READY doesn't arrive in 1s, send anyway
+      setTimeout(() => {
+        window.removeEventListener('message', readyHandler);
+        sendInitMessages();
+      }, 1000);
     } else {
       // Browser preview - skip onboarding
       setHasCompletedOnboarding(true);
@@ -348,12 +374,12 @@ export function App() {
       setIsLoading(false);
     }
     
-    // Fallback timeout - if no response in 2s, assume first-time user
+    // Fallback timeout - if no response in 3s, assume first-time user and show UI
     const timeout = setTimeout(() => {
       setIsLoading(false);
-      // Use a setter function to access current state
       setHasCompletedOnboarding(prev => prev === null ? false : prev);
-    }, 2000);
+      setShowSplash(false);
+    }, 3000);
     
     return () => {
       clearTimeout(timeout);
@@ -378,6 +404,11 @@ export function App() {
       if (!msg) return;
 
       switch (msg.type) {
+        case 'PLUGIN_READY':
+          // Plugin is ready - initialization messages will be sent
+          console.log('Plugin ready signal received');
+          break;
+          
         case 'TEMPLATES_LOADED':
           // Templates loaded from Figma's clientStorage
           setTemplates(msg.templates || []);

@@ -79,9 +79,14 @@ async function buildAll(mode: Mode): Promise<void> {
   const cssTag = `<style>/* Build: ${buildHash} */\n${uiCss}</style>`;
   
   // Inline JS via base64 to avoid </script> parse issues
+  // Use a more robust loader that handles errors gracefully
   const uiB64 = Buffer.from(uiJsWithBuildId, 'utf8').toString('base64');
   const loader = [
-    '<script>(function(){try{',
+    '<script>(function(){',
+    'try{',
+    'if(typeof atob==="undefined"){',
+    'throw new Error("atob not available");',
+    '}',
     'var js = atob("',
     uiB64,
     '");',
@@ -90,10 +95,12 @@ async function buildAll(mode: Mode): Promise<void> {
     's.text = js;',
     'document.body.appendChild(s);',
     '}catch(e){',
+    "console.error('Plugin loader error:',e);",
     "var pre=document.createElement('pre');",
-    "pre.style.color='red';",
-    'pre.textContent = String(e && (e.stack || e.message) || e);',
+    "pre.style.cssText='color:red;padding:20px;font-family:monospace;white-space:pre-wrap;';",
+    'pre.textContent = "Plugin failed to load:\\n" + String(e && (e.stack || e.message) || e);',
     'document.body.appendChild(pre);',
+    'document.getElementById("root").innerHTML="";',
     '}})();</script>',
   ].join('');
   
