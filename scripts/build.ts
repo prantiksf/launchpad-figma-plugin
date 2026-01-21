@@ -84,14 +84,8 @@ async function buildAll(mode: Mode): Promise<void> {
     '}})();</script>',
   ].join('');
   
-  // Add version meta tag and build timestamp for cache busting
-  const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-  const version = packageJson.version || '1.10.0';
-  const buildTime = Date.now();
-  const versionMetaTags = `<meta name="plugin-version" content="${version}"><meta name="build-time" content="${buildTime}">`;
-  
-  // Insert CSS before </head> and JS before </body>
-  let inlineHtml = srcHtml.replace('</head>', `${versionMetaTags}${cssTag}</head>`);
+  // Insert CSS before </head> and JS before </body
+  let inlineHtml = srcHtml.replace('</head>', `${cssTag}</head>`);
   inlineHtml = inlineHtml.replace(/<script\s+src=["']ui\.js["']><\/script>/, loader);
 
   // 4) Build controller with __html__ defined at build time

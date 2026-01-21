@@ -305,33 +305,6 @@ export function App() {
   const coverSelectorRef = useRef<HTMLDivElement>(null);
   const moveMenuRef = useRef<HTMLDivElement>(null);
 
-  // Version check for cache busting (non-blocking, delayed to not interfere with initial load)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const isInFigma = window.parent !== window;
-      if (isInFigma && typeof window !== 'undefined') {
-        const handleMessage = (event: MessageEvent) => {
-          if (event.data.pluginMessage?.type === 'PLUGIN_VERSION') {
-            const receivedVersion = event.data.pluginMessage.version;
-            const storedVersion = localStorage.getItem('plugin_version');
-            
-            if (storedVersion && storedVersion !== receivedVersion) {
-              console.log(`🔄 Plugin version updated: ${storedVersion} → ${receivedVersion}`);
-              localStorage.setItem('plugin_version', receivedVersion);
-            } else if (!storedVersion && receivedVersion) {
-              localStorage.setItem('plugin_version', receivedVersion);
-            }
-          }
-        };
-        
-        window.addEventListener('message', handleMessage);
-        return () => window.removeEventListener('message', handleMessage);
-      }
-    }, 500); // Delay to let UI load first
-    
-    return () => clearTimeout(timer);
-  }, []);
-
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
     // Check if running in Figma or standalone browser
