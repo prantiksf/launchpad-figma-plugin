@@ -307,6 +307,7 @@ export function App() {
 
   // Version check for cache busting
   useEffect(() => {
+    const isInFigma = window.parent !== window;
     if (isInFigma && typeof window !== 'undefined') {
       const handleMessage = (event: MessageEvent) => {
         if (event.data.pluginMessage?.type === 'PLUGIN_VERSION') {
@@ -316,8 +317,11 @@ export function App() {
           if (storedVersion && storedVersion !== receivedVersion) {
             console.log(`🔄 Plugin version mismatch: ${storedVersion} → ${receivedVersion}. Reloading...`);
             localStorage.setItem('plugin_version', receivedVersion);
-            window.location.reload();
-          } else if (!storedVersion) {
+            // Small delay to prevent infinite loop
+            setTimeout(() => {
+              window.location.reload();
+            }, 100);
+          } else if (!storedVersion && receivedVersion) {
             localStorage.setItem('plugin_version', receivedVersion);
           }
         }
@@ -326,7 +330,7 @@ export function App() {
       window.addEventListener('message', handleMessage);
       return () => window.removeEventListener('message', handleMessage);
     }
-  }, [isInFigma]);
+  }, []);
 
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
