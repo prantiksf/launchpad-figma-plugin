@@ -40,7 +40,10 @@ figma.showUI(__html__, {
 
 // Send ready signal immediately to ensure UI knows plugin is loaded
 // This is critical for published plugins where initialization might be delayed
-figma.ui.postMessage({ type: 'PLUGIN_READY' });
+// Use setTimeout to ensure UI is fully ready to receive messages
+setTimeout(() => {
+  figma.ui.postMessage({ type: 'PLUGIN_READY' });
+}, 0);
 
 // Helper to generate preview from a node
 async function generatePreview(node: SceneNode): Promise<string | null> {
@@ -574,31 +577,43 @@ figma.ui.onmessage = async (msg) => {
 
   // ============ CHECK SCAFFOLD EXISTS ============
   if (msg.type === 'CHECK_SCAFFOLD_EXISTS') {
-    // Check if scaffold pages already exist by looking for "CURRENT DESIGNS" page
-    const exists = figma.root.children.some(page => 
-      page.name.includes('CURRENT DESIGNS') || page.name.includes('Read Me')
-    );
-    figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists });
+    // With dynamic-page access, we need to load all pages first
+    figma.loadAllPagesAsync()
+      .then(() => {
+        // Check if scaffold pages already exist by looking for "CURRENT DESIGNS" page
+        const exists = figma.root.children.some(page => 
+          page.name.includes('CURRENT DESIGNS') || page.name.includes('Read Me')
+        );
+        figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists });
+      })
+      .catch((error) => {
+        console.error('Error checking scaffold:', error);
+        // Default to false if check fails
+        figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists: false });
+      });
     return;
   }
 
   // ============ SCAFFOLD FILE STRUCTURE ============
   if (msg.type === 'SCAFFOLD_FILE_STRUCTURE') {
-    try {
-      // Check if scaffold already exists
-      const alreadyExists = figma.root.children.some(page => 
-        page.name.includes('CURRENT DESIGNS') || page.name === 'Read Me'
-      );
-      
-      if (alreadyExists) {
-        figma.notify('⚠️ Scaffold already exists in this file', { error: true });
-        figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists: true });
-        return;
-      }
-      
-      // Rename existing "Page 1" to "Cover Page" or use first page
-      let coverPage: PageNode | null = null;
-      const page1 = figma.root.children.find(p => p.name === 'Page 1') as PageNode | undefined;
+    // With dynamic-page access, we need to load all pages first
+    figma.loadAllPagesAsync()
+      .then(async () => {
+        try {
+          // Check if scaffold already exists
+          const alreadyExists = figma.root.children.some(page => 
+            page.name.includes('CURRENT DESIGNS') || page.name === 'Read Me'
+          );
+          
+          if (alreadyExists) {
+            figma.notify('⚠️ Scaffold already exists in this file', { error: true });
+            figma.ui.postMessage({ type: 'SCAFFOLD_EXISTS', exists: true });
+            return;
+          }
+          
+          // Rename existing "Page 1" to "Cover Page" or use first page
+          let coverPage: PageNode | null = null;
+          const page1 = figma.root.children.find(p => p.name === 'Page 1') as PageNode | undefined;
       
       if (page1) {
         page1.name = 'Cover Page';
@@ -697,12 +712,19 @@ figma.ui.onmessage = async (msg) => {
         // Navigation failed, but pages were created
       }
       
-      figma.notify(`✓ Created ${createdCount} pages!`, { timeout: 3000 });
-      figma.ui.postMessage({ type: 'SCAFFOLD_SUCCESS', count: createdCount });
-    } catch (error) {
-      figma.notify('⚠️ Error creating scaffold', { error: true });
-      figma.ui.postMessage({ type: 'SCAFFOLD_ERROR', error: String(error) });
-    }
+          figma.notify(`✓ Created ${createdCount} pages!`, { timeout: 3000 });
+          figma.ui.postMessage({ type: 'SCAFFOLD_SUCCESS', count: createdCount });
+        } catch (error) {
+          console.error('Error creating scaffold:', error);
+          figma.notify('⚠️ Error creating scaffold', { error: true });
+          figma.ui.postMessage({ type: 'SCAFFOLD_ERROR', error: String(error) });
+        }
+      })
+      .catch((error) => {
+        console.error('Error loading pages for scaffold:', error);
+        figma.notify('⚠️ Error loading pages', { error: true });
+        figma.ui.postMessage({ type: 'SCAFFOLD_ERROR', error: 'Failed to load pages' });
+      });
     return;
   }
 
