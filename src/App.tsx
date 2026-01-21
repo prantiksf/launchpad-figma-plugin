@@ -1280,13 +1280,11 @@ export function App() {
           </div>
         </div>
 
-        <button 
-          className="splash-screen__cta" 
-          onClick={enterFromSplash}
-          disabled={!selectedClouds[0]}
-        >
-          Get Started →
-        </button>
+        {selectedClouds[0] && (
+          <button className="splash-screen__cta" onClick={enterFromSplash}>
+            Get Started →
+          </button>
+        )}
 
         <label className="splash-screen__skip">
           <input 

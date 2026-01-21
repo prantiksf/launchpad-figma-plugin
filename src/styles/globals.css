@@ -3887,13 +3887,13 @@ fieldset.slds-form-element legend {
 .splash-screen--launcher .splash-screen__more-container { animation-delay: 0.8s; }
 
 .splash-screen--launcher .splash-screen__cta {
-  opacity: 1;
-  animation: none;
+  animation: slideUpFade 0.5s ease 0.9s forwards;
+  opacity: 0;
 }
 
 .splash-screen--launcher .splash-screen__skip {
-  opacity: 1;
-  animation: none;
+  animation: fadeIn 0.5s ease 1s forwards;
+  opacity: 0;
 }
 
 .splash-screen__illustration {
@@ -4091,12 +4091,9 @@ fieldset.slds-form-element legend {
   border-radius: 100px;
   cursor: pointer;
   transition: all 0.2s ease;
-  opacity: 1 !important;
-  display: block !important;
-  visibility: visible !important;
 }
 
-.splash-screen__cta:hover:not(:disabled) {
+.splash-screen__cta:hover {
   background: var(--slds-g-color-brand-base-50);
   color: white;
 }
@@ -4107,15 +4104,13 @@ fieldset.slds-form-element legend {
 }
 
 .splash-screen__skip {
-  display: flex !important;
+  display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 16px;
   font-size: 11px;
   color: var(--slds-g-color-neutral-base-50);
   cursor: pointer;
-  opacity: 1 !important;
-  visibility: visible !important;
 }
 
 .splash-screen__skip input {
