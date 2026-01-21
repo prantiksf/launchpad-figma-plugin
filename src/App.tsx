@@ -305,7 +305,7 @@ export function App() {
   const coverSelectorRef = useRef<HTMLDivElement>(null);
   const moveMenuRef = useRef<HTMLDivElement>(null);
 
-  // Version check for cache busting
+  // Version check for cache busting (non-blocking)
   useEffect(() => {
     const isInFigma = window.parent !== window;
     if (isInFigma && typeof window !== 'undefined') {
@@ -315,12 +315,9 @@ export function App() {
           const storedVersion = localStorage.getItem('plugin_version');
           
           if (storedVersion && storedVersion !== receivedVersion) {
-            console.log(`🔄 Plugin version mismatch: ${storedVersion} → ${receivedVersion}. Reloading...`);
+            console.log(`🔄 Plugin version updated: ${storedVersion} → ${receivedVersion}`);
             localStorage.setItem('plugin_version', receivedVersion);
-            // Small delay to prevent infinite loop
-            setTimeout(() => {
-              window.location.reload();
-            }, 100);
+            // Note: Reload handled by user manually closing/reopening plugin
           } else if (!storedVersion && receivedVersion) {
             localStorage.setItem('plugin_version', receivedVersion);
           }
