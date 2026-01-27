@@ -836,6 +836,8 @@ body {
   flex-direction: column;
   box-sizing: border-box;
   padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .content--scaffold {

@@ -454,10 +454,11 @@ export function App() {
     }
     
     // Fallback timeout - if no response in 3s, assume first-time user and show UI
+    // Note: Don't auto-dismiss splash - let user click "Get Started"
     const timeout = setTimeout(() => {
       setIsLoading(false);
       setHasCompletedOnboarding(prev => prev === null ? false : prev);
-      setShowSplash(false);
+      // Don't setShowSplash(false) here - let user interact with splash screen
     }, 3000);
     
     return () => {
