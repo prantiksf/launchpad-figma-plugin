@@ -1729,6 +1729,11 @@ fieldset.slds-form-element legend {
   border-radius: 4px;
   transition: all 0.15s ease;
   min-width: 0;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  cursor: text;
 }
 
 .scaffold-preview__input:hover {
@@ -1854,7 +1859,11 @@ fieldset.slds-form-element legend {
   transition: all 0.15s ease;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  transition: all 0.15s ease;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  cursor: text;
 }
 
 .scaffold-section-header__input:hover {
