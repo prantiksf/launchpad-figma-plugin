@@ -34,7 +34,7 @@ figma.clientStorage.setAsync('plugin_build_id', _buildCacheBuster).catch(() => {
 
 figma.showUI(__html__, { 
   width: 420, 
-  height: 720,
+  height: 900,
   themeColors: true 
 });
 

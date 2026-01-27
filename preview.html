@@ -13,7 +13,9 @@
     }
     #preview-container {
       width: 420px;
-      height: 640px;
+      height: calc(100vh - 40px);
+      max-height: 900px;
+      min-height: 640px;
       margin: 20px auto;
       background: white;
       border: 1px solid #e0e0e0;
@@ -44,10 +46,34 @@
   </div>
   
   <script>
+    // Error handling for preview mode
+    window.addEventListener('error', function(e) {
+      console.error('Preview error:', e.error, e.filename, e.lineno);
+      const root = document.getElementById('root');
+      if (root && root.innerHTML.includes('Loading...')) {
+        root.innerHTML = '<div style="padding: 20px; color: red; font-family: monospace;">Error: ' + (e.message || 'Unknown error') + '<br>File: ' + (e.filename || 'unknown') + '<br>Line: ' + (e.lineno || 'unknown') + '</div>';
+      }
+    });
+    
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('Unhandled promise rejection:', e.reason);
+    });
+    
+    // Mock localStorage for preview mode
+    try {
+      if (!window.localStorage.getItem('hasCompletedOnboarding')) {
+        window.localStorage.setItem('hasCompletedOnboarding', 'true');
+      }
+      if (!window.localStorage.getItem('skipSplashOnLaunch')) {
+        window.localStorage.setItem('skipSplashOnLaunch', 'true');
+      }
+    } catch (e) {
+      console.warn('localStorage not available:', e);
+    }
+    
     // Ensure window.parent === window so app thinks it's NOT in Figma
     // This makes it skip API calls and show UI directly (browser preview mode)
-    // The app will set hasCompletedOnboarding=true and showSplash=false automatically
   </script>
-  <script src="./dist/ui.js"></script>
+  <script src="./dist/ui.js" onerror="document.getElementById('root').innerHTML='<div style=\'padding:20px;color:red;\'>Failed to load ui.js</div>'"></script>
 </body>
 </html>
