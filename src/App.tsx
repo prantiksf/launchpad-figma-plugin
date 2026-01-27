@@ -193,6 +193,12 @@ export function App() {
     },
   ];
   
+  // Undo/Redo history for scaffold sections
+  const [history, setHistory] = useState<ScaffoldSection[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const isUndoRedoRef = useRef(false);
+  const isInitialMountRef = useRef(true);
+  
   const [scaffoldSections, setScaffoldSections] = useState<ScaffoldSection[]>([
     {
       id: 'top',
@@ -238,6 +244,78 @@ export function App() {
       ]
     },
   ]);
+  
+  // Undo/Redo functions
+  const undo = () => {
+    if (historyIndex > 0) {
+      isUndoRedoRef.current = true;
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setScaffoldSections(JSON.parse(JSON.stringify(history[newIndex])));
+    }
+  };
+  
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      isUndoRedoRef.current = true;
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setScaffoldSections(JSON.parse(JSON.stringify(history[newIndex])));
+    }
+  };
+  
+  // Initialize history on first mount
+  useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      setHistory([JSON.parse(JSON.stringify(scaffoldSections))]);
+      setHistoryIndex(0);
+    }
+  }, []);
+  
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+      
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        undo();
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [historyIndex, history]);
+  
+  // Save state to history when scaffoldSections changes (but not from undo/redo)
+  useEffect(() => {
+    if (isUndoRedoRef.current) {
+      isUndoRedoRef.current = false;
+      return;
+    }
+    
+    if (isInitialMountRef.current) {
+      return; // Skip initial mount
+    }
+    
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(JSON.parse(JSON.stringify(scaffoldSections)));
+    // Limit history to 50 items
+    if (newHistory.length > 50) {
+      newHistory.shift();
+    } else {
+      setHistoryIndex(newHistory.length - 1);
+    }
+    setHistory(newHistory);
+  }, [scaffoldSections]);
   
   // Figma Links feature (per cloud)
   const [cloudFigmaLinks, setCloudFigmaLinks] = useState<Record<string, Array<{id: string; name: string; url: string}>>>({});
@@ -1853,7 +1931,10 @@ export function App() {
                             ───────────────────
                           </div>
                         )}
-                        {!section.isDivider && isEditingScaffold ? (
+                        {section.isDivider ? (
+                          // Divider-only section - no header, just the divider line above
+                          null
+                        ) : isEditingScaffold ? (
                           <div 
                             className={`scaffold-section-header ${draggedItem?.type === 'scaffold-section' && draggedItem.index === sectionIndex ? 'is-dragging' : ''}`}
                             draggable={sectionIndex > 0}
@@ -2053,9 +2134,9 @@ export function App() {
                               const newSections = [...scaffoldSections];
                               newSections.splice(sectionIndex + 1, 0, {
                                 id: `divider-${Date.now()}`,
-                                name: 'DIVIDER', // Name needed to trigger divider display
+                                name: '', // Empty name - divider line only
                                 pages: [],
-                                isDivider: true // Flag to hide section header
+                                isDivider: true // Flag to trigger divider display and hide header
                               });
                               setScaffoldSections(newSections);
                             }}
