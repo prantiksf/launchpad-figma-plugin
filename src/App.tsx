@@ -1987,6 +1987,10 @@ export function App() {
                                 newSections[sectionIndex] = { ...section, name: e.target.value };
                                 setScaffoldSections(newSections);
                               }}
+                              onMouseDown={(e) => {
+                                // Allow text selection in input fields
+                                e.stopPropagation();
+                              }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
@@ -2104,6 +2108,10 @@ export function App() {
                               newPages[pageIndex] = { ...page, name: e.target.value };
                               newSections[sectionIndex] = { ...section, pages: newPages };
                               setScaffoldSections(newSections);
+                            }}
+                            onMouseDown={(e) => {
+                              // Allow text selection in input fields
+                              e.stopPropagation();
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
