@@ -811,8 +811,6 @@ body {
   background: white;
   display: flex;
   flex-direction: column;
-  display: flex;
-  flex-direction: column;
   padding: 0;
   box-sizing: border-box;
 }
