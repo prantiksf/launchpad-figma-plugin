@@ -2002,6 +2002,29 @@ export function App() {
                                 newSections[sectionIndex] = { ...section, name: e.target.value };
                                 setScaffoldSections(newSections);
                               }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  // Add new section after current one
+                                  const newSections = [...scaffoldSections];
+                                  const newSection: ScaffoldSection = {
+                                    id: `section-${Date.now()}`,
+                                    name: 'NEW SECTION',
+                                    pages: [{ id: `page-${Date.now()}`, name: 'New Page', status: '🟢' }]
+                                  };
+                                  newSections.splice(sectionIndex + 1, 0, newSection);
+                                  setScaffoldSections(newSections);
+                                  // Focus the new input after a brief delay
+                                  setTimeout(() => {
+                                    const inputs = document.querySelectorAll('.scaffold-section-header__input');
+                                    const newInput = inputs[sectionIndex + 1] as HTMLInputElement;
+                                    if (newInput) {
+                                      newInput.focus();
+                                      newInput.select();
+                                    }
+                                  }, 10);
+                                }
+                              }}
                             />
                             <button 
                               className="scaffold-section-header__duplicate" 
@@ -2097,6 +2120,28 @@ export function App() {
                               newSections[sectionIndex] = { ...section, pages: newPages };
                               setScaffoldSections(newSections);
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                // Add new page after current one
+                                const newSections = [...scaffoldSections];
+                                const newPages = [...section.pages];
+                                const newPage = { id: `page-${Date.now()}`, name: 'New Page', status: section.name ? '🟢' : null };
+                                newPages.splice(pageIndex + 1, 0, newPage);
+                                newSections[sectionIndex] = { ...section, pages: newPages };
+                                setScaffoldSections(newSections);
+                                // Focus the new input after a brief delay
+                                setTimeout(() => {
+                                  const inputs = document.querySelectorAll('.scaffold-preview__input');
+                                  const newInput = inputs[pageIndex + 1] as HTMLInputElement;
+                                  if (newInput) {
+                                    newInput.focus();
+                                    newInput.select();
+                                  }
+                                }, 10);
+                              }
+                            }}
+                            autoFocus={page.name === 'New Page' && pageIndex === section.pages.length - 1}
                           />
                         ) : (
                           <span className="scaffold-preview__name">{page.name}</span>

@@ -1695,7 +1695,15 @@ fieldset.slds-form-element legend {
   color: var(--slds-g-color-neutral-base-30);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  padding: 4px 2px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+  margin: 2px 0;
+}
+
+.scaffold-preview__item:hover {
+  background: var(--slds-g-color-neutral-base-97);
 }
 
 .scaffold-preview__item--indent {
@@ -1711,27 +1719,29 @@ fieldset.slds-form-element legend {
 
 .scaffold-preview__input {
   flex: 1;
-  background: transparent;
-  border: none;
-  border-bottom: 1px dashed transparent;
+  background: var(--slds-g-color-neutral-base-100);
+  border: 1px solid var(--slds-g-color-neutral-base-80);
   font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
   font-size: 12px;
-  color: inherit;
-  padding: 2px 4px;
-  margin: -2px 0;
+  color: var(--slds-g-color-neutral-base-20);
+  padding: 4px 8px;
+  margin: 0;
   border-radius: 4px;
   transition: all 0.15s ease;
+  min-width: 0;
 }
 
 .scaffold-preview__input:hover {
-  background: var(--slds-g-color-neutral-base-95);
-  border-bottom-color: var(--slds-g-color-neutral-base-70);
+  background: var(--slds-g-color-neutral-base-100);
+  border-color: var(--slds-g-color-brand-base-50);
+  box-shadow: 0 0 0 2px var(--slds-g-color-brand-base-95);
 }
 
 .scaffold-preview__input:focus {
   outline: none;
-  background: var(--slds-g-color-brand-base-95);
-  border-bottom-color: var(--slds-g-color-brand-base-50);
+  background: var(--slds-g-color-neutral-base-100);
+  border-color: var(--slds-g-color-brand-base-50);
+  box-shadow: 0 0 0 3px var(--slds-g-color-brand-base-95);
 }
 
 .scaffold-preview--editable {
@@ -1766,25 +1776,35 @@ fieldset.slds-form-element legend {
 }
 
 .scaffold-preview__delete-btn {
-  background: none;
+  background: var(--slds-g-color-neutral-base-90);
   border: none;
   cursor: pointer;
   padding: 2px 6px;
-  font-size: 16px;
-  color: var(--slds-g-color-neutral-base-60);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--slds-g-color-neutral-base-50);
   border-radius: 4px;
   transition: all 0.15s ease;
-  opacity: 0;
+  opacity: 0.6;
   flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .scaffold-preview__item:hover .scaffold-preview__delete-btn {
   opacity: 1;
+  background: var(--slds-g-color-error-base-90);
+  color: var(--slds-g-color-error-base-40);
 }
 
 .scaffold-preview__delete-btn:hover {
   background: var(--slds-g-color-error-base-40);
   color: white;
+  opacity: 1;
 }
 
 .scaffold-preview__add-btn {
@@ -1822,29 +1842,31 @@ fieldset.slds-form-element legend {
 
 .scaffold-section-header__input {
   flex: 1;
-  background: transparent;
-  border: none;
-  border-bottom: 1px dashed transparent;
+  background: var(--slds-g-color-neutral-base-100);
+  border: 1px solid var(--slds-g-color-neutral-base-80);
   font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
   font-size: 11px;
   font-weight: 600;
-  color: var(--slds-g-color-neutral-base-50);
-  padding: 4px 6px;
+  color: var(--slds-g-color-neutral-base-20);
+  padding: 6px 10px;
   border-radius: 4px;
+  transition: all 0.15s ease;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   transition: all 0.15s ease;
 }
 
 .scaffold-section-header__input:hover {
-  background: var(--slds-g-color-neutral-base-95);
-  border-bottom-color: var(--slds-g-color-neutral-base-70);
+  background: var(--slds-g-color-neutral-base-100);
+  border-color: var(--slds-g-color-brand-base-50);
+  box-shadow: 0 0 0 2px var(--slds-g-color-brand-base-95);
 }
 
 .scaffold-section-header__input:focus {
   outline: none;
-  background: var(--slds-g-color-brand-base-95);
-  border-bottom-color: var(--slds-g-color-brand-base-50);
+  background: var(--slds-g-color-neutral-base-100);
+  border-color: var(--slds-g-color-brand-base-50);
+  box-shadow: 0 0 0 3px var(--slds-g-color-brand-base-95);
 }
 
 .scaffold-section-header__duplicate {
@@ -1985,15 +2007,18 @@ fieldset.slds-form-element legend {
 
 /* Add page button per section */
 .scaffold-preview__add-page-btn {
-  background: none;
-  border: none;
+  background: var(--slds-g-color-brand-base-95);
+  border: 1px dashed var(--slds-g-color-brand-base-50);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px 12px;
   font-size: 11px;
+  font-weight: 500;
   color: var(--slds-g-color-brand-base-50);
   margin-left: 40px;
-  opacity: 0.5;
-  transition: opacity 0.15s ease;
+  margin-top: 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  opacity: 0.8;
 }
 
 .scaffold-section-block:hover .scaffold-preview__add-page-btn {
@@ -2001,7 +2026,10 @@ fieldset.slds-form-element legend {
 }
 
 .scaffold-preview__add-page-btn:hover {
-  text-decoration: underline;
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+  border-color: var(--slds-g-color-brand-base-50);
+  opacity: 1;
 }
 
 /* Add section button */
