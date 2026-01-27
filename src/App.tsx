@@ -1893,8 +1893,8 @@ export function App() {
                               }}
                               className="scaffold-divider__actions"
                               >
-                                {section.isDivider ? (
-                                  // Delete button for divider-only sections
+                                {(section.isDivider || (!section.name && section.pages.length === 0)) ? (
+                                  // Delete button for divider-only sections (check both isDivider flag and empty name with no pages)
                                   <button
                                     className="scaffold-divider__delete"
                                     onClick={() => {
