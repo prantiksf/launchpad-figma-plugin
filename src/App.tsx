@@ -1276,20 +1276,18 @@ export function App() {
     setSelectedClouds([cloudId]);
     setDefaultCloud(cloudId);
     parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId } }, '*');
+    // Auto-dismiss splash after selecting cloud
+    setTimeout(() => {
+      enterFromSplash();
+    }, 500);
   }
 
   function enterFromSplash() {
     setShowSplash(false);
     if (!hasCompletedOnboarding) {
       setHasCompletedOnboarding(true);
-      parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true, skipSplash: skipSplashOnLaunch } }, '*');
+      parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true, skipSplash: false } }, '*');
     }
-  }
-
-  function toggleSkipSplash() {
-    const newValue = !skipSplashOnLaunch;
-    setSkipSplashOnLaunch(newValue);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true, skipSplash: newValue } }, '*');
   }
 
   // Show splash screen (launcher)
@@ -1371,15 +1369,6 @@ export function App() {
             Get Started →
           </button>
         )}
-
-        <label className="splash-screen__skip">
-          <input 
-            type="checkbox" 
-            checked={skipSplashOnLaunch}
-            onChange={toggleSkipSplash}
-          />
-          <span>Don't show this again</span>
-        </label>
 
         {/* Add Cloud Modal (for splash screen) */}
         {showAddCloudModal && (
