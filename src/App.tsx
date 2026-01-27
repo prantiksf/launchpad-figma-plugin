@@ -2211,7 +2211,10 @@ export function App() {
                   >+ Add Section</button>
                 )}
               </div>
-              
+            </div>
+
+            {/* Fixed Footer with Status and CTAs */}
+            <div className="scaffold-section__footer">
               <div className={`scaffold-hint ${isEditingStatusBadges ? 'scaffold-hint--editing' : ''}`}>
                 <div className="scaffold-hint__header">
                   <strong>Status:</strong>
@@ -2231,7 +2234,7 @@ export function App() {
                   >
                     {isEditingStatusBadges ? 'Done' : 'Edit'}
                   </button>
-              </div>
+                </div>
 
                 {isEditingStatusBadges && (
                   <div className="scaffold-hint__editor">
@@ -2282,10 +2285,7 @@ export function App() {
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Fixed Footer with CTAs */}
-            <div className="scaffold-section__footer">
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <Button 
                 variant="brand"
                 onClick={() => { scaffoldFileStructure(); }}
@@ -2301,6 +2301,7 @@ export function App() {
                 {isEditingScaffold ? 'Done Editing' : 'Edit'}
                 </Button>
               </div>
+            </div>
             </div>
         ) : view === 'settings' ? (
           <div className="settings-scroll-container">

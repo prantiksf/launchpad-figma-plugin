@@ -1635,25 +1635,28 @@ fieldset.slds-form-element legend {
   font-size: 14px;
   font-weight: 600;
   color: var(--slds-g-color-neutral-base-10);
-  margin: 0 0 4px;
+  margin: 0 0 2px;
 }
 
 .scaffold-section__desc {
   font-size: 11px;
   color: var(--slds-g-color-neutral-base-50);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .scaffold-section__footer {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   padding: 12px 16px;
   background: var(--slds-g-color-neutral-base-100);
   flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--slds-g-color-neutral-base-90);
 }
 
-.scaffold-section__footer > * {
-  flex: 1;
+.scaffold-section__footer > *:last-child {
+  flex-shrink: 0;
 }
 
 .scaffold-desc {
@@ -2975,11 +2978,12 @@ fieldset.slds-form-element legend {
 .scaffold-hint {
   font-size: 11px;
   color: var(--slds-g-color-neutral-base-50);
-  background: var(--slds-g-color-brand-base-95);
-  padding: 8px 12px;
-  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
   margin-bottom: 0;
   line-height: 1.6;
+  flex: 1;
 }
 
 .scaffold-hint--editing {
