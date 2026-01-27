@@ -1276,10 +1276,6 @@ export function App() {
     setSelectedClouds([cloudId]);
     setDefaultCloud(cloudId);
     parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId } }, '*');
-    // Auto-dismiss splash after selecting cloud
-    setTimeout(() => {
-      enterFromSplash();
-    }, 500);
   }
 
   function enterFromSplash() {
