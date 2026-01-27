@@ -257,6 +257,19 @@
   box-sizing: border-box;
 }
 
+/* Ensure text selection works in all input fields */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  cursor: text !important;
+}
+
 html {
   font-family: var(--slds-g-font-family);
   -webkit-font-smoothing: antialiased;
