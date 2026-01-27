@@ -1851,7 +1851,7 @@ export function App() {
 
       {/* Content Container - Scrollable */}
       <div className="content-container">
-        <div className="content">
+        <div className={`content ${view === 'scaffold' ? 'content--scaffold' : ''}`}>
         {view === 'scaffold' ? (
           <div className="scaffold-section scaffold-section--fixed-footer">
             <div className="scaffold-section__scrollable">

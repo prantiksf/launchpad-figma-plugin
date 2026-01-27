@@ -826,6 +826,10 @@ body {
   padding: 20px;
 }
 
+.content--scaffold {
+  padding: 0;
+}
+
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -1594,12 +1598,14 @@ fieldset.slds-form-element legend {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
 .scaffold-section__scrollable {
   flex: 1;
   overflow-y: auto;
   padding: 0 12px 20px 12px;
+  min-height: 0;
 }
 
 .scaffold-section__back {
@@ -1657,13 +1663,16 @@ fieldset.slds-form-element legend {
 }
 
 .scaffold-preview {
-  background: var(--slds-g-color-neutral-base-95);
-  border-radius: 6px;
-  padding: 12px;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
   font-size: 11px;
   line-height: 1.8;
-  margin-bottom: 12px;
+  margin-bottom: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .scaffold-preview__item {
