@@ -806,10 +806,11 @@ body {
 /* ============ CONTENT ============ */
 .content-container {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   min-height: 0;
   background: white;
+  display: flex;
+  flex-direction: column;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -2996,7 +2997,6 @@ fieldset.slds-form-element legend {
   border-radius: 0;
   margin-bottom: 0;
   line-height: 1.6;
-  flex: 1;
 }
 
 .scaffold-hint--editing {
