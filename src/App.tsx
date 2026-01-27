@@ -143,6 +143,7 @@ export function App() {
     id: string;
     name: string;
     pages: ScaffoldPage[];
+    isDivider?: boolean; // Special flag for divider-only sections
   }
   
   // Default scaffold sections (for reset)
@@ -1794,7 +1795,7 @@ export function App() {
               <div className={`scaffold-preview ${isEditingScaffold ? 'scaffold-preview--editable' : 'scaffold-preview--readonly'}`}>
                 {scaffoldSections.map((section, sectionIndex) => (
                   <div key={section.id} className="scaffold-section-block">
-                    {section.name ? (
+                    {(section.name || section.isDivider) ? (
                       <>
                         {sectionIndex > 0 && (
                           <div 
@@ -1852,7 +1853,7 @@ export function App() {
                             ───────────────────
                           </div>
                         )}
-                        {isEditingScaffold ? (
+                        {!section.isDivider && isEditingScaffold ? (
                           <div 
                             className={`scaffold-section-header ${draggedItem?.type === 'scaffold-section' && draggedItem.index === sectionIndex ? 'is-dragging' : ''}`}
                             draggable={sectionIndex > 0}
@@ -2048,12 +2049,13 @@ export function App() {
                           <button
                             className="scaffold-preview__add-divider-btn"
                             onClick={() => {
-                              // Add a new empty section (acts as divider) after current section
+                              // Add a new divider section after current section
                               const newSections = [...scaffoldSections];
                               newSections.splice(sectionIndex + 1, 0, {
                                 id: `divider-${Date.now()}`,
-                                name: '',
-                                pages: []
+                                name: 'DIVIDER', // Name needed to trigger divider display
+                                pages: [],
+                                isDivider: true // Flag to hide section header
                               });
                               setScaffoldSections(newSections);
                             }}

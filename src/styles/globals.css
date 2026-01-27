@@ -1841,8 +1841,8 @@ fieldset.slds-form-element legend {
 }
 
 .scaffold-section-header__duplicate:hover {
-  background: var(--slds-g-color-brand-base-40);
-  color: var(--slds-g-color-brand-base-50);
+  background: var(--slds-g-color-neutral-base-95);
+  color: var(--slds-g-color-neutral-base-50);
 }
 
 .scaffold-section-header__delete {
