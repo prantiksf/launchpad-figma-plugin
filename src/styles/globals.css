@@ -1822,6 +1822,29 @@ fieldset.slds-form-element legend {
   border-bottom-color: var(--slds-g-color-brand-base-50);
 }
 
+.scaffold-section-header__duplicate {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  color: var(--slds-g-color-neutral-base-60);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scaffold-section-header:hover .scaffold-section-header__duplicate {
+  opacity: 1;
+}
+
+.scaffold-section-header__duplicate:hover {
+  background: var(--slds-g-color-brand-base-40);
+  color: var(--slds-g-color-brand-base-50);
+}
+
 .scaffold-section-header__delete {
   background: none;
   border: none;
@@ -1841,6 +1864,14 @@ fieldset.slds-form-element legend {
 .scaffold-section-header__delete:hover {
   background: var(--slds-g-color-error-base-40);
   color: white;
+}
+
+.scaffold-preview__divider {
+  position: relative;
+}
+
+.scaffold-preview__divider:hover .scaffold-divider__actions {
+  opacity: 1 !important;
 }
 
 /* Gripper Handle - Universal reorder control */

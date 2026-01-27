@@ -1796,7 +1796,62 @@ export function App() {
                   <div key={section.id} className="scaffold-section-block">
                     {section.name ? (
                       <>
-                        {sectionIndex > 0 && <div className="scaffold-preview__divider">───────────────────</div>}
+                        {sectionIndex > 0 && (
+                          <div 
+                            className="scaffold-preview__divider"
+                            style={{ position: 'relative' }}
+                          >
+                            {isEditingScaffold && (
+                              <div style={{ 
+                                position: 'absolute', 
+                                right: 0, 
+                                top: '50%', 
+                                transform: 'translateY(-50%)',
+                                display: 'flex',
+                                gap: '4px',
+                                opacity: 0,
+                                transition: 'opacity 0.15s ease'
+                              }}
+                              className="scaffold-divider__actions"
+                              >
+                                <button
+                                  className="scaffold-divider__duplicate"
+                                  onClick={() => {
+                                    // Duplicate the section above this divider
+                                    const sectionToDuplicate = scaffoldSections[sectionIndex - 1];
+                                    const duplicatedSection: ScaffoldSection = {
+                                      id: `section-${Date.now()}`,
+                                      name: `${sectionToDuplicate.name} (Copy)`,
+                                      pages: sectionToDuplicate.pages.map(page => ({
+                                        ...page,
+                                        id: `page-${Date.now()}-${Math.random()}`
+                                      }))
+                                    };
+                                    const newSections = [...scaffoldSections];
+                                    newSections.splice(sectionIndex, 0, duplicatedSection);
+                                    setScaffoldSections(newSections);
+                                  }}
+                                  title="Duplicate section above"
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: '2px 4px',
+                                    borderRadius: '4px',
+                                    color: 'var(--slds-g-color-neutral-base-60)',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M9.33333 0.583252H2.33333C1.6875 0.583252 1.16667 1.10409 1.16667 1.74992V9.33325H2.33333V1.74992H9.33333V0.583252ZM11.6667 2.91659H4.66667C4.02083 2.91659 3.5 3.43742 3.5 4.08325V11.6666C3.5 12.3124 4.02083 12.8333 4.66667 12.8333H11.6667C12.3125 12.8333 12.8333 12.3124 12.8333 11.6666V4.08325C12.8333 3.43742 12.3125 2.91659 11.6667 2.91659ZM11.6667 11.6666H4.66667V4.08325H11.6667V11.6666Z" fill="currentColor"/>
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                            ───────────────────
+                          </div>
+                        )}
                         {isEditingScaffold ? (
                           <div 
                             className={`scaffold-section-header ${draggedItem?.type === 'scaffold-section' && draggedItem.index === sectionIndex ? 'is-dragging' : ''}`}
@@ -1833,6 +1888,27 @@ export function App() {
                                 setScaffoldSections(newSections);
                               }}
                             />
+                            <button 
+                              className="scaffold-section-header__duplicate" 
+                              onClick={() => {
+                                const duplicatedSection: ScaffoldSection = {
+                                  id: `section-${Date.now()}`,
+                                  name: `${section.name} (Copy)`,
+                                  pages: section.pages.map(page => ({
+                                    ...page,
+                                    id: `page-${Date.now()}-${Math.random()}`
+                                  }))
+                                };
+                                const newSections = [...scaffoldSections];
+                                newSections.splice(sectionIndex + 1, 0, duplicatedSection);
+                                setScaffoldSections(newSections);
+                              }}
+                              title="Duplicate section"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M9.33333 0.583252H2.33333C1.6875 0.583252 1.16667 1.10409 1.16667 1.74992V9.33325H2.33333V1.74992H9.33333V0.583252ZM11.6667 2.91659H4.66667C4.02083 2.91659 3.5 3.43742 3.5 4.08325V11.6666C3.5 12.3124 4.02083 12.8333 4.66667 12.8333H11.6667C12.3125 12.8333 12.8333 12.3124 12.8333 11.6666V4.08325C12.8333 3.43742 12.3125 2.91659 11.6667 2.91659ZM11.6667 11.6666H4.66667V4.08325H11.6667V11.6666Z" fill="currentColor"/>
+                              </svg>
+                            </button>
                             <button className="scaffold-section-header__delete" onClick={() => {
                               if (confirm(`Delete "${section.name}" section?`)) {
                                 setScaffoldSections(scaffoldSections.filter((_, i) => i !== sectionIndex));
@@ -1958,15 +2034,50 @@ export function App() {
                     ))}
                     
                     {isEditingScaffold && (
-                      <button
-                        className="scaffold-preview__add-page-btn"
-                        onClick={() => {
-                          const newSections = [...scaffoldSections];
-                          const newPages = [...section.pages, { id: `page-${Date.now()}`, name: 'New Page', status: section.name ? '🟢' : null }];
-                          newSections[sectionIndex] = { ...section, pages: newPages };
-                          setScaffoldSections(newSections);
-                        }}
-                      >+ Add Page</button>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                          className="scaffold-preview__add-page-btn"
+                          onClick={() => {
+                            const newSections = [...scaffoldSections];
+                            const newPages = [...section.pages, { id: `page-${Date.now()}`, name: 'New Page', status: section.name ? '🟢' : null }];
+                            newSections[sectionIndex] = { ...section, pages: newPages };
+                            setScaffoldSections(newSections);
+                          }}
+                        >+ Add Page</button>
+                        {sectionIndex > 0 && (
+                          <button
+                            className="scaffold-preview__add-divider-btn"
+                            onClick={() => {
+                              // Add a new empty section (acts as divider) after current section
+                              const newSections = [...scaffoldSections];
+                              newSections.splice(sectionIndex + 1, 0, {
+                                id: `divider-${Date.now()}`,
+                                name: '',
+                                pages: []
+                              });
+                              setScaffoldSections(newSections);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px 8px',
+                              fontSize: '11px',
+                              color: 'var(--slds-g-color-neutral-base-50)',
+                              borderRadius: '4px',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'var(--slds-g-color-neutral-base-95)';
+                              e.currentTarget.style.color = 'var(--slds-g-color-neutral-base-50)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'none';
+                              e.currentTarget.style.color = 'var(--slds-g-color-neutral-base-50)';
+                            }}
+                          >+ Add Divider</button>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
