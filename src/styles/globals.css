@@ -1649,19 +1649,25 @@ fieldset.slds-form-element legend {
   margin-bottom: 8px;
 }
 
+.scaffold-status-bar {
+  padding: 12px 16px;
+  background: var(--slds-g-color-neutral-base-100);
+  border-top: 1px solid var(--slds-g-color-neutral-base-90);
+  flex-shrink: 0;
+}
+
+.scaffold-status-bar--editing {
+  padding: 12px 16px;
+}
+
 .scaffold-section__footer {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   padding: 12px 16px;
   background: var(--slds-g-color-neutral-base-100);
   flex-shrink: 0;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   border-top: 1px solid var(--slds-g-color-neutral-base-90);
-}
-
-.scaffold-section__footer > *:last-child {
-  flex-shrink: 0;
 }
 
 .scaffold-desc {

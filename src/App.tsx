@@ -2213,94 +2213,94 @@ export function App() {
               </div>
             </div>
 
-            {/* Fixed Footer with Status and CTAs */}
-            <div className="scaffold-section__footer">
-              <div className={`scaffold-hint ${isEditingStatusBadges ? 'scaffold-hint--editing' : ''}`}>
-                <div className="scaffold-hint__header">
-                  <strong>Status:</strong>
-                  {!isEditingStatusBadges && (
-                    <span className="scaffold-hint__badges">
-                      {statusSymbols.map((s, i) => (
-                        <span key={s.id}>
-                          {i > 0 && <span className="scaffold-hint__separator"> • </span>}
-                          <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  <button 
-                    className="scaffold-hint__edit-btn"
-                    onClick={() => setIsEditingStatusBadges(!isEditingStatusBadges)}
-                  >
-                    {isEditingStatusBadges ? 'Done' : 'Edit'}
-                  </button>
-                </div>
-
-                {isEditingStatusBadges && (
-                  <div className="scaffold-hint__editor">
-                    {statusSymbols.map((status, index) => (
-                      <div key={status.id} className="scaffold-hint__editor-row">
-                        <input
-                          type="text"
-                          className="scaffold-hint__emoji-input"
-                          value={status.symbol}
-                          onChange={(e) => {
-                            const newSymbols = [...statusSymbols];
-                            newSymbols[index] = { ...status, symbol: e.target.value };
-                            updateStatusSymbols(newSymbols);
-                          }}
-                          maxLength={2}
-                        />
-                        <input
-                          type="text"
-                          className="scaffold-hint__label-input"
-                          value={status.label}
-                          onChange={(e) => {
-                            const newSymbols = [...statusSymbols];
-                            newSymbols[index] = { ...status, label: e.target.value };
-                            updateStatusSymbols(newSymbols);
-                          }}
-                          placeholder="Label"
-                        />
-                        <button
-                          className="scaffold-hint__delete-btn"
-                          onClick={() => {
-                            if (statusSymbols.length > 1) {
-                              updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
-                            }
-                          }}
-                          disabled={statusSymbols.length <= 1}
-                        >×</button>
-                      </div>
+            {/* Status section above footer */}
+            <div className={`scaffold-status-bar ${isEditingStatusBadges ? 'scaffold-status-bar--editing' : ''}`}>
+              <div className="scaffold-hint__header">
+                <strong>Status:</strong>
+                {!isEditingStatusBadges && (
+                  <span className="scaffold-hint__badges">
+                    {statusSymbols.map((s, i) => (
+                      <span key={s.id}>
+                        {i > 0 && <span className="scaffold-hint__separator"> • </span>}
+                        <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
+                      </span>
                     ))}
-                    <button
-                      className="scaffold-hint__add-btn"
-                      onClick={() => {
-                        updateStatusSymbols([
-                          ...statusSymbols,
-                          { id: `symbol-${Date.now()}`, symbol: '⭐', label: 'New Status' }
-                        ]);
-                      }}
-                    >+ Add Status</button>
-                  </div>
+                  </span>
                 )}
+                <button 
+                  className="scaffold-hint__edit-btn"
+                  onClick={() => setIsEditingStatusBadges(!isEditingStatusBadges)}
+                >
+                  {isEditingStatusBadges ? 'Done' : 'Edit'}
+                </button>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button 
+
+              {isEditingStatusBadges && (
+                <div className="scaffold-hint__editor">
+                  {statusSymbols.map((status, index) => (
+                    <div key={status.id} className="scaffold-hint__editor-row">
+                      <input
+                        type="text"
+                        className="scaffold-hint__emoji-input"
+                        value={status.symbol}
+                        onChange={(e) => {
+                          const newSymbols = [...statusSymbols];
+                          newSymbols[index] = { ...status, symbol: e.target.value };
+                          updateStatusSymbols(newSymbols);
+                        }}
+                        maxLength={2}
+                      />
+                      <input
+                        type="text"
+                        className="scaffold-hint__label-input"
+                        value={status.label}
+                        onChange={(e) => {
+                          const newSymbols = [...statusSymbols];
+                          newSymbols[index] = { ...status, label: e.target.value };
+                          updateStatusSymbols(newSymbols);
+                        }}
+                        placeholder="Label"
+                      />
+                      <button
+                        className="scaffold-hint__delete-btn"
+                        onClick={() => {
+                          if (statusSymbols.length > 1) {
+                            updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
+                          }
+                        }}
+                        disabled={statusSymbols.length <= 1}
+                      >×</button>
+                    </div>
+                  ))}
+                  <button
+                    className="scaffold-hint__add-btn"
+                    onClick={() => {
+                      updateStatusSymbols([
+                        ...statusSymbols,
+                        { id: `symbol-${Date.now()}`, symbol: '⭐', label: 'New Status' }
+                      ]);
+                    }}
+                  >+ Add Status</button>
+                </div>
+              )}
+            </div>
+
+            {/* Fixed Footer with CTAs */}
+            <div className="scaffold-section__footer">
+              <Button 
                 variant="brand"
                 onClick={() => { scaffoldFileStructure(); }}
                 loading={isScaffolding}
                 disabled={scaffoldExists || isEditingScaffold}
               >
                 {scaffoldExists ? 'Already Exists' : 'Insert Pages'}
-                </Button>
-                <Button 
+              </Button>
+              <Button 
                 variant={isEditingScaffold ? 'brand-outline' : 'neutral'}
                 onClick={() => setIsEditingScaffold(!isEditingScaffold)}
-                >
+              >
                 {isEditingScaffold ? 'Done Editing' : 'Edit'}
-                </Button>
-              </div>
+              </Button>
             </div>
             </div>
         ) : view === 'settings' ? (
