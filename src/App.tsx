@@ -1873,7 +1873,7 @@ export function App() {
               <div className={`scaffold-preview ${isEditingScaffold ? 'scaffold-preview--editable' : 'scaffold-preview--readonly'}`}>
                 {scaffoldSections.map((section, sectionIndex) => (
                   <div key={section.id} className="scaffold-section-block">
-                    {(section.name || section.isDivider) ? (
+                    {(section.name || section.isDivider || (!section.name && section.pages.length === 0)) ? (
                       <>
                         {sectionIndex > 0 && (
                           <div 
@@ -1964,7 +1964,7 @@ export function App() {
                             ───────────────────
                           </div>
                         )}
-                        {section.isDivider ? (
+                        {(section.isDivider || (!section.name && section.pages.length === 0)) ? (
                           // Divider-only section - no header, just the divider line above
                           null
                         ) : isEditingScaffold ? (
