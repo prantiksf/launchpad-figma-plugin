@@ -2034,22 +2034,25 @@ fieldset.slds-form-element legend {
 
 /* Add section button */
 .scaffold-preview__add-section-btn {
-  background: none;
-  border: 1px dashed var(--slds-g-color-neutral-base-70);
+  background: var(--slds-g-color-brand-base-95);
+  border: 1px dashed var(--slds-g-color-brand-base-50);
   cursor: pointer;
-  padding: 10px 12px;
+  padding: 12px 16px;
   font-size: 12px;
+  font-weight: 500;
   color: var(--slds-g-color-brand-base-50);
-  border-radius: 4px;
-  margin-top: 12px;
+  border-radius: 6px;
+  margin-top: 16px;
   width: 100%;
   transition: all 0.15s ease;
-  font-weight: 500;
 }
 
 .scaffold-preview__add-section-btn:hover {
   border-color: var(--slds-g-color-brand-base-50);
-  background: var(--slds-g-color-brand-base-95);
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(6, 106, 254, 0.2);
 }
 
 /* ============ SETTINGS VIEW ============ */
