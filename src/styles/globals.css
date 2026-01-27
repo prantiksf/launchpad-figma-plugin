@@ -1745,8 +1745,8 @@ fieldset.slds-form-element legend {
 }
 
 .scaffold-preview--editable {
-  max-height: 320px;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .scaffold-preview__status-btn {
