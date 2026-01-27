@@ -829,8 +829,9 @@ body {
 
 .content--scaffold {
   padding: 0;
-  height: 100%;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .loading-state {
@@ -1600,9 +1601,9 @@ fieldset.slds-form-element legend {
 .scaffold-section--fixed-footer {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .scaffold-section__scrollable {
