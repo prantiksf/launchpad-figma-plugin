@@ -2055,7 +2055,18 @@ export function App() {
                         key={page.id} 
                         className={`scaffold-preview__item ${section.name ? 'scaffold-preview__item--indent' : ''} ${!isEditingScaffold ? 'scaffold-preview__item--readonly' : ''}`}
                         draggable={isEditingScaffold}
-                        onDragStart={(e) => { if (isEditingScaffold) { setDraggedItem({ type: `page-${sectionIndex}`, index: pageIndex }); e.dataTransfer.effectAllowed = 'move'; }}}
+                        onDragStart={(e) => { 
+                          // Only start drag if not clicking on input field
+                          const target = e.target as HTMLElement;
+                          if (target.tagName === 'INPUT' || target.closest('input')) {
+                            e.preventDefault();
+                            return;
+                          }
+                          if (isEditingScaffold) { 
+                            setDraggedItem({ type: `page-${sectionIndex}`, index: pageIndex }); 
+                            e.dataTransfer.effectAllowed = 'move'; 
+                          }
+                        }}
                         onDragEnd={() => { setDraggedItem(null); setDragOverIndex(null); }}
                         onDragOver={(e) => { if (isEditingScaffold) { e.preventDefault(); if (draggedItem?.type === `page-${sectionIndex}` && draggedItem.index !== pageIndex) setDragOverIndex(pageIndex); }}}
                         onDragLeave={() => setDragOverIndex(null)}
