@@ -1874,6 +1874,14 @@ fieldset.slds-form-element legend {
   opacity: 1 !important;
 }
 
+.scaffold-divider__delete {
+  transition: all 0.15s ease;
+}
+
+.scaffold-divider__delete {
+  transition: all 0.15s ease;
+}
+
 /* Gripper Handle - Universal reorder control */
 .gripper-handle {
   position: relative;
