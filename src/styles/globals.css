@@ -1688,7 +1688,7 @@ fieldset.slds-form-element legend {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow-y: auto;
+  width: 100%;
 }
 
 .scaffold-preview__item {
@@ -1828,6 +1828,7 @@ fieldset.slds-form-element legend {
 /* Section Block */
 .scaffold-section-block {
   margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 /* Section Header */
