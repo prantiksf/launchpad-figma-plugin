@@ -104,11 +104,14 @@ app.get('/api/templates', async (req, res) => {
 
 app.post('/api/templates', async (req, res) => {
   try {
-    await db.saveTemplates(req.body.templates);
-    res.json({ success: true });
+    const templates = req.body.templates || [];
+    console.log(`💾 Saving ${templates.length} templates to database...`);
+    await db.saveTemplates(templates);
+    console.log(`✓ Successfully saved ${templates.length} templates`);
+    res.json({ success: true, count: templates.length });
   } catch (error) {
-    console.error('Error saving templates:', error);
-    res.status(500).json({ error: 'Failed to save templates' });
+    console.error('✗ Error saving templates:', error);
+    res.status(500).json({ error: 'Failed to save templates', details: error.message });
   }
 });
 

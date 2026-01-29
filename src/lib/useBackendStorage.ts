@@ -17,12 +17,23 @@ const API_BASE_URL = 'https://starterkit-da8649ad6366.herokuapp.com';
 
 // Helper for API requests
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  });
-  if (!response.ok) throw new Error(`API Error: ${response.status}`);
-  return response.json();
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+      ...options,
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API Error ${response.status} for ${endpoint}:`, errorText);
+      throw new Error(`API Error: ${response.status} - ${errorText.substring(0, 100)}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error(`Failed to fetch ${API_BASE_URL}${endpoint}:`, error);
+    throw error;
+  }
 }
 
 // ============================================================================
@@ -45,10 +56,16 @@ export function useTemplates() {
 
   const save = useCallback(async (newTemplates: any[]) => {
     setTemplates(newTemplates);
-    await apiRequest('/api/templates', {
-      method: 'POST',
-      body: JSON.stringify({ templates: newTemplates }),
-    });
+    try {
+      await apiRequest('/api/templates', {
+        method: 'POST',
+        body: JSON.stringify({ templates: newTemplates }),
+      });
+      console.log('✓ Templates saved to backend:', newTemplates.length);
+    } catch (error) {
+      console.error('✗ Failed to save templates:', error);
+      throw error;
+    }
   }, []);
 
   return { templates, setTemplates: save, loading };
