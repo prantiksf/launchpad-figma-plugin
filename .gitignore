@@ -27,3 +27,4 @@ storybook-static/
 # Environment
 .env
 .env.local
+backend/.env

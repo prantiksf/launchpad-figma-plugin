@@ -42,7 +42,16 @@ figma.showUI(__html__, {
 // This is critical for published plugins where initialization might be delayed
 // Use setTimeout to ensure UI is fully ready to receive messages
 setTimeout(() => {
-  figma.ui.postMessage({ type: 'PLUGIN_READY' });
+  // Include user info for backend API calls (user-specific data)
+  const currentUser = figma.currentUser;
+  figma.ui.postMessage({ 
+    type: 'PLUGIN_READY',
+    user: currentUser ? {
+      id: currentUser.id,
+      name: currentUser.name,
+      photoUrl: currentUser.photoUrl
+    } : null
+  });
 }, 0);
 
 // Helper to generate preview from a node
