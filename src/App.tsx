@@ -548,7 +548,7 @@ export function App() {
     const handleError = (error: ErrorEvent) => {
       console.error('Plugin error:', error);
       setIsLoading(false);
-      setHasCompletedOnboarding(prev => prev === null ? false : prev);
+      // hasCompletedOnboarding comes from hook, no need to set here
       setShowSplash(false);
     };
     
@@ -596,7 +596,7 @@ export function App() {
       }, 1000);
     } else {
       // Browser preview - skip onboarding
-      setHasCompletedOnboarding(true);
+      setOnboardingState({ hasCompleted: true });
       setShowSplash(false);
       setIsLoading(false);
     }
@@ -605,7 +605,7 @@ export function App() {
     // Note: Don't auto-dismiss splash - let user click "Get Started"
     const timeout = setTimeout(() => {
       setIsLoading(false);
-      setHasCompletedOnboarding(prev => prev === null ? false : prev);
+      // hasCompletedOnboarding comes from hook, no need to set here
       // Don't setShowSplash(false) here - let user interact with splash screen
     }, 3000);
     
@@ -1261,11 +1261,15 @@ export function App() {
       setCustomClouds(updatedCustomClouds);
     }
     
-    setHasCompletedOnboarding(true);
+    // Set selected cloud and default
     setSelectedClouds([selectedCloud]);
     setDefaultCloud(selectedCloud);
     
+    // Mark onboarding as completed (this will hide the onboarding screen)
     setOnboardingState({ hasCompleted: true });
+    
+    // Hide splash screen
+    setShowSplash(false);
     
     const cloudName = customCloud?.name || clouds.find(c => c.id === selectedCloud)?.name || selectedCloud;
     parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Welcome! Showing ${cloudName} templates` } }, '*');
@@ -1355,7 +1359,7 @@ export function App() {
   function enterFromSplash() {
     setShowSplash(false);
     if (!hasCompletedOnboarding) {
-      setHasCompletedOnboarding(true);
+      setOnboardingState({ hasCompleted: true });
       setOnboardingState({ hasCompleted: true, skipSplash: false });
     }
   }
