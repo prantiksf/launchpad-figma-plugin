@@ -231,6 +231,8 @@ module.exports = {
   initialize,
   pool,
   // Shared data
+  getSharedData,
+  saveSharedData,
   getTemplates,
   saveTemplates,
   getSavedItems,

@@ -25,6 +25,69 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================================================
+// ADMIN ENDPOINTS (for debugging/checking data)
+// ============================================================================
+
+// View all shared data
+app.get('/admin/shared-data', async (req, res) => {
+  try {
+    const result = await db.pool.query('SELECT key, data, updated_at FROM shared_data ORDER BY updated_at DESC');
+    res.json({
+      count: result.rows.length,
+      data: result.rows.map(row => ({
+        key: row.key,
+        dataSize: JSON.stringify(row.data).length,
+        updatedAt: row.updated_at,
+        preview: JSON.stringify(row.data).substring(0, 200) + '...'
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching shared data:', error);
+    res.status(500).json({ error: 'Failed to fetch shared data' });
+  }
+});
+
+// View specific shared data key
+app.get('/admin/shared-data/:key', async (req, res) => {
+  try {
+    const { key } = req.params;
+    const data = await db.getSharedData(key);
+    res.json({ key, data, exists: data !== null });
+  } catch (error) {
+    console.error('Error fetching shared data:', error);
+    res.status(500).json({ error: 'Failed to fetch shared data' });
+  }
+});
+
+// View all user preferences
+app.get('/admin/user-preferences', async (req, res) => {
+  try {
+    const result = await db.pool.query(
+      'SELECT figma_user_id, default_cloud, onboarding_completed, skip_splash, hidden_clouds, created_at, updated_at FROM user_preferences ORDER BY updated_at DESC'
+    );
+    res.json({
+      count: result.rows.length,
+      users: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching user preferences:', error);
+    res.status(500).json({ error: 'Failed to fetch user preferences' });
+  }
+});
+
+// View specific user preferences
+app.get('/admin/user-preferences/:figmaUserId', async (req, res) => {
+  try {
+    const { figmaUserId } = req.params;
+    const prefs = await db.getUserPreferences(figmaUserId);
+    res.json(prefs);
+  } catch (error) {
+    console.error('Error fetching user preferences:', error);
+    res.status(500).json({ error: 'Failed to fetch user preferences' });
+  }
+});
+
+// ============================================================================
 // SHARED DATA ENDPOINTS (Team-wide)
 // ============================================================================
 
