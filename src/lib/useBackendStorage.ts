@@ -208,13 +208,18 @@ export function useCloudCategories() {
  * Hook for status symbols (shared team-wide)
  */
 export function useStatusSymbols() {
-  const [symbols, setSymbols] = useState<any[]>([]);
+  const defaultSymbols = [
+    { id: 'ready', symbol: '🟢', label: 'Ready' },
+    { id: 'progress', symbol: '🟡', label: 'In Progress' },
+    { id: 'deprecated', symbol: '❌', label: 'Deprecated' },
+  ];
+  const [symbols, setSymbols] = useState<any[]>(defaultSymbols);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     apiRequest<any[]>('/api/status-symbols')
-      .then(setSymbols)
-      .catch(console.error)
+      .then(loaded => setSymbols(loaded.length > 0 ? loaded : defaultSymbols))
+      .catch(() => setSymbols(defaultSymbols)) // Fallback to defaults on error
       .finally(() => setLoading(false));
   }, []);
 

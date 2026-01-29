@@ -16,6 +16,22 @@ import {
 // Import Onboarding component
 import Onboarding from './components/Onboarding';
 
+// Import backend storage hooks
+import {
+  useTemplates,
+  useSavedItems,
+  useFigmaLinks,
+  useCloudFigmaLinks,
+  useCustomClouds,
+  useEditableClouds,
+  useCloudCategories,
+  useStatusSymbols,
+  useCloudPocs,
+  useDefaultCloud,
+  useOnboardingState,
+  useHiddenClouds,
+} from './lib/useBackendStorage';
+
 // Import cloud icons
 import SalesCloudIcon from './assets/SalesCloud-icon.png';
 import ServiceCloudIcon from './assets/ServiceCloud-icon.png';
@@ -100,15 +116,39 @@ interface ComponentInfo {
 
 // ============ MAIN COMPONENT ============
 export function App() {
+  // Figma user ID (from PLUGIN_READY message) - needed for user-specific data
+  const [figmaUserId, setFigmaUserId] = useState<string | null>(null);
+  
   // Onboarding state
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [showSplash, setShowSplash] = useState(true);
-  const [skipSplashOnLaunch, setSkipSplashOnLaunch] = useState(false);
   const [showMoreCloudsInSplash, setShowMoreCloudsInSplash] = useState(false);
   
-  // Core state
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Backend data hooks (shared team-wide)
+  const { templates, setTemplates, loading: templatesLoading } = useTemplates();
+  const { savedItems, setSavedItems, loading: savedItemsLoading } = useSavedItems();
+  const { links: figmaLinks, setLinks: setFigmaLinks, loading: figmaLinksLoading } = useFigmaLinks();
+  const { cloudLinks: cloudFigmaLinks, setCloudLinks: setCloudFigmaLinks, loading: cloudLinksLoading } = useCloudFigmaLinks();
+  const { clouds: customClouds, setClouds: setCustomClouds, loading: customCloudsLoading } = useCustomClouds();
+  const { editableClouds, setEditableClouds, loading: editableCloudsLoading } = useEditableClouds();
+  const { categories: cloudCategories, setCategories: setCloudCategories, loading: categoriesLoading } = useCloudCategories();
+  const { symbols: statusSymbols, setSymbols: setStatusSymbols, loading: statusSymbolsLoading } = useStatusSymbols();
+  const { pocs: cloudPOCs, setPocs: setCloudPOCs, loading: pocsLoading } = useCloudPocs();
+  
+  // User-specific hooks (per Figma user)
+  const { defaultCloud, setDefaultCloud, loading: defaultCloudLoading } = useDefaultCloud(figmaUserId);
+  const { hasCompleted: hasCompletedOnboarding, skipSplash: skipSplashOnLaunch, setOnboardingState, loading: onboardingLoading } = useOnboardingState(figmaUserId);
+  const { hiddenClouds, setHiddenClouds, loading: hiddenCloudsLoading } = useHiddenClouds(figmaUserId);
+  
+  // Combined loading state
+  const isLoading = templatesLoading || savedItemsLoading || figmaLinksLoading || cloudLinksLoading || 
+                    customCloudsLoading || editableCloudsLoading || categoriesLoading || 
+                    statusSymbolsLoading || pocsLoading || defaultCloudLoading || 
+                    onboardingLoading || hiddenCloudsLoading;
+  
+  // Core UI state
+  const setIsLoading = (loading: boolean) => {
+    // This is now handled by hooks, but keeping for compatibility
+  };
   const [selectedClouds, setSelectedClouds] = useState<string[]>(['sales']);
   const [activeCategory, setActiveCategory] = useState('all');
   const [insertingId, setInsertingId] = useState<string | null>(null);
@@ -129,7 +169,7 @@ export function App() {
     name: string;
     email: string;
   }
-  const [cloudPOCs, setCloudPOCs] = useState<Record<string, CloudPOC[]>>({});
+  // cloudPOCs now comes from useCloudPocs hook above
   
   // Editable scaffold structure - organized by sections
   interface ScaffoldPage {
@@ -317,8 +357,7 @@ export function App() {
     setHistory(newHistory);
   }, [scaffoldSections]);
   
-  // Figma Links feature (per cloud)
-  const [cloudFigmaLinks, setCloudFigmaLinks] = useState<Record<string, Array<{id: string; name: string; url: string}>>>({});
+  // Figma Links feature (per cloud) - now from useCloudFigmaLinks hook
   const [showLinksDropdown, setShowLinksDropdown] = useState(false);
   const [isAddingLink, setIsAddingLink] = useState(false);
   const [newLinkName, setNewLinkName] = useState('');
@@ -333,7 +372,7 @@ export function App() {
   
   // Cloud selector feature
   const [showCloudSelector, setShowCloudSelector] = useState(false);
-  const [defaultCloud, setDefaultCloud] = useState<string | null>(null);
+  // defaultCloud now comes from useDefaultCloud hook above
   const [hoveredCloud, setHoveredCloud] = useState<string | null>(null);
   const [showAddCloudModal, setShowAddCloudModal] = useState(false);
   const [newCloudName, setNewCloudName] = useState('');
@@ -344,15 +383,14 @@ export function App() {
   
   // Saved templates/variants (simple bookmark feature)
   // Format: [{templateId: string, variantKey?: string}, ...]
-  const [savedItems, setSavedItems] = useState<Array<{templateId: string; variantKey?: string}>>([]);
+  // savedItems now comes from useSavedItems hook above
   
   // Plugin branding from selected frame
   const [pluginBranding, setPluginBranding] = useState<string | null>(null);
   const [frameName, setFrameName] = useState<string | null>(null);
   
   // Cloud visibility and per-cloud settings
-  const [hiddenClouds, setHiddenClouds] = useState<string[]>([]);
-  const [cloudCategories, setCloudCategories] = useState<Record<string, Array<{id: string; label: string}>>>({});
+  // hiddenClouds and cloudCategories now come from hooks above
   
   // Drag and drop state
   const [draggedItem, setDraggedItem] = useState<{ type: string; index: number } | null>(null);
@@ -373,7 +411,7 @@ export function App() {
     { id: 'progress', symbol: '🟡', label: 'In Progress' },
     { id: 'deprecated', symbol: '❌', label: 'Deprecated' },
   ];
-  const [statusSymbols, setStatusSymbols] = useState(defaultStatusSymbols);
+  // statusSymbols now comes from useStatusSymbols hook above (with default fallback)
   
   // Refs for click-outside handling
   const linksDropdownRef = useRef<HTMLDivElement>(null);
@@ -399,41 +437,30 @@ export function App() {
     
     window.addEventListener('error', handleError);
     
-    // Function to send initialization messages
+    // Function to send initialization messages (only for scaffold check and frame branding)
     const sendInitMessages = () => {
       if (!isInFigma) return;
       
       try {
-        // Send all initialization messages
-        parent.postMessage({ pluginMessage: { type: 'LOAD_ONBOARDING_STATE' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_TEMPLATES' } }, '*');
+        // Only send messages that still need plugin sandbox (not data loading)
         parent.postMessage({ pluginMessage: { type: 'CHECK_SCAFFOLD_EXISTS' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_FIGMA_LINKS' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_DEFAULT_CLOUD' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_CUSTOM_CLOUDS' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_EDITABLE_CLOUDS' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_HIDDEN_CLOUDS' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_SAVED_TEMPLATES' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_CATEGORIES' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_STATUS_SYMBOLS' } }, '*');
-        parent.postMessage({ pluginMessage: { type: 'LOAD_CLOUD_POCS' } }, '*');
         parent.postMessage({ pluginMessage: { type: 'GET_SELECTED_FRAME_BRANDING' } }, '*');
       } catch (error) {
         console.error('Failed to send initial messages:', error);
-        // Don't fail completely - allow UI to render
-        setIsLoading(false);
-        setHasCompletedOnboarding(prev => prev === null ? false : prev);
-        setShowSplash(false);
       }
     };
     
     if (isInFigma) {
-      // Wait for PLUGIN_READY signal before sending messages
+      // Wait for PLUGIN_READY signal to get user ID
       // This ensures code.ts is fully loaded (critical for published plugins)
       const readyHandler = (event: MessageEvent) => {
         const msg = event.data?.pluginMessage;
         if (msg?.type === 'PLUGIN_READY') {
           window.removeEventListener('message', readyHandler);
+          // Capture Figma user ID for user-specific data
+          if (msg.user?.id) {
+            setFigmaUserId(msg.user.id);
+          }
           // Small delay to ensure code.ts message handlers are registered
           setTimeout(sendInitMessages, 50);
         }
@@ -485,18 +512,11 @@ export function App() {
 
       switch (msg.type) {
         case 'PLUGIN_READY':
-          // Plugin is ready - initialization messages will be sent
+          // Plugin is ready - capture user ID if provided
           console.log('Plugin ready signal received');
-          break;
-          
-        case 'TEMPLATES_LOADED':
-          // Templates loaded from Figma's clientStorage
-          setTemplates(msg.templates || []);
-          setIsLoading(false);
-          break;
-
-        case 'TEMPLATES_SAVED':
-          // Templates saved confirmation
+          if (msg.user?.id) {
+            setFigmaUserId(msg.user.id);
+          }
           break;
           
         case 'SELECTED_FRAME_BRANDING_LOADED':
@@ -504,14 +524,8 @@ export function App() {
           setFrameName(msg.frameName || null);
           break;
           
-        case 'SAVED_TEMPLATES_LOADED':
-          // Handle both old format (array of strings) and new format (array of objects)
-          const loaded = msg.savedItems || msg.savedIds || [];
-          const normalized = Array.isArray(loaded) && loaded.length > 0 && typeof loaded[0] === 'string'
-            ? loaded.map(id => ({ templateId: id }))
-            : loaded;
-          setSavedItems(normalized);
-          break;
+        // Data loading messages removed - now handled by backend hooks
+        // Templates, savedItems, etc. are loaded automatically via hooks
 
         case 'COMPONENT_INFO':
           // Successfully captured component - including variant data!
@@ -556,64 +570,8 @@ export function App() {
           setIsScaffolding(false);
           break;
           
-        case 'FIGMA_LINKS_LOADED':
-          // Support both old format (array) and new format (object per cloud)
-          if (msg.links && typeof msg.links === 'object' && !Array.isArray(msg.links)) {
-            setCloudFigmaLinks(msg.links);
-          } else if (Array.isArray(msg.links)) {
-            // Migrate old format to new - assign to 'sales' as default
-            setCloudFigmaLinks({ sales: msg.links });
-          }
-          break;
-
-        case 'DEFAULT_CLOUD_LOADED':
-          if (msg.cloudId) {
-            setDefaultCloud(msg.cloudId);
-            setSelectedClouds([msg.cloudId]);
-          }
-          break;
-
-        case 'ONBOARDING_STATE_LOADED':
-          setHasCompletedOnboarding(msg.hasCompleted || false);
-          setSkipSplashOnLaunch(msg.skipSplash || false);
-          // If skip splash is enabled, hide splash immediately
-          if (msg.skipSplash && msg.hasCompleted) {
-            setShowSplash(false);
-          }
-          break;
-
-        case 'CUSTOM_CLOUDS_LOADED':
-          if (msg.clouds && Array.isArray(msg.clouds)) {
-            setCustomClouds(msg.clouds);
-          }
-          break;
-          
-        case 'EDITABLE_CLOUDS_LOADED':
-          if (msg.clouds) {
-            setEditableClouds(msg.clouds);
-          }
-          break;
-
-        case 'HIDDEN_CLOUDS_LOADED':
-          if (msg.hiddenClouds && Array.isArray(msg.hiddenClouds)) {
-            setHiddenClouds(msg.hiddenClouds);
-          }
-          break;
-
-        case 'CLOUD_CATEGORIES_LOADED':
-          if (msg.categories && typeof msg.categories === 'object') {
-            setCloudCategories(msg.categories);
-          }
-          break;
-
-        case 'STATUS_SYMBOLS_LOADED':
-          if (msg.symbols && Array.isArray(msg.symbols) && msg.symbols.length > 0) {
-            setStatusSymbols(msg.symbols);
-          }
-          break;
-        case 'CLOUD_POCS_LOADED':
-          if (msg.pocs) setCloudPOCs(msg.pocs || {});
-          break;
+        // All data loading messages removed - now handled by backend hooks
+        // Data is automatically loaded when hooks mount
 
         case 'SCAFFOLD_EXISTS':
           setScaffoldExists(msg.exists);
@@ -625,6 +583,13 @@ export function App() {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  // Sync selectedClouds with defaultCloud when it changes
+  useEffect(() => {
+    if (defaultCloud && !selectedClouds.includes(defaultCloud)) {
+      setSelectedClouds([defaultCloud]);
+    }
+  }, [defaultCloud]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -778,7 +743,7 @@ export function App() {
     const currentDefaultCloud = selectedClouds[0];
     if (currentDefaultCloud !== formCloud) {
       setDefaultCloud(formCloud);
-      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: formCloud } }, '*');
+      setDefaultCloud(formCloud);
     }
     
     // Scroll to the new template after render
@@ -792,8 +757,8 @@ export function App() {
       }
     }, 100);
     
-    // Save to Figma's clientStorage
-    parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
+    // Save to backend
+    setTemplates(updated);
     
     // Show toast and go home
     parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `"${capturedComponent.name}" added!` } }, '*');
@@ -908,11 +873,9 @@ export function App() {
   function deleteTemplate(id: string) {
     const updated = templates.filter(t => t.id !== id);
     setTemplates(updated);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
     // Also remove from saved (all variants of this template)
     const updatedSaved = savedItems.filter(item => item.templateId !== id);
     setSavedItems(updatedSaved);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_SAVED_TEMPLATES', savedItems: updatedSaved } }, '*');
     setDeleteConfirmId(null);
   }
   
@@ -926,7 +889,6 @@ export function App() {
       ? savedItems.filter(s => !(s.templateId === templateId && s.variantKey === variantKey))
       : [...savedItems, item];
     setSavedItems(updated);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_SAVED_TEMPLATES', savedItems: updated } }, '*');
     setMoveMenuOpen(null);
   }
   
@@ -950,7 +912,6 @@ export function App() {
       t.id === templateId ? { ...t, category: newCategory } : t
     );
     setTemplates(updated);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_TEMPLATES', templates: updated } }, '*');
     setMoveMenuOpen(null);
     
     // Auto-switch to the new category to show the moved item
@@ -990,7 +951,6 @@ export function App() {
           
           if (data.figmaLinks && Array.isArray(data.figmaLinks)) {
             setFigmaLinks(data.figmaLinks);
-            parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: data.figmaLinks } }, '*');
           }
           
           parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Imported ${data.templates.length} templates!` } }, '*');
@@ -1023,7 +983,6 @@ export function App() {
     const updatedLinks = [...figmaLinks, newLink];
     const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
     setCloudFigmaLinks(updatedCloudLinks);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
     
     setNewLinkName('');
     setNewLinkUrl('');
@@ -1034,7 +993,6 @@ export function App() {
     const updatedLinks = figmaLinks.filter(link => link.id !== id);
     const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
     setCloudFigmaLinks(updatedCloudLinks);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
   }
   
   function openFigmaLink(url: string) {
@@ -1052,7 +1010,7 @@ export function App() {
   function makeDefaultCloud(cloudId: string) {
     setDefaultCloud(cloudId);
     setSelectedClouds([cloudId]);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId } }, '*');
+      setDefaultCloud(cloudId);
     const cloudName = allClouds.find(c => c.id === cloudId)?.name || cloudId;
     parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${cloudName} set as default` } }, '*');
     setShowCloudSelector(false);
@@ -1083,8 +1041,7 @@ export function App() {
       setCustomClouds(updatedClouds);
       setSelectedClouds([newCloud.id]);
       setDefaultCloud(newCloud.id);
-      parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedClouds } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: newCloud.id } }, '*');
+      setCustomClouds(updatedClouds);
       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${newCloud.name} added!` } }, '*');
       
       // Reset form
@@ -1136,24 +1093,24 @@ export function App() {
       ? hiddenClouds.filter(id => id !== cloudId)
       : [...hiddenClouds, cloudId];
     setHiddenClouds(newHiddenClouds);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_HIDDEN_CLOUDS', hiddenClouds: newHiddenClouds } }, '*');
+    setHiddenClouds(newHiddenClouds);
   }
   
   function updateCloudCategories(cloudId: string, newCategories: Array<{id: string; label: string}>) {
     const updated = { ...cloudCategories, [cloudId]: newCategories };
     setCloudCategories(updated);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_CATEGORIES', categories: updated } }, '*');
+    setCloudCategories(updated);
   }
   
   function updateStatusSymbols(newSymbols: typeof statusSymbols) {
     setStatusSymbols(newSymbols);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_STATUS_SYMBOLS', symbols: newSymbols } }, '*');
+    setStatusSymbols(newSymbols);
   }
   
   function updateCloudPOCs(cloudId: string, pocs: CloudPOC[]) {
     const newPOCs = { ...cloudPOCs, [cloudId]: pocs };
     setCloudPOCs(newPOCs);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_POCS', pocs: newPOCs } }, '*');
+    setCloudPOCs(newPOCs);
   }
   
   function resetAllSettings() {
@@ -1167,13 +1124,13 @@ export function App() {
       setScaffoldSections(defaultScaffoldSections);
       setCloudFigmaLinks({});
       setCloudPOCs({});
-      parent.postMessage({ pluginMessage: { type: 'SAVE_HIDDEN_CLOUDS', hiddenClouds: [] } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_CATEGORIES', categories: {} } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: 'sales' } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: [] } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'SAVE_STATUS_SYMBOLS', symbols: defaultStatusSymbols } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'SAVE_FIGMA_LINKS', links: {} } }, '*');
-      parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_POCS', pocs: {} } }, '*');
+      setHiddenClouds([]);
+      setCloudCategories({});
+      setDefaultCloud('sales');
+      setCustomClouds([]);
+      setStatusSymbols(defaultStatusSymbols);
+      setCloudFigmaLinks({});
+      setCloudPOCs({});
     }
   }
 
@@ -1184,15 +1141,13 @@ export function App() {
     if (customCloud) {
       updatedCustomClouds = [...customClouds, customCloud];
       setCustomClouds(updatedCustomClouds);
-      parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedCustomClouds } }, '*');
     }
     
     setHasCompletedOnboarding(true);
     setSelectedClouds([selectedCloud]);
     setDefaultCloud(selectedCloud);
     
-    parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true } }, '*');
-    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: selectedCloud } }, '*');
+    setOnboardingState({ hasCompleted: true });
     
     const cloudName = customCloud?.name || clouds.find(c => c.id === selectedCloud)?.name || selectedCloud;
     parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Welcome! Showing ${cloudName} templates` } }, '*');
@@ -1276,14 +1231,14 @@ export function App() {
   function selectCloudFromSplash(cloudId: string) {
     setSelectedClouds([cloudId]);
     setDefaultCloud(cloudId);
-    parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId } }, '*');
+      setDefaultCloud(cloudId);
   }
 
   function enterFromSplash() {
     setShowSplash(false);
     if (!hasCompletedOnboarding) {
       setHasCompletedOnboarding(true);
-      parent.postMessage({ pluginMessage: { type: 'SAVE_ONBOARDING_STATE', hasCompleted: true, skipSplash: false } }, '*');
+      setOnboardingState({ hasCompleted: true, skipSplash: false });
     }
   }
 
@@ -2409,7 +2364,6 @@ export function App() {
                                               c.id === cloud.id ? { ...c, icon: iconUrl } : c
                                             );
                                             setCustomClouds(updatedCustom);
-                                            parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedCustom } }, '*');
                                           } else {
                                             const updated = editableClouds.map(c => 
                                               c.id === cloud.id ? { ...c, icon: iconUrl } : c
@@ -2453,7 +2407,6 @@ export function App() {
                                     if (!hiddenClouds.includes(cloud.id)) {
                                       setDefaultCloud(cloud.id);
                                       setSelectedClouds([cloud.id]);
-                                      parent.postMessage({ pluginMessage: { type: 'SAVE_DEFAULT_CLOUD', cloudId: cloud.id } }, '*');
                                       const cloudName = allClouds.find(c => c.id === cloud.id)?.name || cloud.id;
                                       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${cloudName} set as default` } }, '*');
                                     }
