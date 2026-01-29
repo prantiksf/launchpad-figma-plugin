@@ -1289,7 +1289,7 @@ export function App() {
     }, '*');
   }
 
-  const VERSION = '1.10.0';
+  const VERSION = '1.11.0';
 
   // ============ RENDER ============
   
