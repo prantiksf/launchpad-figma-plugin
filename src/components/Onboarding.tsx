@@ -34,13 +34,13 @@ const defaultClouds: Cloud[] = [
 ];
 
 export function Onboarding({ onComplete, customClouds = [] }: OnboardingProps) {
-  const [selectedCloud, setSelectedCloud] = useState<string | null>(null);
+  const allClouds = [...defaultClouds, ...customClouds];
+  // Auto-select first cloud by default for better UX
+  const [selectedCloud, setSelectedCloud] = useState<string | null>(allClouds.length > 0 ? allClouds[0].id : null);
   const [view, setView] = useState<'select' | 'addCloud'>('select');
   const [newCloudName, setNewCloudName] = useState('');
   const [newCloudIcon, setNewCloudIcon] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const allClouds = [...defaultClouds, ...customClouds];
 
   const handleCloudSelect = (cloudId: string) => {
     setSelectedCloud(cloudId);
@@ -180,11 +180,17 @@ export function Onboarding({ onComplete, customClouds = [] }: OnboardingProps) {
       </div>
 
       {/* Get Started Button */}
-      {selectedCloud && (
-        <button className="onboarding__cta" onClick={handleGetStarted}>
-          Get Started →
-        </button>
-      )}
+      <button 
+        className="onboarding__cta" 
+        onClick={handleGetStarted}
+        disabled={!selectedCloud}
+        style={{ 
+          opacity: selectedCloud ? 1 : 0.5,
+          cursor: selectedCloud ? 'pointer' : 'not-allowed'
+        }}
+      >
+        Get Started →
+      </button>
     </div>
   );
 }
