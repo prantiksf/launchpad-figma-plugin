@@ -1293,9 +1293,27 @@ export function App() {
 
   // ============ RENDER ============
   
+  // Wait for onboarding state to load before rendering anything (prevents flash)
+  if (onboardingLoading || hasCompletedOnboarding === null) {
+    return (
+      <div className="splash-screen">
+        <div className="splash-screen__logo">
+          <img src={StarterKitIcon} alt="Starter Kit" className="splash-screen__icon" />
+          <h1 className="splash-screen__title">
+            <span className="onboarding__title-gradient">starter</span>
+            <span className="onboarding__title-kit">KIT</span>
+          </h1>
+        </div>
+        <div className="splash-screen__spinner">
+          <Spinner size="small" />
+        </div>
+      </div>
+    );
+  }
+  
   // Show onboarding for first-time users
   if (hasCompletedOnboarding === false) {
-  return (
+    return (
       <Onboarding 
         onComplete={completeOnboarding}
         customClouds={customClouds}
@@ -1307,7 +1325,6 @@ export function App() {
   function selectCloudFromSplash(cloudId: string) {
     setSelectedClouds([cloudId]);
     setDefaultCloud(cloudId);
-      setDefaultCloud(cloudId);
   }
 
   function enterFromSplash() {
@@ -1317,8 +1334,8 @@ export function App() {
     }
   }
 
-  // Show splash screen (launcher)
-  if (showSplash && hasCompletedOnboarding !== null) {
+  // Show splash screen (launcher) - only after onboarding state is loaded
+  if (showSplash && hasCompletedOnboarding === true) {
     const displayedClouds = clouds.filter(c => !hiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
     const visibleCustomClouds = customClouds.filter(c => !hiddenClouds.includes(c.id));
     const hasMoreClouds = visibleCustomClouds.length > 0;
@@ -1450,24 +1467,7 @@ export function App() {
     );
   }
   
-  // Loading state (before onboarding state is known)
-  if (hasCompletedOnboarding === null) {
-    return (
-      <div className="splash-screen">
-        <div className="splash-screen__logo">
-          <img src={StarterKitIcon} alt="Starter Kit" className="splash-screen__icon" />
-          <h1 className="splash-screen__title">
-            <span className="onboarding__title-gradient">starter</span>
-            <span className="onboarding__title-kit">KIT</span>
-            </h1>
-          </div>
-        <div className="splash-screen__spinner">
-          <Spinner size="small" />
-        </div>
-        </div>
-    );
-  }
-  
+  // Show loading state while data is loading (but onboarding state is known)
   if (isLoading) {
     return (
       <div className="app">
