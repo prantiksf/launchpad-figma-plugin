@@ -1089,7 +1089,7 @@ export function App() {
 
   // Get current cloud's figma links
   const currentCloudId = selectedClouds[0] || 'sales';
-  const figmaLinks = cloudFigmaLinks[currentCloudId] || [];
+  const currentCloudFigmaLinks = cloudFigmaLinks[currentCloudId] || [];
   
   // Figma Links functions
   function addFigmaLink() {
@@ -1101,7 +1101,7 @@ export function App() {
       url: newLinkUrl.trim()
     };
     
-    const updatedLinks = [...figmaLinks, newLink];
+    const updatedLinks = [...currentCloudFigmaLinks, newLink];
     const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
     setCloudFigmaLinks(updatedCloudLinks);
     
@@ -1111,7 +1111,7 @@ export function App() {
   }
   
   function removeFigmaLink(id: string) {
-    const updatedLinks = figmaLinks.filter(link => link.id !== id);
+    const updatedLinks = currentCloudFigmaLinks.filter(link => link.id !== id);
     const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
     setCloudFigmaLinks(updatedCloudLinks);
   }
@@ -1179,14 +1179,11 @@ export function App() {
     setShowAddCloudModal(false);
   }
 
-  // Editable default clouds state
-  const [editableClouds, setEditableClouds] = useState(clouds);
-  
-  // Custom clouds state
-  const [customClouds, setCustomClouds] = useState<Array<{id: string; name: string; icon: string; isCustom?: boolean}>>([]);
+  // Editable default clouds and custom clouds now come from hooks above
+  // editableClouds and customClouds are already defined from useEditableClouds and useCustomClouds hooks
 
   // Combined clouds list (default + custom)
-  const allClouds = [...editableClouds, ...customClouds];
+  const allClouds = [...(editableClouds || clouds), ...customClouds];
   
   // Visible clouds (excluding hidden ones)
   const visibleClouds = allClouds.filter(cloud => !hiddenClouds.includes(cloud.id));
