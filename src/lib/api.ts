@@ -7,8 +7,8 @@
  * IMPORTANT: Set the API_BASE_URL to your Heroku deployment URL
  */
 
-// TODO: Replace with your actual Heroku URL after deployment
-const API_BASE_URL = process.env.STARTER_KIT_API_URL || 'https://your-heroku-app.herokuapp.com';
+// Heroku backend URL
+const API_BASE_URL = process.env.STARTER_KIT_API_URL || 'https://starterkit-da8649ad6366.herokuapp.com';
 
 // Helper for making API requests
 async function apiRequest<T>(

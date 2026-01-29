@@ -12,8 +12,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-// ⚠️ TODO: Replace with your actual Heroku URL after deployment
-const API_BASE_URL = 'https://your-heroku-app.herokuapp.com';
+// Heroku backend URL
+const API_BASE_URL = 'https://starterkit-da8649ad6366.herokuapp.com';
 
 // Helper for API requests
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
