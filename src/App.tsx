@@ -422,6 +422,123 @@ export function App() {
   const coverSelectorRef = useRef<HTMLDivElement>(null);
   const moveMenuRef = useRef<HTMLDivElement>(null);
 
+  // Migration function: Copy data from figma.clientStorage to backend
+  const migrateFromClientStorage = async () => {
+    const isInFigma = window.parent !== window && typeof parent.postMessage === 'function';
+    if (!isInFigma) return false;
+
+    return new Promise<boolean>((resolve) => {
+      let migrationComplete = false;
+      const migrationTimeout = setTimeout(() => {
+        if (!migrationComplete) {
+          console.log('Migration timeout - proceeding without migration');
+          resolve(false);
+        }
+      }, 5000);
+
+      const migrationHandler = async (event: MessageEvent) => {
+        const msg = event.data?.pluginMessage;
+        if (msg?.type === 'MIGRATION_DATA') {
+          window.removeEventListener('message', migrationHandler);
+          migrationComplete = true;
+          clearTimeout(migrationTimeout);
+
+          try {
+            console.log('🔄 Migrating data from clientStorage to backend...');
+            
+            // Migrate templates
+            if (msg.templates && msg.templates.length > 0) {
+              setTemplates(msg.templates);
+              console.log(`✓ Migrated ${msg.templates.length} templates`);
+            }
+
+            // Migrate saved items
+            if (msg.savedItems && msg.savedItems.length > 0) {
+              setSavedItems(msg.savedItems);
+              console.log(`✓ Migrated ${msg.savedItems.length} saved items`);
+            }
+
+            // Migrate figma links
+            if (msg.figmaLinks && (Array.isArray(msg.figmaLinks) || Object.keys(msg.figmaLinks).length > 0)) {
+              if (Array.isArray(msg.figmaLinks)) {
+                setCloudFigmaLinks({ sales: msg.figmaLinks });
+              } else {
+                setCloudFigmaLinks(msg.figmaLinks);
+              }
+              console.log('✓ Migrated Figma links');
+            }
+
+            // Migrate cloud-specific links
+            if (msg.cloudFigmaLinks && Object.keys(msg.cloudFigmaLinks).length > 0) {
+              setCloudFigmaLinks(msg.cloudFigmaLinks);
+              console.log('✓ Migrated cloud-specific Figma links');
+            }
+
+            // Migrate custom clouds
+            if (msg.customClouds && msg.customClouds.length > 0) {
+              setCustomClouds(msg.customClouds);
+              console.log(`✓ Migrated ${msg.customClouds.length} custom clouds`);
+            }
+
+            // Migrate editable clouds
+            if (msg.editableClouds) {
+              setEditableClouds(msg.editableClouds);
+              console.log('✓ Migrated editable clouds');
+            }
+
+            // Migrate cloud categories
+            if (msg.cloudCategories && Object.keys(msg.cloudCategories).length > 0) {
+              setCloudCategories(msg.cloudCategories);
+              console.log('✓ Migrated cloud categories');
+            }
+
+            // Migrate status symbols
+            if (msg.statusSymbols && msg.statusSymbols.length > 0) {
+              setStatusSymbols(msg.statusSymbols);
+              console.log(`✓ Migrated ${msg.statusSymbols.length} status symbols`);
+            }
+
+            // Migrate cloud POCs
+            if (msg.cloudPOCs && Object.keys(msg.cloudPOCs).length > 0) {
+              setCloudPOCs(msg.cloudPOCs);
+              console.log('✓ Migrated cloud POCs');
+            }
+
+            // Migrate user preferences (if user ID is available)
+            if (figmaUserId) {
+              if (msg.defaultCloud) {
+                setDefaultCloud(msg.defaultCloud);
+                console.log(`✓ Migrated default cloud: ${msg.defaultCloud}`);
+              }
+              if (msg.onboardingState) {
+                setOnboardingState({
+                  hasCompleted: msg.onboardingState.hasCompleted || false,
+                  skipSplash: msg.onboardingState.skipSplash || false
+                });
+                console.log('✓ Migrated onboarding state');
+              }
+              if (msg.hiddenClouds && msg.hiddenClouds.length > 0) {
+                setHiddenClouds(msg.hiddenClouds);
+                console.log(`✓ Migrated ${msg.hiddenClouds.length} hidden clouds`);
+              }
+            }
+
+            console.log('✅ Migration complete!');
+            resolve(true);
+          } catch (error) {
+            console.error('❌ Migration error:', error);
+            resolve(false);
+          }
+        }
+      };
+
+      window.addEventListener('message', migrationHandler);
+      
+      // Request migration data from plugin sandbox
+      parent.postMessage({ pluginMessage: { type: 'MIGRATE_FROM_CLIENT_STORAGE' } }, '*');
+    });
+  };
+
   // Load templates and figma links from Figma's clientStorage on mount
   useEffect(() => {
     // Check if running in Figma or standalone browser
@@ -453,7 +570,7 @@ export function App() {
     if (isInFigma) {
       // Wait for PLUGIN_READY signal to get user ID
       // This ensures code.ts is fully loaded (critical for published plugins)
-      const readyHandler = (event: MessageEvent) => {
+      const readyHandler = async (event: MessageEvent) => {
         const msg = event.data?.pluginMessage;
         if (msg?.type === 'PLUGIN_READY') {
           window.removeEventListener('message', readyHandler);
@@ -461,6 +578,10 @@ export function App() {
           if (msg.user?.id) {
             setFigmaUserId(msg.user.id);
           }
+          
+          // Try to migrate existing data from clientStorage to backend
+          await migrateFromClientStorage();
+          
           // Small delay to ensure code.ts message handlers are registered
           setTimeout(sendInitMessages, 50);
         }

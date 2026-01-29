@@ -69,6 +69,50 @@ async function generatePreview(node: SceneNode): Promise<string | null> {
 
 figma.ui.onmessage = async (msg) => {
   
+  // ============ MIGRATE FROM CLIENT STORAGE ============
+  if (msg.type === 'MIGRATE_FROM_CLIENT_STORAGE') {
+    try {
+      console.log('🔄 Reading data from clientStorage for migration...');
+      
+      // Read all data from clientStorage
+      const templates = await figma.clientStorage.getAsync(STORAGE_KEY) || [];
+      const savedItems = await figma.clientStorage.getAsync('starter-kit-saved') || [];
+      const figmaLinks = await figma.clientStorage.getAsync('starter-kit-figma-links') || [];
+      const cloudFigmaLinks = await figma.clientStorage.getAsync('starter-kit-cloud-figma-links') || {};
+      const customClouds = await figma.clientStorage.getAsync('starter-kit-custom-clouds') || [];
+      const editableClouds = await figma.clientStorage.getAsync('starter-kit-editable-clouds') || null;
+      const cloudCategories = await figma.clientStorage.getAsync('starter-kit-cloud-categories') || {};
+      const statusSymbols = await figma.clientStorage.getAsync('starter-kit-status-symbols') || [];
+      const cloudPOCs = await figma.clientStorage.getAsync('starter-kit-cloud-pocs') || {};
+      const defaultCloud = await figma.clientStorage.getAsync('starter-kit-default-cloud') || null;
+      const onboardingState = await figma.clientStorage.getAsync('starter-kit-onboarding') || { hasCompleted: false, skipSplash: false };
+      const hiddenClouds = await figma.clientStorage.getAsync('starter-kit-hidden-clouds') || [];
+      
+      // Send all data to UI for migration to backend
+      figma.ui.postMessage({
+        type: 'MIGRATION_DATA',
+        templates,
+        savedItems,
+        figmaLinks,
+        cloudFigmaLinks,
+        customClouds,
+        editableClouds,
+        cloudCategories,
+        statusSymbols,
+        cloudPOCs,
+        defaultCloud,
+        onboardingState,
+        hiddenClouds,
+      });
+      
+      console.log(`✓ Migration data prepared: ${templates.length} templates, ${savedItems.length} saved items`);
+    } catch (error) {
+      console.error('❌ Migration error:', error);
+      figma.ui.postMessage({ type: 'MIGRATION_DATA', error: String(error) });
+    }
+    return;
+  }
+  
   // ============ LOAD TEMPLATES ============
   if (msg.type === 'LOAD_TEMPLATES') {
     try {
