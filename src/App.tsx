@@ -1359,7 +1359,6 @@ export function App() {
   function enterFromSplash() {
     setShowSplash(false);
     if (!hasCompletedOnboarding) {
-      setOnboardingState({ hasCompleted: true });
       setOnboardingState({ hasCompleted: true, skipSplash: false });
     }
   }
