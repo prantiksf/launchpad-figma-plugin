@@ -709,21 +709,20 @@ export function App() {
 
   // Sync selectedClouds with defaultCloud when it loads
   // If no defaultCloud exists, default to 'sales' after loading completes
+  // Only run once when defaultCloudLoading becomes false
   useEffect(() => {
-    if (!defaultCloudLoading) {
-      if (defaultCloud && !selectedClouds.includes(defaultCloud)) {
+    if (!defaultCloudLoading && !cloudSelectionReady) {
+      if (defaultCloud) {
+        // User has a saved default cloud
         setSelectedClouds([defaultCloud]);
         setCloudSelectionReady(true);
-      } else if (!defaultCloud && selectedClouds.length === 0) {
+      } else {
         // No default cloud saved, use 'sales' as fallback
         setSelectedClouds(['sales']);
         setCloudSelectionReady(true);
-      } else if (selectedClouds.length > 0) {
-        // Already synced, just mark as ready
-        setCloudSelectionReady(true);
       }
     }
-  }, [defaultCloud, defaultCloudLoading, selectedClouds]);
+  }, [defaultCloud, defaultCloudLoading, cloudSelectionReady]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1334,6 +1333,26 @@ export function App() {
     );
   }
 
+  // Show loading state while waiting for splash screen data to sync (prevents UI snap)
+  // Don't render splash screen until cloudSelectionReady is true AND selectedClouds is set
+  if (showSplash && hasCompletedOnboarding === true && 
+      (!cloudSelectionReady || selectedClouds.length === 0 || customCloudsLoading || hiddenCloudsLoading || defaultCloudLoading)) {
+    return (
+      <div className="splash-screen">
+        <div className="splash-screen__logo">
+          <img src={StarterKitIcon} alt="Starter Kit" className="splash-screen__icon" />
+          <h1 className="splash-screen__title">
+            <span className="onboarding__title-gradient">starter</span>
+            <span className="onboarding__title-kit">KIT</span>
+          </h1>
+        </div>
+        <div className="splash-screen__spinner">
+          <Spinner size="small" />
+        </div>
+      </div>
+    );
+  }
+
   // Splash screen functions
   function selectCloudFromSplash(cloudId: string) {
     setSelectedClouds([cloudId]);
@@ -1347,9 +1366,10 @@ export function App() {
     }
   }
 
-  // Show splash screen (launcher) - only after onboarding state AND required data is loaded
-  // Wait for customClouds, hiddenClouds, and defaultCloud to prevent flash/reload
-  if (showSplash && hasCompletedOnboarding === true && !customCloudsLoading && !hiddenCloudsLoading && !defaultCloudLoading && cloudSelectionReady) {
+  // Show splash screen (launcher) - only after ALL data is loaded and synced (prevents UI snap)
+  // This check ensures cloudSelectionReady is true AND selectedClouds has a value
+  if (showSplash && hasCompletedOnboarding === true && cloudSelectionReady && selectedClouds.length > 0 && 
+      !customCloudsLoading && !hiddenCloudsLoading && !defaultCloudLoading) {
     const displayedClouds = clouds.filter(c => !hiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
     const visibleCustomClouds = customClouds.filter(c => !hiddenClouds.includes(c.id));
     const hasMoreClouds = visibleCustomClouds.length > 0;
