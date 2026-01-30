@@ -705,12 +705,12 @@ export function App() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  // Sync selectedClouds with defaultCloud when it changes
+  // Sync selectedClouds with defaultCloud when it loads (but only if not already set)
   useEffect(() => {
-    if (defaultCloud && !selectedClouds.includes(defaultCloud)) {
+    if (defaultCloud && !defaultCloudLoading && !selectedClouds.includes(defaultCloud)) {
       setSelectedClouds([defaultCloud]);
     }
-  }, [defaultCloud]);
+  }, [defaultCloud, defaultCloudLoading]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1334,8 +1334,9 @@ export function App() {
     }
   }
 
-  // Show splash screen (launcher) - only after onboarding state is loaded
-  if (showSplash && hasCompletedOnboarding === true) {
+  // Show splash screen (launcher) - only after onboarding state AND required data is loaded
+  // Wait for customClouds and hiddenClouds to prevent flash/reload
+  if (showSplash && hasCompletedOnboarding === true && !customCloudsLoading && !hiddenCloudsLoading && !defaultCloudLoading) {
     const displayedClouds = clouds.filter(c => !hiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
     const visibleCustomClouds = customClouds.filter(c => !hiddenClouds.includes(c.id));
     const hasMoreClouds = visibleCustomClouds.length > 0;
@@ -1408,7 +1409,8 @@ export function App() {
           </div>
         </div>
 
-        {selectedClouds[0] && (
+        {/* Only show button when defaultCloud is loaded (prevents flash) */}
+        {(selectedClouds[0] || defaultCloud) && !defaultCloudLoading && (
           <button className="splash-screen__cta" onClick={enterFromSplash}>
             Get Started →
           </button>
