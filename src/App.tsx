@@ -149,7 +149,9 @@ export function App() {
   const setIsLoading = (loading: boolean) => {
     // This is now handled by hooks, but keeping for compatibility
   };
-  const [selectedClouds, setSelectedClouds] = useState<string[]>(['sales']);
+  // Don't initialize with default - wait for defaultCloud to load to prevent flash
+  const [selectedClouds, setSelectedClouds] = useState<string[]>([]);
+  const [cloudSelectionReady, setCloudSelectionReady] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
   const [insertingId, setInsertingId] = useState<string | null>(null);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
@@ -705,12 +707,23 @@ export function App() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  // Sync selectedClouds with defaultCloud when it loads (but only if not already set)
+  // Sync selectedClouds with defaultCloud when it loads
+  // If no defaultCloud exists, default to 'sales' after loading completes
   useEffect(() => {
-    if (defaultCloud && !defaultCloudLoading && !selectedClouds.includes(defaultCloud)) {
-      setSelectedClouds([defaultCloud]);
+    if (!defaultCloudLoading) {
+      if (defaultCloud && !selectedClouds.includes(defaultCloud)) {
+        setSelectedClouds([defaultCloud]);
+        setCloudSelectionReady(true);
+      } else if (!defaultCloud && selectedClouds.length === 0) {
+        // No default cloud saved, use 'sales' as fallback
+        setSelectedClouds(['sales']);
+        setCloudSelectionReady(true);
+      } else if (selectedClouds.length > 0) {
+        // Already synced, just mark as ready
+        setCloudSelectionReady(true);
+      }
     }
-  }, [defaultCloud, defaultCloudLoading]);
+  }, [defaultCloud, defaultCloudLoading, selectedClouds]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1335,8 +1348,8 @@ export function App() {
   }
 
   // Show splash screen (launcher) - only after onboarding state AND required data is loaded
-  // Wait for customClouds and hiddenClouds to prevent flash/reload
-  if (showSplash && hasCompletedOnboarding === true && !customCloudsLoading && !hiddenCloudsLoading && !defaultCloudLoading) {
+  // Wait for customClouds, hiddenClouds, and defaultCloud to prevent flash/reload
+  if (showSplash && hasCompletedOnboarding === true && !customCloudsLoading && !hiddenCloudsLoading && !defaultCloudLoading && cloudSelectionReady) {
     const displayedClouds = clouds.filter(c => !hiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
     const visibleCustomClouds = customClouds.filter(c => !hiddenClouds.includes(c.id));
     const hasMoreClouds = visibleCustomClouds.length > 0;
@@ -1409,8 +1422,8 @@ export function App() {
           </div>
         </div>
 
-        {/* Only show button when defaultCloud is loaded (prevents flash) */}
-        {(selectedClouds[0] || defaultCloud) && !defaultCloudLoading && (
+        {/* Only show button when cloud selection is ready (prevents flash/reload) */}
+        {cloudSelectionReady && selectedClouds.length > 0 && (
           <button className="splash-screen__cta" onClick={enterFromSplash}>
             Get Started →
           </button>
