@@ -30,6 +30,7 @@ import {
   useDefaultCloud,
   useOnboardingState,
   useHiddenClouds,
+  useHousekeepingRules,
 } from './lib/useBackendStorage';
 
 // Import cloud icons
@@ -54,7 +55,8 @@ const clouds = [
 ];
 
 const categories = [
-  { id: 'all', label: 'All' },
+  { id: 'team-housekeeping', label: 'Team Housekeeping' },
+  { id: 'all', label: 'All Assets' },
   { id: 'cover-pages', label: 'Covers' },
   { id: 'components', label: 'Components' },
   { id: 'slides', label: 'Slides' },
@@ -152,7 +154,7 @@ export function App() {
   // Don't initialize with default - wait for defaultCloud to load to prevent flash
   const [selectedClouds, setSelectedClouds] = useState<string[]>([]);
   const [cloudSelectionReady, setCloudSelectionReady] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('team-housekeeping');
   const [insertingId, setInsertingId] = useState<string | null>(null);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [moveMenuOpen, setMoveMenuOpen] = useState<string | null>(null);
@@ -365,6 +367,28 @@ export function App() {
   const [newLinkName, setNewLinkName] = useState('');
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  // Load dark mode preference on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('starterkit-darkmode');
+      if (saved === 'true') {
+        setIsDarkMode(true);
+      }
+    } catch (e) {
+      // localStorage not available
+    }
+  }, []);
+  
+  // Save dark mode preference
+  useEffect(() => {
+    try {
+      localStorage.setItem('starterkit-darkmode', String(isDarkMode));
+    } catch (e) {
+      // localStorage not available
+    }
+  }, [isDarkMode]);
   
   // Settings accordion state
   const [expandedSettingsSection, setExpandedSettingsSection] = useState<string | null>('clouds');
@@ -400,7 +424,8 @@ export function App() {
   
   // Default categories (used for reset and initial state)
   const defaultCategories = [
-    { id: 'all', label: 'All' },
+    { id: 'team-housekeeping', label: 'Team Housekeeping' },
+    { id: 'all', label: 'All Assets' },
     { id: 'cover-pages', label: 'Covers' },
     { id: 'components', label: 'Components' },
     { id: 'slides', label: 'Slides' },
@@ -618,7 +643,115 @@ export function App() {
   }, []);
 
   // Add template flow
-  const [view, setView] = useState<'home' | 'add' | 'scaffold' | 'settings'>('home');
+  const [view, setView] = useState<'home' | 'add' | 'scaffold' | 'settings' | 'frame-details' | 'housekeeping-admin'>('home');
+  const [frameDetails, setFrameDetails] = useState<any>(null);
+  const [frameDetailsError, setFrameDetailsError] = useState<string | null>(null);
+  const [frameDetailsLoading, setFrameDetailsLoading] = useState(false);
+  
+  // Housekeeping admin state - persisted to backend
+  const { rules: housekeepingRules, setRules: saveHousekeepingRules, loading: housekeepingLoading } = useHousekeepingRules();
+  const [editingRule, setEditingRule] = useState<any>(null);
+  const [showRuleModal, setShowRuleModal] = useState(false);
+  const [ruleForm, setRuleForm] = useState({ title: '', description: '', hasComplianceCheck: false, links: [] as { label: string; action: string }[] });
+  const [newLinkLabel, setNewLinkLabel] = useState('');
+  const [deleteConfirmRule, setDeleteConfirmRule] = useState<string | null>(null);
+
+  // Housekeeping functions
+  function addRule() {
+    setEditingRule(null);
+    setRuleForm({ title: '', description: '', hasComplianceCheck: false, links: [] });
+    setShowRuleModal(true);
+  }
+
+  function editRule(rule: any) {
+    setEditingRule(rule);
+    setRuleForm({ 
+      title: rule.title, 
+      description: rule.description, 
+      hasComplianceCheck: rule.hasComplianceCheck,
+      links: [...rule.links]
+    });
+    setShowRuleModal(true);
+  }
+
+  function saveRule() {
+    if (!ruleForm.title.trim()) return;
+    
+    let newRules: any[];
+    if (editingRule) {
+      newRules = housekeepingRules.map(r => 
+        r.id === editingRule.id 
+          ? { ...r, title: ruleForm.title, description: ruleForm.description, hasComplianceCheck: ruleForm.hasComplianceCheck, links: ruleForm.links }
+          : r
+      );
+    } else {
+      const newRule = {
+        id: `rule-${Date.now()}`,
+        title: ruleForm.title,
+        description: ruleForm.description,
+        hasComplianceCheck: ruleForm.hasComplianceCheck,
+        links: ruleForm.links
+      };
+      newRules = [...housekeepingRules, newRule];
+    }
+    saveHousekeepingRules(newRules);
+    setShowRuleModal(false);
+    setEditingRule(null);
+  }
+
+  function deleteRule(ruleId: string) {
+    setDeleteConfirmRule(ruleId);
+  }
+  
+  function confirmDeleteRule() {
+    if (deleteConfirmRule) {
+      const newRules = housekeepingRules.filter(r => r.id !== deleteConfirmRule);
+      saveHousekeepingRules(newRules);
+      setDeleteConfirmRule(null);
+    }
+  }
+
+  function moveRule(index: number, direction: 'up' | 'down') {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= housekeepingRules.length) return;
+    
+    const newRules = [...housekeepingRules];
+    [newRules[index], newRules[newIndex]] = [newRules[newIndex], newRules[index]];
+    saveHousekeepingRules(newRules);
+  }
+
+  function addLinkToRule() {
+    if (!newLinkLabel.trim()) return;
+    setRuleForm(form => ({
+      ...form,
+      links: [...form.links, { label: newLinkLabel.trim(), action: 'scaffold' }]
+    }));
+    setNewLinkLabel('');
+  }
+
+  function removeLinkFromRule(index: number) {
+    setRuleForm(form => ({
+      ...form,
+      links: form.links.filter((_, i) => i !== index)
+    }));
+  }
+  const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    'frame-guidelines': false,
+    'page-structure': false,
+    'starter-kit-info': false,
+  });
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
   const [addStep, setAddStep] = useState<'instructions' | 'loading' | 'configure'>('instructions');
   const [capturedComponent, setCapturedComponent] = useState<ComponentInfo | null>(null);
   const [formName, setFormName] = useState('');
@@ -645,6 +778,17 @@ export function App() {
         case 'SELECTED_FRAME_BRANDING_LOADED':
           setPluginBranding(msg.branding || null);
           setFrameName(msg.frameName || null);
+          break;
+          
+        case 'FRAME_DETAILS_RESULT':
+          setFrameDetailsLoading(false);
+          if (msg.error) {
+            setFrameDetailsError(msg.error);
+            setFrameDetails(null);
+          } else {
+            setFrameDetails(msg.details);
+            setFrameDetailsError(null);
+          }
           break;
           
         // Data loading messages removed - now handled by backend hooks
@@ -756,9 +900,154 @@ export function App() {
 
   // ============ ACTIONS ============
   
+  // Semantic search helper - searches across multiple fields
+  const searchTemplates = (query: string) => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase().trim();
+    const words = q.split(/\s+/);
+    
+    return templates.filter(t => {
+      const cloud = clouds.find(c => c.id === t.cloudId);
+      const cloudName = cloud?.name.toLowerCase() || '';
+      const categoryLabel = categoryLabels[t.category]?.toLowerCase() || t.category.toLowerCase();
+      
+      // Combine all searchable text
+      const searchableText = [
+        t.name.toLowerCase(),
+        t.description?.toLowerCase() || '',
+        categoryLabel,
+        cloudName,
+        t.category.toLowerCase(),
+        // Also search variant names if component set
+        ...(t.variants?.map(v => v.displayName.toLowerCase()) || [])
+      ].join(' ');
+      
+      // Check if all words match (AND search for better results)
+      return words.every(word => searchableText.includes(word));
+    });
+  };
+  
+  // Generate search suggestions - filtered by selected cloud and includes variants
+  const searchSuggestions = React.useMemo(() => {
+    if (!searchQuery.trim() || searchQuery.length < 2) return [];
+    
+    const q = searchQuery.toLowerCase();
+    const suggestions: Array<{type: 'template' | 'variant' | 'category'; label: string; value: string; icon?: string; templateId?: string; variantKey?: string; categoryId?: string}> = [];
+    
+    // Filter templates by selected cloud first
+    const cloudFilteredTemplates = templates.filter(t => selectedClouds.includes(t.cloudId));
+    
+    // Search within cloud-filtered templates
+    cloudFilteredTemplates.forEach(t => {
+      const cloud = clouds.find(c => c.id === t.cloudId);
+      const searchableText = [t.name.toLowerCase(), t.description?.toLowerCase() || ''].join(' ');
+      
+      // Check if template name matches
+      if (searchableText.includes(q)) {
+        suggestions.push({
+          type: 'template',
+          label: t.name,
+          value: t.name,
+          icon: cloud?.icon,
+          templateId: t.id,
+          categoryId: t.category
+        });
+      }
+      
+      // Check variants if component set
+      if (t.isComponentSet && t.variants) {
+        t.variants.forEach(variant => {
+          if (variant.displayName.toLowerCase().includes(q) || variant.name.toLowerCase().includes(q)) {
+            suggestions.push({
+              type: 'variant',
+              label: variant.displayName,
+              value: variant.displayName,
+              icon: cloud?.icon,
+              templateId: t.id,
+              variantKey: variant.key,
+              categoryId: t.category
+            });
+          }
+        });
+      }
+    });
+    
+    // Add matching categories (these are global, not cloud-specific)
+    categories.filter(c => c.label.toLowerCase().includes(q) && c.id !== 'all' && c.id !== 'team-housekeeping' && c.id !== 'saved').forEach(c => {
+      suggestions.push({
+        type: 'category',
+        label: `${c.label} category`,
+        value: c.label,
+        categoryId: c.id
+      });
+    });
+    
+    // Remove duplicates and limit
+    const uniqueSuggestions = suggestions.filter((s, index, self) => 
+      index === self.findIndex(t => t.label === s.label && t.type === s.type)
+    );
+    
+    return uniqueSuggestions.slice(0, 10);
+  }, [searchQuery, templates, clouds, selectedClouds]);
+  
+  // Function to navigate to a search result
+  const navigateToSearchResult = (suggestion: typeof searchSuggestions[0]) => {
+    setSearchQuery('');
+    setShowSearchSuggestions(false);
+    setShowWelcomeScreen(false);
+    
+    if (suggestion.type === 'category' && suggestion.categoryId) {
+      // Navigate to category tab
+      setActiveCategory(suggestion.categoryId);
+    } else if (suggestion.templateId) {
+      // Navigate to template's category and scroll to it
+      if (suggestion.categoryId) {
+        setActiveCategory(suggestion.categoryId);
+      }
+      // Scroll to template after a short delay for DOM to update
+      setTimeout(() => {
+        const element = document.getElementById(`template-${suggestion.templateId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Add highlight effect
+          element.classList.add('template-item--highlighted');
+          setTimeout(() => {
+            element.classList.remove('template-item--highlighted');
+          }, 2000);
+        }
+      }, 100);
+    }
+  };
+  
   // Filter templates
   const filteredTemplates = templates.filter(t => {
     const matchCloud = selectedClouds.includes(t.cloudId);
+    
+    // Apply search filter if there's a search query - ignores category
+    if (searchQuery.trim()) {
+      const cloud = clouds.find(c => c.id === t.cloudId);
+      const cloudName = cloud?.name.toLowerCase() || '';
+      const categoryLabel = categoryLabels[t.category]?.toLowerCase() || t.category.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+      const words = q.split(/\s+/);
+      
+      const searchableText = [
+        t.name.toLowerCase(),
+        t.description?.toLowerCase() || '',
+        categoryLabel,
+        cloudName,
+        t.category.toLowerCase(),
+        ...(t.variants?.map(v => v.displayName.toLowerCase()) || [])
+      ].join(' ');
+      
+      const matchSearch = words.every(word => searchableText.includes(word));
+      return matchCloud && matchSearch;
+    }
+    
+    if (activeCategory === 'team-housekeeping') {
+      // Team Housekeeping shows welcome screen, no templates
+      return false;
+    }
     
     if (activeCategory === 'saved') {
       // Show template if any variant is saved, or if template itself is saved
@@ -766,6 +1055,7 @@ export function App() {
     }
     
     const matchCategory = activeCategory === 'all' || t.category === activeCategory;
+    
     return matchCloud && matchCategory;
   });
   
@@ -1170,6 +1460,13 @@ export function App() {
       setActiveCategory('all');
     }
   }, [savedCount, activeCategory]);
+  
+  // Show welcome screen when Team Housekeeping is selected
+  useEffect(() => {
+    if (activeCategory === 'team-housekeeping') {
+      setShowWelcomeScreen(true);
+    }
+  }, [activeCategory]);
     
   // Helper functions for settings
   function toggleCloudVisibility(cloudId: string) {
@@ -1299,6 +1596,127 @@ export function App() {
         pages
       } 
     }, '*');
+  }
+
+  // Get frame details (navigates to frame details view)
+  function getFrameDetails() {
+    setFrameDetailsLoading(true);
+    setFrameDetailsError(null);
+    setFrameDetails(null);
+    setView('frame-details');
+    
+    const isInFigma = window.parent !== window && typeof parent.postMessage === 'function';
+    if (isInFigma) {
+      parent.postMessage({ pluginMessage: { type: 'GET_FRAME_DETAILS' } }, '*');
+    } else {
+      setFrameDetailsError('This feature only works in Figma');
+      setFrameDetailsLoading(false);
+    }
+  }
+
+  // Simple markdown renderer for descriptions
+  function renderMarkdown(text: string) {
+    if (!text) return null;
+    
+    // Split by lines first to handle line breaks
+    const lines = text.split('\n');
+    
+    return lines.map((line, lineIndex) => {
+      // Process inline formatting
+      let parts: (string | JSX.Element)[] = [line];
+      
+      // Bold: **text** or __text__
+      parts = parts.flatMap((part, i) => {
+        if (typeof part !== 'string') return part;
+        const boldRegex = /\*\*(.+?)\*\*|__(.+?)__/g;
+        const result: (string | JSX.Element)[] = [];
+        let lastIndex = 0;
+        let match;
+        while ((match = boldRegex.exec(part)) !== null) {
+          if (match.index > lastIndex) {
+            result.push(part.substring(lastIndex, match.index));
+          }
+          result.push(<strong key={`b-${lineIndex}-${match.index}`}>{match[1] || match[2]}</strong>);
+          lastIndex = match.index + match[0].length;
+        }
+        if (lastIndex < part.length) {
+          result.push(part.substring(lastIndex));
+        }
+        return result.length > 0 ? result : [part];
+      });
+      
+      // Italic: _text_ (but not __)
+      parts = parts.flatMap((part, i) => {
+        if (typeof part !== 'string') return part;
+        const italicRegex = /(?<![_\w])_([^_]+)_(?![_\w])/g;
+        const result: (string | JSX.Element)[] = [];
+        let lastIndex = 0;
+        let match;
+        while ((match = italicRegex.exec(part)) !== null) {
+          if (match.index > lastIndex) {
+            result.push(part.substring(lastIndex, match.index));
+          }
+          result.push(<em key={`i-${lineIndex}-${match.index}`}>{match[1]}</em>);
+          lastIndex = match.index + match[0].length;
+        }
+        if (lastIndex < part.length) {
+          result.push(part.substring(lastIndex));
+        }
+        return result.length > 0 ? result : [part];
+      });
+      
+      // Links: [text](url)
+      parts = parts.flatMap((part, i) => {
+        if (typeof part !== 'string') return part;
+        const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+        const result: (string | JSX.Element)[] = [];
+        let lastIndex = 0;
+        let match;
+        while ((match = linkRegex.exec(part)) !== null) {
+          if (match.index > lastIndex) {
+            result.push(part.substring(lastIndex, match.index));
+          }
+          result.push(
+            <a 
+              key={`l-${lineIndex}-${match.index}`} 
+              href={match[2]} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ color: 'var(--slds-g-color-brand-base-50)', textDecoration: 'underline' }}
+            >
+              {match[1]}
+            </a>
+          );
+          lastIndex = match.index + match[0].length;
+        }
+        if (lastIndex < part.length) {
+          result.push(part.substring(lastIndex));
+        }
+        return result.length > 0 ? result : [part];
+      });
+      
+      return (
+        <span key={lineIndex}>
+          {parts}
+          {lineIndex < lines.length - 1 && <br />}
+        </span>
+      );
+    });
+  }
+
+  // Check frame compliance inline (doesn't navigate)
+  function checkFrameCompliance() {
+    setFrameDetailsLoading(true);
+    setFrameDetailsError(null);
+    setFrameDetails(null);
+    
+    const isInFigma = window.parent !== window && typeof parent.postMessage === 'function';
+    if (isInFigma) {
+      parent.postMessage({ pluginMessage: { type: 'GET_FRAME_DETAILS' } }, '*');
+    } else {
+      setFrameDetailsError('This feature only works in Figma');
+      setFrameDetailsLoading(false);
+    }
   }
 
   const VERSION = '1.11.0';
@@ -1515,7 +1933,7 @@ export function App() {
   }
 
   return (
-    <div className={`app ${view === 'settings' ? 'view-settings' : ''}`}>
+    <div className={`app ${view === 'settings' ? 'view-settings' : ''} ${isDarkMode ? 'dark-mode' : ''}`}>
       {/* Header Container - Fixed, Non-scrollable */}
       <div className="header-container">
         <div className="sticky-header">
@@ -1591,6 +2009,24 @@ export function App() {
             <div className="header__actions">
               {view === 'home' ? (
                 <>
+                  {/* Dark Mode Toggle */}
+                  <button 
+                    className="header__icon-btn header__dark-toggle"
+                    onClick={() => setIsDarkMode(!isDarkMode)}
+                    title={isDarkMode ? 'Light mode' : 'Dark mode'}
+                  >
+                    {isDarkMode ? (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+                        <circle cx="8" cy="8" r="3"/>
+                        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+                        <path d="M13.5 10.5A6 6 0 015.5 2.5 6 6 0 1013.5 10.5z"/>
+                      </svg>
+                    )}
+                  </button>
+                  
                   {/* More Menu (Export/Import) */}
                   <div className="header__dropdown-container" ref={moreMenuRef}>
                     <button 
@@ -1609,6 +2045,33 @@ export function App() {
                       <div className="header__dropdown header__dropdown--compact">
                         <button 
                           className="header__dropdown-menu-item"
+                          onClick={() => { setView('settings'); setShowMoreMenu(false); }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="3" width="12" height="2" rx="0.5"/>
+                            <rect x="2" y="6" width="12" height="2" rx="0.5"/>
+                            <rect x="2" y="9" width="12" height="2" rx="0.5"/>
+                            <rect x="2" y="12" width="8" height="2" rx="0.5"/>
+                          </svg>
+                          Manage Clouds and Sections
+                        </button>
+                        <button 
+                          className="header__dropdown-menu-item"
+                          onClick={(e) => { 
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowMoreMenu(false);
+                            setView('housekeeping-admin');
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="2" y="2" width="12" height="12" rx="2"/>
+                            <path d="M5 5h6M5 8h6M5 11h4"/>
+                          </svg>
+                          Team Housekeeping
+                        </button>
+                        <button 
+                          className="header__dropdown-menu-item"
                           onClick={() => { startAddFlow(); setShowMoreMenu(false); }}
                         >
                           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -1624,18 +2087,6 @@ export function App() {
                             <path d="M2 2h12v12H2V2zm1 1v10h10V3H3zm1 1h8v1H4V4zm0 2h8v1H4V6zm0 2h8v1H4V8zm0 2h5v1H4v-1z"/>
                           </svg>
                           Create Pages
-                        </button>
-                        <button 
-                          className="header__dropdown-menu-item"
-                          onClick={() => { setView('settings'); setShowMoreMenu(false); }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="2" y="3" width="12" height="2" rx="0.5"/>
-                            <rect x="2" y="6" width="12" height="2" rx="0.5"/>
-                            <rect x="2" y="9" width="12" height="2" rx="0.5"/>
-                            <rect x="2" y="12" width="8" height="2" rx="0.5"/>
-                          </svg>
-                          Manage Clouds and Sections
                         </button>
                       </div>
                     )}
@@ -1859,6 +2310,90 @@ export function App() {
           })()}
         </header>
 
+        {/* Search Bar (only on home) */}
+        {view === 'home' && (
+          <div className="home-search-section">
+            <div className="home-search-wrapper">
+              <svg className="home-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+                <circle cx="7" cy="7" r="4.5"/>
+                <path d="M10.5 10.5l3 3"/>
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="home-search-input"
+                placeholder="What do you want to get started with ?"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowSearchSuggestions(true);
+                  setSelectedSuggestionIndex(-1);
+                  if (e.target.value.trim()) {
+                    setShowWelcomeScreen(false);
+                    // Don't change category - search works across all
+                  } else {
+                    setShowWelcomeScreen(true);
+                    setActiveCategory('team-housekeeping');
+                  }
+                }}
+                onFocus={() => {
+                  if (searchQuery.trim()) {
+                    setShowSearchSuggestions(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay to allow click on suggestion
+                  setTimeout(() => setShowSearchSuggestions(false), 200);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedSuggestionIndex(prev => 
+                      prev < searchSuggestions.length - 1 ? prev + 1 : prev
+                    );
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+                  } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                    e.preventDefault();
+                    const suggestion = searchSuggestions[selectedSuggestionIndex];
+                    if (suggestion) {
+                      navigateToSearchResult(suggestion);
+                    }
+                  } else if (e.key === 'Escape') {
+                    setShowSearchSuggestions(false);
+                  }
+                }}
+              />
+              {/* Search Suggestions Dropdown */}
+              {showSearchSuggestions && searchSuggestions.length > 0 && (
+                <div className="search-suggestions">
+                  {/* Header showing which cloud we're searching in */}
+                  <div className="search-suggestions__header">
+                    Searching within {clouds.find(c => c.id === selectedClouds[0])?.name || 'All Clouds'}
+                  </div>
+                  {searchSuggestions.map((suggestion, index) => (
+                    <button
+                      key={`${suggestion.type}-${suggestion.value}`}
+                      className={`search-suggestion ${index === selectedSuggestionIndex ? 'search-suggestion--selected' : ''}`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        navigateToSearchResult(suggestion);
+                      }}
+                      onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                    >
+                      <span className="search-suggestion__label">{suggestion.label}</span>
+                      <span className="search-suggestion__type">
+                        {suggestion.type === 'variant' ? 'Variant' : suggestion.type === 'template' ? 'Template' : 'Category'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Category Pills (only on home) */}
         {view === 'home' && (
           <div className="category-pills">
@@ -1867,7 +2402,14 @@ export function App() {
                 key={cat.id}
                 className={`category-pill ${cat.iconOnly ? 'category-pill--icon' : ''} ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
                 data-category={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
+                onClick={() => {
+                  setActiveCategory(cat.id);
+                  if (cat.id !== 'team-housekeeping') {
+                    setShowWelcomeScreen(false);
+                  } else {
+                    setShowWelcomeScreen(true);
+                  }
+                }}
                 title={cat.iconOnly ? 'Saved' : cat.label}
               >
                 {cat.iconOnly ? (
@@ -2785,6 +3327,724 @@ export function App() {
                 </CardFooter>
               </Card>
             )}
+          </div>
+        ) : view === 'frame-details' ? (
+          <div className="frame-details-view">
+            <div className="frame-details-view__header">
+              <button 
+                className="frame-details-view__back"
+                onClick={() => setView('home')}
+                title="Back"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
+                </svg>
+                Back
+              </button>
+              <h3 className="frame-details-view__title">Frame Details</h3>
+            </div>
+            
+            {frameDetailsLoading ? (
+              <div className="frame-details-view__loading">
+                <Spinner size="small" />
+                <p>Analyzing selected frame...</p>
+              </div>
+            ) : frameDetailsError ? (
+              <Card>
+                <CardContent>
+                  <div className="frame-details-view__error">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 8v4M12 16h.01"/>
+                    </svg>
+                    <p>{frameDetailsError}</p>
+                    <Button 
+                      variant="brand-outline" 
+                      size="small"
+                      onClick={getFrameDetails}
+                    >
+                      Try Again
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : frameDetails ? (
+              <div className="frame-details-view__content">
+                <Card>
+                  <CardContent>
+                    <div className="frame-details-section">
+                      <h4 className="frame-details-section__title">Basic Information</h4>
+                      <div className="frame-details-grid">
+                        <div className="frame-details-item">
+                          <span className="frame-details-item__label">Name</span>
+                          <span className="frame-details-item__value">{frameDetails.name}</span>
+                        </div>
+                        <div className="frame-details-item">
+                          <span className="frame-details-item__label">Type</span>
+                          <span className="frame-details-item__value">{frameDetails.type}</span>
+                        </div>
+                        <div className="frame-details-item">
+                          <span className="frame-details-item__label">Dimensions</span>
+                          <span className="frame-details-item__value">{frameDetails.width} × {frameDetails.height}px</span>
+                        </div>
+                        <div className="frame-details-item">
+                          <span className="frame-details-item__label">Aspect Ratio</span>
+                          <span className="frame-details-item__value">{frameDetails.aspectRatio}:1</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent>
+                    <div className="frame-details-section">
+                      <h4 className="frame-details-section__title">Guidelines Compliance</h4>
+                      <div className="frame-details-compliance">
+                        <div className={`frame-details-compliance-item ${frameDetails.is16x9 ? 'is-compliant' : 'is-non-compliant'}`}>
+                          <div className="frame-details-compliance-item__icon">
+                            {frameDetails.is16x9 ? (
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                              </svg>
+                            ) : (
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 8v4M12 16h.01"/>
+                              </svg>
+                            )}
+                          </div>
+                          <div className="frame-details-compliance-item__content">
+                            <span className="frame-details-compliance-item__label">16:9 Aspect Ratio</span>
+                            <span className="frame-details-compliance-item__status">
+                              {frameDetails.is16x9 ? 'Compliant' : 'Not compliant'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className={`frame-details-compliance-item ${frameDetails.hasAutoLayout ? 'is-compliant' : 'is-non-compliant'}`}>
+                          <div className="frame-details-compliance-item__icon">
+                            {frameDetails.hasAutoLayout ? (
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                              </svg>
+                            ) : (
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 8v4M12 16h.01"/>
+                              </svg>
+                            )}
+                          </div>
+                          <div className="frame-details-compliance-item__content">
+                            <span className="frame-details-compliance-item__label">Auto Layout</span>
+                            <span className="frame-details-compliance-item__status">
+                              {frameDetails.hasAutoLayout ? 'Enabled' : 'Not enabled'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className={`frame-details-compliance-item ${frameDetails.matchesRecommendedResolution ? 'is-compliant' : 'is-non-compliant'}`}>
+                          <div className="frame-details-compliance-item__icon">
+                            {frameDetails.matchesRecommendedResolution ? (
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 6L9 17l-5-5"/>
+                              </svg>
+                            ) : (
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 8v4M12 16h.01"/>
+                              </svg>
+                            )}
+                          </div>
+                          <div className="frame-details-compliance-item__content">
+                            <span className="frame-details-compliance-item__label">Recommended Resolution</span>
+                            <span className="frame-details-compliance-item__status">
+                              {frameDetails.matchesRecommendedResolution 
+                                ? '1600×900 or 1920×1080' 
+                                : 'Not 1600×900 or 1920×1080'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {frameDetails.layoutProps && (
+                  <Card>
+                    <CardContent>
+                      <div className="frame-details-section">
+                        <h4 className="frame-details-section__title">Auto Layout Properties</h4>
+                        <div className="frame-details-grid">
+                          <div className="frame-details-item">
+                            <span className="frame-details-item__label">Layout Mode</span>
+                            <span className="frame-details-item__value">{frameDetails.layoutProps.layoutMode}</span>
+                          </div>
+                          <div className="frame-details-item">
+                            <span className="frame-details-item__label">Primary Axis</span>
+                            <span className="frame-details-item__value">{frameDetails.layoutProps.primaryAxisSizingMode}</span>
+                          </div>
+                          <div className="frame-details-item">
+                            <span className="frame-details-item__label">Counter Axis</span>
+                            <span className="frame-details-item__value">{frameDetails.layoutProps.counterAxisSizingMode}</span>
+                          </div>
+                          <div className="frame-details-item">
+                            <span className="frame-details-item__label">Padding</span>
+                            <span className="frame-details-item__value">
+                              {frameDetails.layoutProps.paddingTop} / {frameDetails.layoutProps.paddingRight} / {frameDetails.layoutProps.paddingBottom} / {frameDetails.layoutProps.paddingLeft}
+                            </span>
+                          </div>
+                          <div className="frame-details-item">
+                            <span className="frame-details-item__label">Item Spacing</span>
+                            <span className="frame-details-item__value">{frameDetails.layoutProps.itemSpacing}px</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : view === 'housekeeping-admin' ? (
+          <div className="housekeeping-admin">
+            <div className="housekeeping-admin__header">
+              <button 
+                className="housekeeping-admin__back"
+                onClick={() => setView('home')}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
+                </svg>
+                Back
+              </button>
+              <h3 className="housekeeping-admin__title">Team Housekeeping</h3>
+              <p className="housekeeping-admin__subtitle">Manage rules and guidelines for your team</p>
+            </div>
+
+            <div className="housekeeping-admin__content">
+              <div className="housekeeping-admin__section-header">
+                <span className="housekeeping-admin__section-title">RULES ({housekeepingRules.length})</span>
+                <button className="housekeeping-admin__add-btn" onClick={addRule}>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M8 3v10M3 8h10"/>
+                  </svg>
+                  Add Rule
+                </button>
+              </div>
+
+              <div className="housekeeping-admin__rules">
+                {housekeepingRules.map((rule, index) => (
+                  <div key={rule.id} className="housekeeping-rule">
+                    <div 
+                      className="housekeeping-rule__gripper"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', index.toString());
+                        e.currentTarget.parentElement?.classList.add('is-dragging');
+                      }}
+                      onDragEnd={(e) => {
+                        e.currentTarget.parentElement?.classList.remove('is-dragging');
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.parentElement?.classList.add('drag-over');
+                      }}
+                      onDragLeave={(e) => {
+                        e.currentTarget.parentElement?.classList.remove('drag-over');
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.parentElement?.classList.remove('drag-over');
+                        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                        if (fromIndex !== index) {
+                          const newRules = [...housekeepingRules];
+                          const [moved] = newRules.splice(fromIndex, 1);
+                          newRules.splice(index, 0, moved);
+                          saveHousekeepingRules(newRules);
+                        }
+                      }}
+                      title="Drag to reorder"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                        <circle cx="5" cy="3" r="1.5"/>
+                        <circle cx="11" cy="3" r="1.5"/>
+                        <circle cx="5" cy="8" r="1.5"/>
+                        <circle cx="11" cy="8" r="1.5"/>
+                        <circle cx="5" cy="13" r="1.5"/>
+                        <circle cx="11" cy="13" r="1.5"/>
+                      </svg>
+                    </div>
+                    <div className="housekeeping-rule__content">
+                      <div className="housekeeping-rule__header">
+                        <h4 className="housekeeping-rule__title">{rule.title}</h4>
+                        <div className="housekeeping-rule__actions">
+                          <button className="housekeeping-rule__action" title="Edit" onClick={() => editRule(rule)}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 2l2 2-8 8H4v-2l8-8z"/>
+                            </svg>
+                          </button>
+                          <button className="housekeeping-rule__action housekeeping-rule__action--danger" title="Delete" onClick={() => deleteRule(rule.id)}>
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 4h10M6 4V3h4v1M5 4v9h6V4"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <p className="housekeeping-rule__description">{rule.description}</p>
+                      {rule.links.length > 0 && (
+                        <div className="housekeeping-rule__links">
+                          <span className="housekeeping-rule__links-label">Buttons:</span>
+                          {rule.links.map((link, i) => (
+                            <span key={i} className="housekeeping-rule__link-tag">{link.label}</span>
+                          ))}
+                        </div>
+                      )}
+                      {rule.hasComplianceCheck && (
+                        <div className="housekeeping-rule__badge">
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 8l3 3 7-7"/>
+                          </svg>
+                          Has compliance check
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="housekeeping-admin__info">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm2 8H6v-1h1V8H6V7h3v4h1v1z"/>
+                </svg>
+                <span>Rules appear as accordion sections in the Team Housekeeping tab. Each rule can have a header, description, and optional action buttons.</span>
+              </div>
+            </div>
+
+            {/* Add/Edit Rule Modal */}
+            {showRuleModal && (
+              <div className="rule-modal-overlay" onClick={() => setShowRuleModal(false)}>
+                <div className="rule-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="rule-modal__header">
+                    <h3 className="rule-modal__title">{editingRule ? 'Edit Rule' : 'Add New Rule'}</h3>
+                    <button className="rule-modal__close" onClick={() => setShowRuleModal(false)}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M4 4l8 8M12 4l-8 8"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="rule-modal__content">
+                    <div className="rule-modal__field">
+                      <label className="rule-modal__label">Title</label>
+                      <input
+                        type="text"
+                        className="rule-modal__input"
+                        placeholder="Enter rule title"
+                        value={ruleForm.title}
+                        onChange={(e) => setRuleForm({ ...ruleForm, title: e.target.value })}
+                      />
+                    </div>
+                    <div className="rule-modal__field">
+                      <label className="rule-modal__label">Description</label>
+                      <div className="rich-editor">
+                        <div className="rich-editor__toolbar">
+                          <button 
+                            type="button"
+                            className="rich-editor__btn"
+                            title="Bold - wraps selected text or inserts placeholder"
+                            onClick={() => {
+                              const textarea = document.getElementById('rule-description') as HTMLTextAreaElement;
+                              if (textarea) {
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = ruleForm.description;
+                                const selected = text.substring(start, end);
+                                const replacement = selected ? `**${selected}**` : '**bold**';
+                                const newText = text.substring(0, start) + replacement + text.substring(end);
+                                setRuleForm({ ...ruleForm, description: newText });
+                                setTimeout(() => {
+                                  textarea.focus();
+                                  const newPos = start + replacement.length;
+                                  textarea.setSelectionRange(newPos, newPos);
+                                }, 0);
+                              }
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M4 2h5a3 3 0 012.1 5.2A3.5 3.5 0 019.5 14H4V2zm2 5h3a1 1 0 100-2H6v2zm0 5h3.5a1.5 1.5 0 000-3H6v3z"/>
+                            </svg>
+                          </button>
+                          <button 
+                            type="button"
+                            className="rich-editor__btn"
+                            title="Italic - wraps selected text or inserts placeholder"
+                            onClick={() => {
+                              const textarea = document.getElementById('rule-description') as HTMLTextAreaElement;
+                              if (textarea) {
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = ruleForm.description;
+                                const selected = text.substring(start, end);
+                                const replacement = selected ? `_${selected}_` : '_italic_';
+                                const newText = text.substring(0, start) + replacement + text.substring(end);
+                                setRuleForm({ ...ruleForm, description: newText });
+                                setTimeout(() => {
+                                  textarea.focus();
+                                  const newPos = start + replacement.length;
+                                  textarea.setSelectionRange(newPos, newPos);
+                                }, 0);
+                              }
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M6 2h6v2h-2l-2 8h2v2H4v-2h2l2-8H6V2z"/>
+                            </svg>
+                          </button>
+                          <button 
+                            type="button"
+                            className="rich-editor__btn"
+                            title="Underline - wraps selected text or inserts placeholder"
+                            onClick={() => {
+                              const textarea = document.getElementById('rule-description') as HTMLTextAreaElement;
+                              if (textarea) {
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = ruleForm.description;
+                                const selected = text.substring(start, end);
+                                const replacement = selected ? `__${selected}__` : '__underline__';
+                                const newText = text.substring(0, start) + replacement + text.substring(end);
+                                setRuleForm({ ...ruleForm, description: newText });
+                                setTimeout(() => {
+                                  textarea.focus();
+                                  const newPos = start + replacement.length;
+                                  textarea.setSelectionRange(newPos, newPos);
+                                }, 0);
+                              }
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M4 2v6a4 4 0 108 0V2h2v6a6 6 0 11-12 0V2h2zM2 15h12v-1H2v1z"/>
+                            </svg>
+                          </button>
+                          <div className="rich-editor__divider"></div>
+                          <button 
+                            type="button"
+                            className="rich-editor__btn"
+                            title="Bullet List - adds bullet point"
+                            onClick={() => {
+                              const textarea = document.getElementById('rule-description') as HTMLTextAreaElement;
+                              if (textarea) {
+                                const start = textarea.selectionStart;
+                                const text = ruleForm.description;
+                                const beforeCursor = text.substring(0, start);
+                                const needsNewline = beforeCursor.length > 0 && !beforeCursor.endsWith('\n');
+                                const insertion = (needsNewline ? '\n' : '') + '• ';
+                                const newText = text.substring(0, start) + insertion + text.substring(start);
+                                setRuleForm({ ...ruleForm, description: newText });
+                                setTimeout(() => {
+                                  textarea.focus();
+                                  const newPos = start + insertion.length;
+                                  textarea.setSelectionRange(newPos, newPos);
+                                }, 0);
+                              }
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                              <circle cx="2.5" cy="4" r="1.5"/>
+                              <circle cx="2.5" cy="8" r="1.5"/>
+                              <circle cx="2.5" cy="12" r="1.5"/>
+                              <path d="M6 3h9v2H6zM6 7h9v2H6zM6 11h9v2H6z"/>
+                            </svg>
+                          </button>
+                          <button 
+                            type="button"
+                            className="rich-editor__btn"
+                            title="Numbered List - adds numbered item"
+                            onClick={() => {
+                              const textarea = document.getElementById('rule-description') as HTMLTextAreaElement;
+                              if (textarea) {
+                                const start = textarea.selectionStart;
+                                const text = ruleForm.description;
+                                const beforeCursor = text.substring(0, start);
+                                const lines = beforeCursor.split('\n');
+                                let lastNum = 0;
+                                for (const line of lines) {
+                                  const match = line.match(/^(\d+)\./);
+                                  if (match) lastNum = parseInt(match[1]);
+                                }
+                                const needsNewline = beforeCursor.length > 0 && !beforeCursor.endsWith('\n');
+                                const insertion = (needsNewline ? '\n' : '') + `${lastNum + 1}. `;
+                                const newText = text.substring(0, start) + insertion + text.substring(start);
+                                setRuleForm({ ...ruleForm, description: newText });
+                                setTimeout(() => {
+                                  textarea.focus();
+                                  const newPos = start + insertion.length;
+                                  textarea.setSelectionRange(newPos, newPos);
+                                }, 0);
+                              }
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M2 3h1v3H2V5H1V4h1V3zM1 8h2v.5H2v1h1V10H1V8zM1 12v.5h1v.5H1v1h2v-3H1v1zM5 3h10v2H5zM5 7h10v2H5zM5 11h10v2H5z"/>
+                            </svg>
+                          </button>
+                          <div className="rich-editor__divider"></div>
+                          <button 
+                            type="button"
+                            className="rich-editor__btn"
+                            title="Link - inserts link with URL"
+                            onClick={() => {
+                              const textarea = document.getElementById('rule-description') as HTMLTextAreaElement;
+                              const url = prompt('Enter URL:');
+                              if (url && textarea) {
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = ruleForm.description;
+                                const selected = text.substring(start, end);
+                                const linkText = selected || 'link text';
+                                const replacement = `[${linkText}](${url})`;
+                                const newText = text.substring(0, start) + replacement + text.substring(end);
+                                setRuleForm({ ...ruleForm, description: newText });
+                                setTimeout(() => {
+                                  textarea.focus();
+                                  const newPos = start + replacement.length;
+                                  textarea.setSelectionRange(newPos, newPos);
+                                }, 0);
+                              }
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M7 9l2-2M5.5 10.5l-1 1a2 2 0 002.8 2.8l1-1M10.5 5.5l1-1a2 2 0 00-2.8-2.8l-1 1"/>
+                            </svg>
+                          </button>
+                        </div>
+                        <textarea
+                          id="rule-description"
+                          className="rich-editor__textarea"
+                          placeholder="Enter description..."
+                          value={ruleForm.description}
+                          onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    {/* Only show compliance check when editing an existing rule that has it */}
+                    {editingRule && editingRule.hasComplianceCheck && (
+                      <div className="rule-modal__field">
+                        <label className="rule-modal__checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={ruleForm.hasComplianceCheck}
+                            onChange={(e) => setRuleForm({ ...ruleForm, hasComplianceCheck: e.target.checked })}
+                          />
+                          <span>Has compliance check (Frame & Resolution)</span>
+                        </label>
+                      </div>
+                    )}
+                    <div className="rule-modal__field">
+                      <label className="rule-modal__label">Action Buttons</label>
+                      <div className="rule-modal__links">
+                        {ruleForm.links.map((link, i) => (
+                          <div key={i} className="rule-modal__link-item">
+                            <span>{link.label}</span>
+                            <button onClick={() => removeLinkFromRule(i)}>
+                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M4 4l8 8M12 4l-8 8"/>
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="rule-modal__add-link">
+                        <input
+                          type="text"
+                          placeholder="Button label"
+                          value={newLinkLabel}
+                          onChange={(e) => setNewLinkLabel(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && addLinkToRule()}
+                        />
+                        <button onClick={addLinkToRule}>Add</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rule-modal__footer">
+                    <button className="rule-modal__cancel" onClick={() => setShowRuleModal(false)}>Cancel</button>
+                    <button className="rule-modal__save" onClick={saveRule} disabled={!ruleForm.title.trim()}>
+                      {editingRule ? 'Save Changes' : 'Add Rule'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirmRule && (
+              <div className="delete-confirm-overlay" onClick={() => setDeleteConfirmRule(null)}>
+                <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="delete-confirm-modal__icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/>
+                    </svg>
+                  </div>
+                  <h3 className="delete-confirm-modal__title">Delete Rule?</h3>
+                  <p className="delete-confirm-modal__message">
+                    This will permanently delete "{housekeepingRules.find(r => r.id === deleteConfirmRule)?.title}". This action cannot be undone.
+                  </p>
+                  <div className="delete-confirm-modal__actions">
+                    <button className="delete-confirm-modal__cancel" onClick={() => setDeleteConfirmRule(null)}>
+                      Cancel
+                    </button>
+                    <button className="delete-confirm-modal__delete" onClick={confirmDeleteRule}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : view === 'home' && (activeCategory === 'team-housekeeping' || showWelcomeScreen) ? (
+          <div className="welcome-screen">
+            {/* Dynamic Accordion Cards based on housekeepingRules */}
+            <div className="welcome-screen__accordions">
+              {housekeepingRules.map((rule) => (
+                <div key={rule.id} className={`welcome-accordion ${expandedSections[rule.id] ? 'welcome-accordion--expanded' : ''}`}>
+                  <button 
+                    className="welcome-accordion__header"
+                    onClick={() => toggleSection(rule.id)}
+                  >
+                    <h3 className="welcome-accordion__title">{rule.title}</h3>
+                    <svg 
+                      className="welcome-accordion__chevron" 
+                      width="16" 
+                      height="16" 
+                      viewBox="0 0 16 16" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="1.5"
+                    >
+                      <path d="M4 6l4 4 4-4"/>
+                    </svg>
+                  </button>
+                  <div className="welcome-accordion__content">
+                    <div className="welcome-accordion__content-inner">
+                      <div className="welcome-accordion__text">{renderMarkdown(rule.description)}</div>
+                      
+                      {/* Compliance Check Button (for rules with hasComplianceCheck) */}
+                      {rule.hasComplianceCheck && (
+                        <>
+                          <button 
+                            className="welcome-accordion__check-btn"
+                            onClick={() => checkFrameCompliance()}
+                            disabled={frameDetailsLoading}
+                          >
+                            {frameDetailsLoading ? 'Checking...' : 'Check selected frame'}
+                          </button>
+
+                          {/* Inline Compliance Results */}
+                          {frameDetailsError && (
+                            <div className="welcome-accordion__error">
+                              {frameDetailsError}
+                            </div>
+                          )}
+
+                          {frameDetails && (
+                            <div className="welcome-accordion__compliance">
+                              <div className="compliance-header">
+                                <span>GUIDELINES COMPLIANCE</span>
+                                <button 
+                                  className="compliance-header__dismiss"
+                                  onClick={() => setFrameDetails(null)}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                    <path d="M4 4l8 8M12 4l-8 8"/>
+                                  </svg>
+                                </button>
+                              </div>
+                              
+                              <div className={`compliance-item ${frameDetails.is16x9 ? 'compliance-item--success' : 'compliance-item--error'}`}>
+                                <div className={`compliance-item__icon ${frameDetails.is16x9 ? 'compliance-item__icon--success' : 'compliance-item__icon--error'}`}>
+                                  {frameDetails.is16x9 ? (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M20 6L9 17l-5-5"/>
+                                    </svg>
+                                  ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <circle cx="12" cy="12" r="10"/>
+                                      <path d="M12 8v4M12 16h.01"/>
+                                    </svg>
+                                  )}
+                                </div>
+                                <div className="compliance-item__content">
+                                  <div className="compliance-item__title">16:9 Aspect Ratio</div>
+                                  <div className="compliance-item__status">{frameDetails.is16x9 ? 'Compliant' : `Current: ${frameDetails.aspectRatio}`}</div>
+                                </div>
+                              </div>
+
+                              <div className={`compliance-item ${frameDetails.hasAutoLayout ? 'compliance-item--success' : 'compliance-item--error'}`}>
+                                <div className={`compliance-item__icon ${frameDetails.hasAutoLayout ? 'compliance-item__icon--success' : 'compliance-item__icon--error'}`}>
+                                  {frameDetails.hasAutoLayout ? (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M20 6L9 17l-5-5"/>
+                                    </svg>
+                                  ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <circle cx="12" cy="12" r="10"/>
+                                      <path d="M12 8v4M12 16h.01"/>
+                                    </svg>
+                                  )}
+                                </div>
+                                <div className="compliance-item__content">
+                                  <div className="compliance-item__title">Auto Layout</div>
+                                  <div className="compliance-item__status">{frameDetails.hasAutoLayout ? 'Enabled' : 'Not enabled'}</div>
+                                </div>
+                              </div>
+
+                              <div className={`compliance-item ${frameDetails.matchesRecommendedResolution ? 'compliance-item--success' : 'compliance-item--error'}`}>
+                                <div className={`compliance-item__icon ${frameDetails.matchesRecommendedResolution ? 'compliance-item__icon--success' : 'compliance-item__icon--error'}`}>
+                                  {frameDetails.matchesRecommendedResolution ? (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M20 6L9 17l-5-5"/>
+                                    </svg>
+                                  ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <circle cx="12" cy="12" r="10"/>
+                                      <path d="M12 8v4M12 16h.01"/>
+                                    </svg>
+                                  )}
+                                </div>
+                                <div className="compliance-item__content">
+                                  <div className="compliance-item__title">Recommended Resolution</div>
+                                  <div className="compliance-item__status">
+                                    {frameDetails.matchesRecommendedResolution 
+                                      ? `${frameDetails.width}×${frameDetails.height}` 
+                                      : `Current: ${frameDetails.width}×${frameDetails.height}`}
+                                  </div>
+                                  <div className="compliance-item__hint">Recommended for web: 1600×900 or 1920×1080</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Action Buttons (for rules with links) */}
+                      {rule.links.length > 0 && (
+                        <div className="welcome-accordion__options">
+                          {rule.links.map((link, i) => (
+                            <button 
+                              key={i}
+                              className="welcome-accordion__option"
+                              onClick={() => setView('scaffold')}
+                            >
+                              {link.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : templates.length === 0 ? (
           <EmptyState

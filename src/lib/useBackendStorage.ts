@@ -276,6 +276,63 @@ export function useCloudPocs() {
   return { pocs, setPocs: save, loading };
 }
 
+/**
+ * Hook for housekeeping rules (shared team-wide)
+ */
+export function useHousekeepingRules() {
+  const defaultRules = [
+    { 
+      id: 'frame-guidelines', 
+      title: 'Frame & Resolution Guidelines',
+      description: 'All designs are made at 16:9 aspect ratio and built with Auto Layout for our screens. Additionally, it is strongly recommended to build designs to 1600×900 or 1920×1080 resolutions, these are 16:9 aspect ratio resolutions.',
+      hasComplianceCheck: true,
+      links: []
+    },
+    { 
+      id: 'page-structure', 
+      title: 'Page Structure',
+      description: 'Starting with a blank Figma file? Use page structures to get your team\'s way of maintaining Figma files supaaaa fast! Need to customize? Contact your team POCs to edit or add page structures.',
+      hasComplianceCheck: false,
+      links: [
+        { label: 'Exploratory Work', action: 'scaffold' },
+        { label: 'Release Work', action: 'scaffold' }
+      ]
+    },
+    { 
+      id: 'starter-kit-info', 
+      title: 'What is part of Starter Kit and whats not',
+      description: 'Starter Kit contains only defined, team-approved components to help you get started fast.',
+      hasComplianceCheck: false,
+      links: []
+    }
+  ];
+  
+  const [rules, setRules] = useState<any[]>(defaultRules);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiRequest<any[]>('/api/housekeeping-rules')
+      .then(loaded => setRules(loaded.length > 0 ? loaded : defaultRules))
+      .catch(() => setRules(defaultRules))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = useCallback(async (newRules: any[]) => {
+    setRules(newRules);
+    try {
+      await apiRequest('/api/housekeeping-rules', {
+        method: 'POST',
+        body: JSON.stringify({ rules: newRules }),
+      });
+      console.log('✓ Housekeeping rules saved:', newRules.length);
+    } catch (error) {
+      console.error('✗ Failed to save housekeeping rules:', error);
+    }
+  }, []);
+
+  return { rules, setRules: save, loading };
+}
+
 // ============================================================================
 // USER-SPECIFIC DATA HOOKS (Per Figma User)
 // ============================================================================

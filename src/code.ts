@@ -868,6 +868,84 @@ figma.ui.onmessage = async (msg) => {
     }
     return;
   }
+
+  // ============ GET FRAME DETAILS ============
+  if (msg.type === 'GET_FRAME_DETAILS') {
+    try {
+      const selection = figma.currentPage.selection;
+      
+      if (selection.length === 0) {
+        figma.ui.postMessage({ 
+          type: 'FRAME_DETAILS_RESULT', 
+          error: 'No frame selected. Please select a frame, component, or instance.' 
+        });
+        return;
+      }
+      
+      const node = selection[0];
+      
+      // Check if it's a frame, component, or instance
+      if (node.type !== 'FRAME' && node.type !== 'COMPONENT' && node.type !== 'INSTANCE') {
+        figma.ui.postMessage({ 
+          type: 'FRAME_DETAILS_RESULT', 
+          error: 'Selected node is not a frame, component, or instance.' 
+        });
+        return;
+      }
+      
+      // Calculate aspect ratio
+      const aspectRatio = node.width / node.height;
+      const is16x9 = Math.abs(aspectRatio - 16/9) < 0.01; // Allow small tolerance
+      
+      // Check if it has auto layout
+      const hasAutoLayout = 'layoutMode' in node && 
+                           (node.layoutMode === 'HORIZONTAL' || node.layoutMode === 'VERTICAL');
+      
+      // Check recommended resolutions
+      const recommendedResolutions = [
+        { width: 1600, height: 900 },
+        { width: 1920, height: 1080 }
+      ];
+      
+      const matchesRecommended = recommendedResolutions.some(res => 
+        node.width === res.width && node.height === res.height
+      );
+      
+      // Get layout properties if available
+      const layoutProps = hasAutoLayout ? {
+        layoutMode: node.layoutMode,
+        primaryAxisSizingMode: node.primaryAxisSizingMode,
+        counterAxisSizingMode: node.counterAxisSizingMode,
+        paddingLeft: node.paddingLeft,
+        paddingRight: node.paddingRight,
+        paddingTop: node.paddingTop,
+        paddingBottom: node.paddingBottom,
+        itemSpacing: node.itemSpacing,
+      } : null;
+      
+      figma.ui.postMessage({
+        type: 'FRAME_DETAILS_RESULT',
+        details: {
+          name: node.name,
+          type: node.type,
+          width: Math.round(node.width),
+          height: Math.round(node.height),
+          aspectRatio: aspectRatio.toFixed(2),
+          is16x9: is16x9,
+          hasAutoLayout: hasAutoLayout,
+          matchesRecommendedResolution: matchesRecommended,
+          layoutProps: layoutProps,
+        }
+      });
+      
+    } catch (error) {
+      figma.ui.postMessage({ 
+        type: 'FRAME_DETAILS_RESULT', 
+        error: `Error getting frame details: ${error}` 
+      });
+    }
+    return;
+  }
 };
 
 // Listen for selection changes to update branding
