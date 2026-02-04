@@ -283,6 +283,27 @@ app.post('/api/cloud-pocs', async (req, res) => {
   }
 });
 
+// ---------- Housekeeping Rules ----------
+app.get('/api/housekeeping-rules', async (req, res) => {
+  try {
+    const rules = await db.getSharedData('housekeeping-rules') || [];
+    res.json(rules);
+  } catch (error) {
+    console.error('Error fetching housekeeping rules:', error);
+    res.status(500).json({ error: 'Failed to fetch housekeeping rules' });
+  }
+});
+
+app.post('/api/housekeeping-rules', async (req, res) => {
+  try {
+    await db.saveSharedData('housekeeping-rules', req.body.rules);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving housekeeping rules:', error);
+    res.status(500).json({ error: 'Failed to save housekeeping rules' });
+  }
+});
+
 // ============================================================================
 // USER-SPECIFIC DATA ENDPOINTS (Per Figma User)
 // ============================================================================
