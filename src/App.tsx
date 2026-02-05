@@ -413,6 +413,18 @@ export function App() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showTrashModal, setShowTrashModal] = useState(false);
   
+  // Cloud trash - stores deleted clouds with all their associated data
+  const [deletedClouds, setDeletedClouds] = useState<Array<{
+    cloud: any;
+    templates: any[];
+    categories: any[];
+    links: any[];
+    pocs: any[];
+    deletedAt: number;
+  }>>([]);
+  const [showCloudTrashModal, setShowCloudTrashModal] = useState(false);
+  const [deleteCloudConfirmId, setDeleteCloudConfirmId] = useState<string | null>(null);
+  
   // Saved templates/variants (simple bookmark feature)
   // Format: [{templateId: string, variantKey?: string}, ...]
   // savedItems now comes from useSavedItems hook above
@@ -1647,6 +1659,119 @@ export function App() {
     setCloudPOCs(newPOCs);
   }
   
+  // Delete cloud - moves to trash with all associated data
+  function deleteCloud(cloudId: string) {
+    const cloud = allClouds.find(c => c.id === cloudId);
+    if (!cloud) return;
+    
+    // Gather all associated data
+    const cloudTemplates = templates.filter(t => t.cloudId === cloudId);
+    const cloudCats = cloudCategories[cloudId] || [];
+    const cloudLinks = cloudFigmaLinks[cloudId] || [];
+    const cloudPocsList = cloudPOCs[cloudId] || [];
+    
+    // Add to trash
+    setDeletedClouds(prev => [...prev, {
+      cloud,
+      templates: cloudTemplates,
+      categories: cloudCats,
+      links: cloudLinks,
+      pocs: cloudPocsList,
+      deletedAt: Date.now(),
+    }]);
+    
+    // Remove from active data
+    if (cloud.isCustom) {
+      setCustomClouds(customClouds.filter(c => c.id !== cloudId));
+    } else {
+      // For default clouds, just hide them
+      setHiddenClouds([...hiddenClouds, cloudId]);
+    }
+    
+    // Soft delete templates (mark as deleted)
+    const updatedTemplates = templates.map(t => 
+      t.cloudId === cloudId ? { ...t, deleted: true, deletedAt: Date.now() } : t
+    );
+    setTemplates(updatedTemplates);
+    
+    // Clear associated data
+    const newCategories = { ...cloudCategories };
+    delete newCategories[cloudId];
+    setCloudCategories(newCategories);
+    
+    const newLinks = { ...cloudFigmaLinks };
+    delete newLinks[cloudId];
+    setCloudFigmaLinks(newLinks);
+    
+    const newPOCs = { ...cloudPOCs };
+    delete newPOCs[cloudId];
+    setCloudPOCs(newPOCs);
+    
+    // If deleted cloud was default, switch to first available
+    if (defaultCloud === cloudId) {
+      const firstAvailable = allClouds.find(c => c.id !== cloudId && !hiddenClouds.includes(c.id));
+      if (firstAvailable) {
+        setDefaultCloud(firstAvailable.id);
+        setSelectedClouds([firstAvailable.id]);
+      }
+    }
+    
+    setDeleteCloudConfirmId(null);
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${cloud.name} moved to trash` } }, '*');
+  }
+  
+  // Restore cloud from trash with all associated data
+  function restoreCloud(deletedCloudData: typeof deletedClouds[0]) {
+    const { cloud, templates: cloudTemplates, categories, links, pocs } = deletedCloudData;
+    
+    // Restore cloud
+    if (cloud.isCustom) {
+      setCustomClouds([...customClouds, cloud]);
+    } else {
+      setHiddenClouds(hiddenClouds.filter(id => id !== cloud.id));
+    }
+    
+    // Restore templates
+    const restoredTemplateIds = new Set(cloudTemplates.map(t => t.id));
+    const updatedTemplates = templates.map(t => 
+      restoredTemplateIds.has(t.id) ? { ...t, deleted: false, deletedAt: undefined } : t
+    );
+    setTemplates(updatedTemplates);
+    
+    // Restore categories
+    if (categories.length > 0) {
+      setCloudCategories({ ...cloudCategories, [cloud.id]: categories });
+    }
+    
+    // Restore links
+    if (links.length > 0) {
+      setCloudFigmaLinks({ ...cloudFigmaLinks, [cloud.id]: links });
+    }
+    
+    // Restore POCs
+    if (pocs.length > 0) {
+      setCloudPOCs({ ...cloudPOCs, [cloud.id]: pocs });
+    }
+    
+    // Remove from trash
+    setDeletedClouds(deletedClouds.filter(d => d.cloud.id !== cloud.id));
+    
+    parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${cloud.name} restored` } }, '*');
+  }
+  
+  // Permanently delete cloud from trash
+  function permanentlyDeleteCloud(cloudId: string) {
+    const cloudData = deletedClouds.find(d => d.cloud.id === cloudId);
+    if (!cloudData) return;
+    
+    // Permanently delete templates
+    const templateIds = new Set(cloudData.templates.map(t => t.id));
+    setTemplates(templates.filter(t => !templateIds.has(t.id)));
+    
+    // Remove from trash
+    setDeletedClouds(deletedClouds.filter(d => d.cloud.id !== cloudId));
+  }
+  
   function resetAllSettings() {
     if (confirm('Reset all settings to default? This will:\n• Show all clouds\n• Reset categories to default\n• Clear custom clouds\n• Reset default cloud\n• Reset status symbols\n• Reset page structure\n• Clear cloud POCs')) {
       setHiddenClouds([]);
@@ -2198,7 +2323,7 @@ export function App() {
                       <div className="header__dropdown header__dropdown--compact">
                         <button 
                           className="header__dropdown-menu-item"
-                          onClick={() => { setView('settings'); setShowMoreMenu(false); }}
+                          onClick={() => { setView('settings'); setExpandedCloudId(defaultCloud); setShowMoreMenu(false); }}
                         >
                           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="2" y="3" width="12" height="2" rx="0.5"/>
@@ -2357,6 +2482,7 @@ export function App() {
                       className="header__poc-add-link"
                       onClick={() => {
                         setView('settings');
+                        setExpandedCloudId(defaultCloud);
                         // Scroll to POC section if needed
                         setTimeout(() => {
                           const pocSection = document.querySelector('.settings-cloud-row__pocs');
@@ -3123,9 +3249,20 @@ export function App() {
                 </button>
                 <span className="settings-header__title">Manage Clouds and Sections</span>
               </div>
-              <button className="settings-header__reset" onClick={resetAllSettings}>
-                Reset All
-              </button>
+              <div className="settings-header__actions">
+                {deletedClouds.length > 0 && (
+                  <button className="settings-header__trash" onClick={() => setShowCloudTrashModal(true)}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                      <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                    </svg>
+                    Trash ({deletedClouds.length})
+                  </button>
+                )}
+                <button className="settings-header__reset" onClick={resetAllSettings}>
+                  Reset All
+                </button>
+              </div>
             </div>
             <div className="settings-section">
               <div className="settings-cloud-list">
@@ -3239,6 +3376,22 @@ export function App() {
                                   {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
                                 </svg>
                               </button>
+                              {/* Delete cloud button - only for custom clouds or if not default */}
+                              {(cloud.isCustom || defaultCloud !== cloud.id) && (
+                                <button
+                                  className="settings-cloud-row__delete"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteCloudConfirmId(cloud.id);
+                                  }}
+                                  title="Delete cloud"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                    <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                                  </svg>
+                                </button>
+                              )}
                           </div>
                             
                             {/* Nested Categories - only show when expanded */}
@@ -4719,6 +4872,81 @@ export function App() {
                           variant="destructive" 
                           size="small"
                           onClick={() => permanentlyDeleteTemplate(template.id)}
+                        >
+                          Delete Forever
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Cloud Delete Confirmation Modal */}
+      {deleteCloudConfirmId && (
+        <div className="modal-overlay" onClick={() => setDeleteCloudConfirmId(null)}>
+          <div className="modal modal--small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Delete Cloud?</h3>
+              <button className="modal__close" onClick={() => setDeleteCloudConfirmId(null)}>×</button>
+            </div>
+            <div className="modal__body">
+              <p className="modal__text">
+                This will move "<strong>{allClouds.find(c => c.id === deleteCloudConfirmId)?.name}</strong>" and all its assets, categories, links, and POCs to trash. You can restore it later.
+              </p>
+            </div>
+            <div className="modal__footer">
+              <Button variant="neutral" onClick={() => setDeleteCloudConfirmId(null)}>Cancel</Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => deleteCloud(deleteCloudConfirmId)}
+              >
+                Move to Trash
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Cloud Trash Modal */}
+      {showCloudTrashModal && (
+        <div className="modal-overlay" onClick={() => setShowCloudTrashModal(false)}>
+          <div className="modal modal--trash" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Cloud Trash ({deletedClouds.length})</h3>
+              <button className="modal__close" onClick={() => setShowCloudTrashModal(false)}>×</button>
+            </div>
+            <div className="modal__body">
+              {deletedClouds.length === 0 ? (
+                <p className="modal__text">No deleted clouds</p>
+              ) : (
+                <div className="trash-list">
+                  {deletedClouds.map(deletedCloud => (
+                    <div key={deletedCloud.cloud.id} className="trash-item">
+                      <div className="trash-item__preview" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img src={deletedCloud.cloud.icon} alt={deletedCloud.cloud.name} style={{ width: 48, height: 48, objectFit: 'contain' }} />
+                      </div>
+                      <div className="trash-item__info">
+                        <span className="trash-item__name">{deletedCloud.cloud.name}</span>
+                        <span className="trash-item__category">
+                          {deletedCloud.templates.length} assets, {deletedCloud.categories.length} categories
+                        </span>
+                      </div>
+                      <div className="trash-item__actions">
+                        <Button 
+                          variant="brand-outline" 
+                          size="small"
+                          onClick={() => restoreCloud(deletedCloud)}
+                        >
+                          Restore All
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          size="small"
+                          onClick={() => permanentlyDeleteCloud(deletedCloud.cloud.id)}
                         >
                           Delete Forever
                         </Button>

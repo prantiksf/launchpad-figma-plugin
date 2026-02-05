@@ -2343,6 +2343,31 @@ fieldset.slds-form-element legend {
   color: var(--slds-g-color-neutral-base-10);
 }
 
+.settings-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-header__trash {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--slds-g-color-neutral-base-50);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.settings-header__trash:hover {
+  background: var(--slds-g-color-neutral-base-95);
+  color: var(--slds-g-color-neutral-base-30);
+}
+
 .settings-header__reset {
   background: none;
   border: none;
@@ -2352,7 +2377,6 @@ fieldset.slds-form-element legend {
   padding: 4px 8px;
   border-radius: 4px;
   transition: all 0.15s ease;
-  margin-right: 6px;
 }
 
 .settings-header__reset:hover {
@@ -2939,6 +2963,24 @@ fieldset.slds-form-element legend {
   flex-shrink: 0;
 }
 
+.settings-cloud-row__delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slds-g-color-neutral-base-60);
+  margin-left: 4px;
+}
+
+.settings-cloud-row__delete:hover {
+  background: var(--slds-g-color-error-base-95);
+  color: var(--slds-g-color-error-base-40);
+}
 
 .settings-cloud-row__categories {
   margin-top: 4px;
@@ -6077,6 +6119,24 @@ fieldset.slds-form-element legend {
 
 .app.dark-mode .settings-header__title {
   color: #e5e5e5;
+}
+
+.app.dark-mode .settings-header__trash {
+  color: #888;
+}
+
+.app.dark-mode .settings-header__trash:hover {
+  background: #333;
+  color: #b3b3b3;
+}
+
+.app.dark-mode .settings-cloud-row__delete {
+  color: #666;
+}
+
+.app.dark-mode .settings-cloud-row__delete:hover {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
 }
 
 .app.dark-mode .settings-section {
