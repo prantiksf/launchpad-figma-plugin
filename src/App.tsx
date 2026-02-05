@@ -1077,13 +1077,28 @@ export function App() {
     if (suggestion.type === 'category' && suggestion.categoryId) {
       // Navigate to category tab
       setActiveCategory(suggestion.categoryId);
+      // Scroll pill into view
+      setTimeout(() => {
+        const pillElement = document.querySelector(`[data-category="${suggestion.categoryId}"]`);
+        if (pillElement) {
+          pillElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }, 100);
     } else if (suggestion.templateId) {
       // Navigate to template's category and scroll to it
       if (suggestion.categoryId) {
         setActiveCategory(suggestion.categoryId);
       }
-      // Scroll to template after a short delay for DOM to update
+      // Scroll to template and pill after a short delay for DOM to update
       setTimeout(() => {
+        // Scroll pill into view first
+        if (suggestion.categoryId) {
+          const pillElement = document.querySelector(`[data-category="${suggestion.categoryId}"]`);
+          if (pillElement) {
+            pillElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          }
+        }
+        // Then scroll to template
         const element = document.getElementById(`template-${suggestion.templateId}`);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1093,7 +1108,7 @@ export function App() {
             element.classList.remove('template-item--highlighted');
           }, 2000);
         }
-      }, 100);
+      }, 150);
     }
   };
   
@@ -1242,24 +1257,13 @@ export function App() {
     // Switch to the cloud and category where the template was saved
     setSelectedClouds([formCloud]);
     setActiveCategory(formCategory);
+    setShowWelcomeScreen(false); // Ensure welcome screen is hidden to show templates
     
     // Set as default cloud if not already set
     const currentDefaultCloud = selectedClouds[0];
     if (currentDefaultCloud !== formCloud) {
       setDefaultCloud(formCloud);
-      setDefaultCloud(formCloud);
     }
-    
-    // Scroll to the new template after render
-    setTimeout(() => {
-      const element = document.getElementById(`template-${newTemplateId}`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Brief highlight effect
-        element.classList.add('template-item--highlight');
-        setTimeout(() => element.classList.remove('template-item--highlight'), 2000);
-      }
-    }, 100);
     
     // Save to backend
     setTemplates(updated);
@@ -1267,6 +1271,24 @@ export function App() {
     // Show toast and go home
     parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `"${capturedComponent.name}" added!` } }, '*');
     setView('home');
+    
+    // Scroll to the new template and category pill after view transition completes
+    setTimeout(() => {
+      // Scroll category pill into view first
+      const pillElement = document.querySelector(`[data-category="${formCategory}"]`);
+      if (pillElement) {
+        pillElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+      
+      // Then scroll to the template
+      const element = document.getElementById(`template-${newTemplateId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Brief highlight effect
+        element.classList.add('template-item--highlight');
+        setTimeout(() => element.classList.remove('template-item--highlight'), 2000);
+      }
+    }, 300);
   }
 
   // Insert template to canvas
@@ -1456,6 +1478,20 @@ export function App() {
     
     // Auto-switch to the new category to show the moved item
     setActiveCategory(newCategory);
+    
+    // Scroll pill and template into view
+    setTimeout(() => {
+      const pillElement = document.querySelector(`[data-category="${newCategory}"]`);
+      if (pillElement) {
+        pillElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+      const element = document.getElementById(`template-${templateId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('template-item--highlight');
+        setTimeout(() => element.classList.remove('template-item--highlight'), 2000);
+      }
+    }, 200);
   }
 
   // Export/Import functions removed - data is now automatically synced via backend
@@ -2194,7 +2230,7 @@ export function App() {
                           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                           </svg>
-                          Add pattern
+                          Add asset
                         </button>
                         <button 
                           className="header__dropdown-menu-item"
