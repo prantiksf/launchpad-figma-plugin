@@ -477,18 +477,20 @@ export function App() {
           clearTimeout(migrationTimeout);
 
           try {
-            console.log('🔄 Migrating data from clientStorage to backend...');
+            console.log('🔄 Checking migration from clientStorage to backend...');
             
-            // Migrate templates
+            // IMPORTANT: Only migrate if backend is empty to avoid overwriting
+            // Backend data takes precedence over local clientStorage
+            
+            // Skip template migration - backend is the source of truth now
+            // Templates are loaded from backend via useTemplates hook
             if (msg.templates && msg.templates.length > 0) {
-              setTemplates(msg.templates);
-              console.log(`✓ Migrated ${msg.templates.length} templates`);
+              console.log(`⏭️ Skipping template migration (${msg.templates.length} local) - backend is source of truth`);
             }
 
-            // Migrate saved items
+            // Skip saved items migration - backend is the source of truth
             if (msg.savedItems && msg.savedItems.length > 0) {
-              setSavedItems(msg.savedItems);
-              console.log(`✓ Migrated ${msg.savedItems.length} saved items`);
+              console.log(`⏭️ Skipping saved items migration (${msg.savedItems.length} local) - backend is source of truth`);
             }
 
             // Migrate figma links
