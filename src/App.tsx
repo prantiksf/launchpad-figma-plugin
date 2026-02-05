@@ -411,6 +411,7 @@ export function App() {
   
   // Delete confirmation
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showTrashModal, setShowTrashModal] = useState(false);
   
   // Saved templates/variants (simple bookmark feature)
   // Format: [{templateId: string, variantKey?: string}, ...]
@@ -1094,8 +1095,11 @@ export function App() {
     }
   };
   
-  // Filter templates
+  // Filter templates (exclude deleted)
   const filteredTemplates = templates.filter(t => {
+    // Exclude deleted templates
+    if (t.deleted) return false;
+    
     const matchCloud = selectedClouds.includes(t.cloudId);
     
     // Apply search filter if there's a search query - ignores category
@@ -1362,20 +1366,40 @@ export function App() {
     }));
   }
 
-  // Delete template (with confirmation)
+  // Delete template (soft delete - moves to trash)
   function confirmDeleteTemplate(id: string) {
     setDeleteConfirmId(id);
     setMoveMenuOpen(null);
   }
   
   function deleteTemplate(id: string) {
-    const updated = templates.filter(t => t.id !== id);
+    // Soft delete - mark as deleted instead of removing
+    const updated = templates.map(t => 
+      t.id === id ? { ...t, deleted: true, deletedAt: Date.now() } : t
+    );
     setTemplates(updated);
     // Also remove from saved (all variants of this template)
     const updatedSaved = savedItems.filter(item => item.templateId !== id);
     setSavedItems(updatedSaved);
     setDeleteConfirmId(null);
   }
+  
+  // Restore deleted template
+  function restoreTemplate(id: string) {
+    const updated = templates.map(t => 
+      t.id === id ? { ...t, deleted: false, deletedAt: undefined } : t
+    );
+    setTemplates(updated);
+  }
+  
+  // Permanently delete template
+  function permanentlyDeleteTemplate(id: string) {
+    const updated = templates.filter(t => t.id !== id);
+    setTemplates(updated);
+  }
+  
+  // Get deleted templates
+  const deletedTemplates = templates.filter(t => t.deleted);
   
   // Save/Unsave template or variant
   function toggleSaveTemplate(templateId: string, variantKey?: string) {
@@ -2179,6 +2203,21 @@ export function App() {
                           </svg>
                           Create Pages
                         </button>
+                        {deletedTemplates.length > 0 && (
+                          <>
+                            <div className="header__dropdown-divider"></div>
+                            <button 
+                              className="header__dropdown-menu-item"
+                              onClick={() => { setShowTrashModal(true); setShowMoreMenu(false); }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                              </svg>
+                              Trash ({deletedTemplates.length})
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -4577,12 +4616,12 @@ export function App() {
         <div className="modal-overlay" onClick={() => setDeleteConfirmId(null)}>
           <div className="modal modal--small" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
-              <h3 className="modal__title">Delete Template?</h3>
+              <h3 className="modal__title">Move to Trash?</h3>
               <button className="modal__close" onClick={() => setDeleteConfirmId(null)}>×</button>
             </div>
             <div className="modal__body">
               <p className="modal__text">
-                Are you sure you want to delete "<strong>{templates.find(t => t.id === deleteConfirmId)?.name}</strong>"? This action cannot be undone.
+                "<strong>{templates.find(t => t.id === deleteConfirmId)?.name}</strong>" will be moved to trash. You can restore it later from the menu.
               </p>
             </div>
             <div className="modal__footer">
@@ -4591,8 +4630,66 @@ export function App() {
                 variant="destructive" 
                 onClick={() => deleteTemplate(deleteConfirmId)}
               >
-                Delete
+                Move to Trash
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Trash Modal */}
+      {showTrashModal && (
+        <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Trash ({deletedTemplates.length})</h3>
+              <button className="modal__close" onClick={() => setShowTrashModal(false)}>×</button>
+            </div>
+            <div className="modal__body">
+              {deletedTemplates.length === 0 ? (
+                <p className="modal__text">No deleted items</p>
+              ) : (
+                <div className="trash-list">
+                  {deletedTemplates.map(template => (
+                    <div key={template.id} className="trash-item">
+                      <div className="trash-item__info">
+                        <span className="trash-item__name">{template.name}</span>
+                        <span className="trash-item__category">{categoryLabels[template.category] || template.category}</span>
+                      </div>
+                      <div className="trash-item__actions">
+                        <Button 
+                          variant="brand-outline" 
+                          size="small"
+                          onClick={() => { restoreTemplate(template.id); }}
+                        >
+                          Restore
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          size="small"
+                          onClick={() => permanentlyDeleteTemplate(template.id)}
+                        >
+                          Delete Forever
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal__footer">
+              <Button variant="neutral" onClick={() => setShowTrashModal(false)}>Close</Button>
+              {deletedTemplates.length > 0 && (
+                <Button 
+                  variant="destructive" 
+                  onClick={() => {
+                    deletedTemplates.forEach(t => permanentlyDeleteTemplate(t.id));
+                    setShowTrashModal(false);
+                  }}
+                >
+                  Empty Trash
+                </Button>
+              )}
             </div>
           </div>
         </div>
