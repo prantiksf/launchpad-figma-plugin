@@ -4640,7 +4640,7 @@ export function App() {
       {/* Trash Modal */}
       {showTrashModal && (
         <div className="modal-overlay" onClick={() => setShowTrashModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal--trash" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
               <h3 className="modal__title">Trash ({deletedTemplates.length})</h3>
               <button className="modal__close" onClick={() => setShowTrashModal(false)}>×</button>
@@ -4652,6 +4652,19 @@ export function App() {
                 <div className="trash-list">
                   {deletedTemplates.map(template => (
                     <div key={template.id} className="trash-item">
+                      <div className="trash-item__preview">
+                        {template.preview ? (
+                          <img src={template.preview} alt={template.name} />
+                        ) : (
+                          <div className="trash-item__preview-placeholder">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <path d="M21 15l-5-5L5 21" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
                       <div className="trash-item__info">
                         <span className="trash-item__name">{template.name}</span>
                         <span className="trash-item__category">{categoryLabels[template.category] || template.category}</span>
@@ -4675,20 +4688,6 @@ export function App() {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-            <div className="modal__footer">
-              <Button variant="neutral" onClick={() => setShowTrashModal(false)}>Close</Button>
-              {deletedTemplates.length > 0 && (
-                <Button 
-                  variant="destructive" 
-                  onClick={() => {
-                    deletedTemplates.forEach(t => permanentlyDeleteTemplate(t.id));
-                    setShowTrashModal(false);
-                  }}
-                >
-                  Empty Trash
-                </Button>
               )}
             </div>
           </div>
