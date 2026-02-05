@@ -115,6 +115,28 @@ app.post('/api/templates', async (req, res) => {
   }
 });
 
+// ---------- Templates Last Refreshed ----------
+app.get('/api/templates-last-refreshed', async (req, res) => {
+  try {
+    const data = await db.getSharedData('templates_last_refreshed');
+    res.json({ lastRefreshed: data || null });
+  } catch (error) {
+    console.error('Error fetching last refreshed:', error);
+    res.status(500).json({ error: 'Failed to fetch last refreshed' });
+  }
+});
+
+app.post('/api/templates-last-refreshed', async (req, res) => {
+  try {
+    const { lastRefreshed } = req.body;
+    await db.saveSharedData('templates_last_refreshed', lastRefreshed);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving last refreshed:', error);
+    res.status(500).json({ error: 'Failed to save last refreshed' });
+  }
+});
+
 // ---------- Saved Items ----------
 app.get('/api/saved-items', async (req, res) => {
   try {

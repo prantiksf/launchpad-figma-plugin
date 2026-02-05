@@ -33,6 +33,9 @@ import {
   useHousekeepingRules,
 } from './lib/useBackendStorage';
 
+// Import API functions
+import { getTemplatesLastRefreshed, setTemplatesLastRefreshed } from './lib/api';
+
 // Import cloud icons
 import SalesCloudIcon from './assets/SalesCloud-icon.png';
 import ServiceCloudIcon from './assets/ServiceCloud-icon.png';
@@ -156,6 +159,8 @@ export function App() {
   const [cloudSelectionReady, setCloudSelectionReady] = useState(false);
   const [activeCategory, setActiveCategory] = useState('team-housekeeping');
   const [insertingId, setInsertingId] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [moveMenuOpen, setMoveMenuOpen] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
@@ -824,6 +829,52 @@ export function App() {
           setInsertingId(null);
           break;
 
+        case 'TEMPLATE_REFRESHED':
+          // Update template with new preview and data
+          setRefreshingId(null);
+          const updatedTemplates = templates.map(t => {
+            if (t.id === msg.templateId) {
+              return {
+                ...t,
+                preview: msg.preview,
+                size: msg.size,
+                ...(msg.variants && { variants: msg.variants }),
+                ...(msg.variantCount && { variantCount: msg.variantCount }),
+              };
+            }
+            return t;
+          });
+          setTemplates(updatedTemplates);
+          break;
+
+        case 'TEMPLATE_REFRESH_ERROR':
+          setRefreshingId(null);
+          break;
+
+        case 'ALL_TEMPLATES_REFRESHED':
+          // Update all refreshed templates
+          setIsBackgroundSyncing(false);
+          if (msg.templates && msg.templates.length > 0) {
+            const refreshedMap = new Map(msg.templates.map((t: any) => [t.id, t]));
+            const updatedTemplates = templates.map(t => {
+              const refreshed = refreshedMap.get(t.id);
+              if (refreshed) {
+                return {
+                  ...t,
+                  preview: refreshed.preview,
+                  size: refreshed.size,
+                  ...(refreshed.variants && { variants: refreshed.variants }),
+                  ...(refreshed.variantCount && { variantCount: refreshed.variantCount }),
+                };
+              }
+              return t;
+            });
+            setTemplates(updatedTemplates);
+            // Update last refreshed timestamp
+            setTemplatesLastRefreshed(Date.now()).catch(console.error);
+          }
+          break;
+
         case 'SCAFFOLD_SUCCESS':
           setIsScaffolding(false);
           setScaffoldExists(true);
@@ -867,6 +918,48 @@ export function App() {
       }
     }
   }, [defaultCloud, defaultCloudLoading, cloudSelectionReady]);
+
+  // Auto-refresh templates if stale (>24 hours since last refresh)
+  // For testing: set to 1 minute (60000ms), production: 24 hours (86400000ms)
+  const REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+  
+  useEffect(() => {
+    // Only run after templates are loaded and we're in Figma
+    if (templatesLoading || templates.length === 0 || isBackgroundSyncing) return;
+    
+    const checkAndRefresh = async () => {
+      try {
+        const lastRefreshed = await getTemplatesLastRefreshed();
+        const now = Date.now();
+        
+        // If never refreshed or stale, trigger background refresh
+        if (!lastRefreshed || (now - lastRefreshed) > REFRESH_THRESHOLD_MS) {
+          console.log('Templates are stale, triggering background refresh...');
+          setIsBackgroundSyncing(true);
+          
+          // Send refresh request to Figma
+          parent.postMessage({
+            pluginMessage: {
+              type: 'REFRESH_ALL_TEMPLATES',
+              payload: {
+                templates: templates.map(t => ({
+                  id: t.id,
+                  componentKey: t.componentKey,
+                  isComponentSet: t.isComponentSet,
+                })),
+              },
+            },
+          }, '*');
+        }
+      } catch (error) {
+        console.error('Failed to check template freshness:', error);
+      }
+    };
+    
+    // Small delay to ensure plugin is ready
+    const timer = setTimeout(checkAndRefresh, 2000);
+    return () => clearTimeout(timer);
+  }, [templatesLoading, templates.length]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1327,6 +1420,22 @@ export function App() {
   
   function getSavedVariantsCount(templateId: string) {
     return savedItems.filter(s => s.templateId === templateId).length;
+  }
+
+  // Refresh template preview from published component
+  function refreshTemplate(template: Template) {
+    setRefreshingId(template.id);
+    setMoveMenuOpen(null);
+    parent.postMessage({
+      pluginMessage: {
+        type: 'REFRESH_TEMPLATE',
+        payload: {
+          templateId: template.id,
+          componentKey: template.componentKey,
+          isComponentSet: template.isComponentSet,
+        },
+      },
+    }, '*');
   }
 
   // Move template to different category
@@ -4197,8 +4306,16 @@ export function App() {
 
                 {/* Only show main preview for single components, not component sets */}
                 {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
-                  <div className="template-item__preview">
+                  <div className={`template-item__preview ${refreshingId === template.id ? 'template-item__preview--refreshing' : ''}`}>
                     <img src={template.preview} alt={template.name} />
+                    {refreshingId === template.id && (
+                      <div className="template-item__refresh-overlay">
+                        <svg className="template-item__refresh-spinner" width="24" height="24" viewBox="0 0 16 16" fill="currentColor">
+                          <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                          <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                        </svg>
+                      </div>
+                    )}
                     {isTemplateSaved(template.id) && (
                       <button 
                         className="template-item__preview-saved"
@@ -4369,6 +4486,21 @@ export function App() {
                             
                             <div className="template-item__more-divider"></div>
                             
+                            {/* Refresh Preview */}
+                            <button
+                              className="template-item__more-option"
+                              onClick={() => refreshTemplate(template)}
+                              disabled={refreshingId === template.id}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                              </svg>
+                              {refreshingId === template.id ? 'Refreshing...' : 'Refresh Preview'}
+                            </button>
+                            
+                            <div className="template-item__more-divider"></div>
+                            
                             {/* Delete */}
                             <button
                               className="template-item__more-option template-item__more-option--danger"
@@ -4396,7 +4528,17 @@ export function App() {
       {/* Footer - Fixed at bottom for all views */}
       <footer className="app-footer">
         <span>Need help? prantik.banerjee@salesforce.com</span>
-        <span>v{VERSION}</span>
+        {isBackgroundSyncing ? (
+          <span className="app-footer__syncing">
+            <svg className="app-footer__sync-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+              <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+              <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+            </svg>
+            Syncing...
+          </span>
+        ) : (
+          <span>v{VERSION}</span>
+        )}
       </footer>
       
       {/* Modals - Outside scroll container - Fixed position */}

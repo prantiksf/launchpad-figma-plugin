@@ -829,6 +829,230 @@ figma.ui.onmessage = async (msg) => {
     }
   }
 
+  // ============ REFRESH ALL TEMPLATES ============
+  if (msg.type === 'REFRESH_ALL_TEMPLATES') {
+    const { templates } = msg.payload;
+    
+    if (!templates || templates.length === 0) {
+      figma.ui.postMessage({ type: 'ALL_TEMPLATES_REFRESHED', templates: [] });
+      return;
+    }
+    
+    figma.notify(`Refreshing ${templates.length} templates...`);
+    const refreshedTemplates: any[] = [];
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const template of templates) {
+      try {
+        const component = await figma.importComponentByKeyAsync(template.componentKey);
+        
+        if (template.isComponentSet) {
+          const parent = component.parent;
+          if (parent && parent.type === 'COMPONENT_SET') {
+            // Generate main preview
+            const mainPreviewBytes = await parent.exportAsync({
+              format: 'PNG',
+              constraint: { type: 'WIDTH', value: 400 }
+            });
+            const mainPreview = `data:image/png;base64,${figma.base64Encode(mainPreviewBytes)}`;
+            
+            // Get variant order
+            let variantOrder: string[] = [];
+            if (parent.componentPropertyDefinitions) {
+              for (const [key, def] of Object.entries(parent.componentPropertyDefinitions)) {
+                if (def.type === 'VARIANT' && def.variantOptions) {
+                  variantOrder = def.variantOptions;
+                  break;
+                }
+              }
+            }
+            
+            // Build variants array
+            const variants: any[] = [];
+            for (const child of parent.children) {
+              if (child.type === 'COMPONENT') {
+                let displayName = child.name;
+                const eqIndex = child.name.indexOf('=');
+                if (eqIndex > 0) {
+                  displayName = child.name.substring(eqIndex + 1).trim();
+                }
+                
+                const orderIndex = variantOrder.indexOf(displayName);
+                
+                let variantPreview: string | null = null;
+                try {
+                  const bytes = await child.exportAsync({
+                    format: 'PNG',
+                    constraint: { type: 'WIDTH', value: 300 }
+                  });
+                  variantPreview = `data:image/png;base64,${figma.base64Encode(bytes)}`;
+                } catch {
+                  // Skip preview if it fails
+                }
+                
+                variants.push({
+                  name: child.name,
+                  displayName,
+                  key: child.key,
+                  preview: variantPreview,
+                  orderIndex: orderIndex >= 0 ? orderIndex : 999,
+                });
+              }
+            }
+            
+            variants.sort((a, b) => a.orderIndex - b.orderIndex);
+            
+            refreshedTemplates.push({
+              id: template.id,
+              preview: mainPreview,
+              size: { width: Math.round(parent.width), height: Math.round(parent.height) },
+              variants,
+              variantCount: variants.length,
+            });
+            successCount++;
+          }
+        } else {
+          // Single component
+          const instance = component.createInstance();
+          const bytes = await instance.exportAsync({
+            format: 'PNG',
+            constraint: { type: 'WIDTH', value: 400 }
+          });
+          instance.remove();
+          
+          refreshedTemplates.push({
+            id: template.id,
+            preview: `data:image/png;base64,${figma.base64Encode(bytes)}`,
+            size: { width: Math.round(component.width), height: Math.round(component.height) },
+          });
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`Failed to refresh template ${template.id}:`, error);
+        errorCount++;
+        // Keep original template data if refresh fails
+      }
+    }
+    
+    if (errorCount > 0) {
+      figma.notify(`✓ Refreshed ${successCount} templates, ${errorCount} failed`);
+    } else {
+      figma.notify(`✓ All ${successCount} templates refreshed`);
+    }
+    
+    figma.ui.postMessage({ type: 'ALL_TEMPLATES_REFRESHED', templates: refreshedTemplates });
+    return;
+  }
+
+  // ============ REFRESH TEMPLATE ============
+  if (msg.type === 'REFRESH_TEMPLATE') {
+    const { templateId, componentKey, isComponentSet } = msg.payload;
+    
+    try {
+      figma.notify('Refreshing template...');
+      const component = await figma.importComponentByKeyAsync(componentKey);
+      
+      if (isComponentSet) {
+        // For component sets, get the parent and refresh all variants
+        const parent = component.parent;
+        if (parent && parent.type === 'COMPONENT_SET') {
+          // Generate main preview
+          const mainPreviewBytes = await parent.exportAsync({
+            format: 'PNG',
+            constraint: { type: 'WIDTH', value: 400 }
+          });
+          const mainPreview = `data:image/png;base64,${figma.base64Encode(mainPreviewBytes)}`;
+          
+          // Get variant order from property definitions
+          let variantOrder: string[] = [];
+          if (parent.componentPropertyDefinitions) {
+            for (const [key, def] of Object.entries(parent.componentPropertyDefinitions)) {
+              if (def.type === 'VARIANT' && def.variantOptions) {
+                variantOrder = def.variantOptions;
+                break;
+              }
+            }
+          }
+          
+          // Build updated variants array
+          const variants: Array<{
+            name: string;
+            displayName: string;
+            key: string;
+            preview: string | null;
+            orderIndex: number;
+          }> = [];
+          
+          for (const child of parent.children) {
+            if (child.type === 'COMPONENT') {
+              let displayName = child.name;
+              const eqIndex = child.name.indexOf('=');
+              if (eqIndex > 0) {
+                displayName = child.name.substring(eqIndex + 1).trim();
+              }
+              
+              const orderIndex = variantOrder.indexOf(displayName);
+              
+              let variantPreview: string | null = null;
+              try {
+                const bytes = await child.exportAsync({
+                  format: 'PNG',
+                  constraint: { type: 'WIDTH', value: 300 }
+                });
+                variantPreview = `data:image/png;base64,${figma.base64Encode(bytes)}`;
+              } catch {
+                // Skip preview if it fails
+              }
+              
+              variants.push({
+                name: child.name,
+                displayName: displayName,
+                key: child.key,
+                preview: variantPreview,
+                orderIndex: orderIndex >= 0 ? orderIndex : 999,
+              });
+            }
+          }
+          
+          variants.sort((a, b) => a.orderIndex - b.orderIndex);
+          
+          figma.notify(`✓ Refreshed: ${variants.length} variants updated`);
+          figma.ui.postMessage({
+            type: 'TEMPLATE_REFRESHED',
+            templateId,
+            preview: mainPreview,
+            size: { width: Math.round(parent.width), height: Math.round(parent.height) },
+            variants: variants,
+            variantCount: variants.length,
+          });
+        }
+      } else {
+        // Single component
+        const instance = component.createInstance();
+        const bytes = await instance.exportAsync({
+          format: 'PNG',
+          constraint: { type: 'WIDTH', value: 400 }
+        });
+        instance.remove();
+        
+        const preview = `data:image/png;base64,${figma.base64Encode(bytes)}`;
+        
+        figma.notify(`✓ Refreshed: ${component.name}`);
+        figma.ui.postMessage({
+          type: 'TEMPLATE_REFRESHED',
+          templateId,
+          preview: preview,
+          size: { width: Math.round(component.width), height: Math.round(component.height) },
+        });
+      }
+    } catch (error) {
+      figma.notify('⚠️ Failed to refresh - ensure component is published', { error: true });
+      figma.ui.postMessage({ type: 'TEMPLATE_REFRESH_ERROR', templateId, error: 'Failed to refresh template' });
+    }
+    return;
+  }
+
   // ============ OPEN EXTERNAL URL ============
   if (msg.type === 'OPEN_EXTERNAL_URL') {
     try {

@@ -1167,6 +1167,33 @@ fieldset.slds-form-element legend {
   height: 14px;
 }
 
+.template-item__preview--refreshing {
+  opacity: 0.6;
+}
+
+.template-item__refresh-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 14px;
+}
+
+.template-item__refresh-spinner {
+  animation: spin 1s linear infinite;
+  color: var(--slds-g-color-brand-base-50);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .template-item__footer {
   display: flex;
   align-items: center;
@@ -1698,6 +1725,17 @@ fieldset.slds-form-element legend {
   flex-shrink: 0;
   z-index: 10;
   box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.app-footer__syncing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--slds-g-color-brand-base-50);
+}
+
+.app-footer__sync-icon {
+  animation: spin 1s linear infinite;
 }
 
 .header__dropdown--compact {
@@ -5898,6 +5936,10 @@ fieldset.slds-form-element legend {
   border-color: #3a3a3a;
 }
 
+.app.dark-mode .template-item__refresh-overlay {
+  background: rgba(26, 26, 26, 0.8);
+}
+
 .app.dark-mode .template-item__select-bar {
   background: #242424;
   border-color: #3a3a3a;
@@ -6011,6 +6053,12 @@ fieldset.slds-form-element legend {
 
 .app.dark-mode .footer__link {
   color: #b3b3b3;
+}
+
+.app.dark-mode .app-footer {
+  background: #242424;
+  border-top-color: #3a3a3a;
+  color: #8c8c8c;
 }
 
 /* Dark Mode Settings */

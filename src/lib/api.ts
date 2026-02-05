@@ -48,6 +48,19 @@ export async function saveTemplates(templates: any[]): Promise<void> {
   });
 }
 
+// ---------- Templates Last Refreshed ----------
+export async function getTemplatesLastRefreshed(): Promise<number | null> {
+  const result = await apiRequest<{ lastRefreshed: number | null }>('/api/templates-last-refreshed');
+  return result.lastRefreshed;
+}
+
+export async function setTemplatesLastRefreshed(timestamp: number): Promise<void> {
+  await apiRequest('/api/templates-last-refreshed', {
+    method: 'POST',
+    body: JSON.stringify({ lastRefreshed: timestamp }),
+  });
+}
+
 // ---------- Saved Items ----------
 export async function loadSavedItems(): Promise<any[]> {
   return apiRequest<any[]>('/api/saved-items');
