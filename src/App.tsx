@@ -33,8 +33,8 @@ import {
   useHousekeepingRules,
 } from './lib/useBackendStorage';
 
-// Import API functions
-import { getTemplatesLastRefreshed, setTemplatesLastRefreshed } from './lib/api';
+// Import API functions (for future auto-refresh feature)
+// import { getTemplatesLastRefreshed, setTemplatesLastRefreshed } from './lib/api';
 
 // Import cloud icons
 import SalesCloudIcon from './assets/SalesCloud-icon.png';
@@ -832,19 +832,26 @@ export function App() {
         case 'TEMPLATE_REFRESHED':
           // Update template with new preview and data
           setRefreshingId(null);
-          const updatedTemplates = templates.map(t => {
-            if (t.id === msg.templateId) {
-              return {
-                ...t,
-                preview: msg.preview,
-                size: msg.size,
-                ...(msg.variants && { variants: msg.variants }),
-                ...(msg.variantCount && { variantCount: msg.variantCount }),
-              };
+          // Use functional update to get latest templates (avoid stale closure)
+          setTemplates(prevTemplates => {
+            // Safety check - don't update if templates is empty
+            if (!prevTemplates || prevTemplates.length === 0) {
+              console.warn('Skipping refresh update - templates is empty');
+              return prevTemplates;
             }
-            return t;
+            return prevTemplates.map(t => {
+              if (t.id === msg.templateId) {
+                return {
+                  ...t,
+                  preview: msg.preview,
+                  size: msg.size,
+                  ...(msg.variants && { variants: msg.variants }),
+                  ...(msg.variantCount && { variantCount: msg.variantCount }),
+                };
+              }
+              return t;
+            });
           });
-          setTemplates(updatedTemplates);
           break;
 
         case 'TEMPLATE_REFRESH_ERROR':
@@ -856,22 +863,29 @@ export function App() {
           setIsBackgroundSyncing(false);
           if (msg.templates && msg.templates.length > 0) {
             const refreshedMap = new Map(msg.templates.map((t: any) => [t.id, t]));
-            const updatedTemplates = templates.map(t => {
-              const refreshed = refreshedMap.get(t.id);
-              if (refreshed) {
-                return {
-                  ...t,
-                  preview: refreshed.preview,
-                  size: refreshed.size,
-                  ...(refreshed.variants && { variants: refreshed.variants }),
-                  ...(refreshed.variantCount && { variantCount: refreshed.variantCount }),
-                };
+            // Use functional update to get latest templates (avoid stale closure)
+            setTemplates(prevTemplates => {
+              // Safety check - don't update if templates is empty
+              if (!prevTemplates || prevTemplates.length === 0) {
+                console.warn('Skipping bulk refresh update - templates is empty');
+                return prevTemplates;
               }
-              return t;
+              return prevTemplates.map(t => {
+                const refreshed = refreshedMap.get(t.id);
+                if (refreshed) {
+                  return {
+                    ...t,
+                    preview: refreshed.preview,
+                    size: refreshed.size,
+                    ...(refreshed.variants && { variants: refreshed.variants }),
+                    ...(refreshed.variantCount && { variantCount: refreshed.variantCount }),
+                  };
+                }
+                return t;
+              });
             });
-            setTemplates(updatedTemplates);
-            // Update last refreshed timestamp
-            setTemplatesLastRefreshed(Date.now()).catch(console.error);
+            // Update last refreshed timestamp (disabled for now)
+            // setTemplatesLastRefreshed(Date.now()).catch(console.error);
           }
           break;
 
@@ -919,47 +933,15 @@ export function App() {
     }
   }, [defaultCloud, defaultCloudLoading, cloudSelectionReady]);
 
-  // Auto-refresh templates if stale (>24 hours since last refresh)
-  // For testing: set to 1 minute (60000ms), production: 24 hours (86400000ms)
-  const REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
-  
+  // Auto-refresh disabled for now - use manual refresh instead
+  // TODO: Re-enable after testing
+  /*
+  const REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+  const hasCheckedFreshness = useRef(false);
   useEffect(() => {
-    // Only run after templates are loaded and we're in Figma
-    if (templatesLoading || templates.length === 0 || isBackgroundSyncing) return;
-    
-    const checkAndRefresh = async () => {
-      try {
-        const lastRefreshed = await getTemplatesLastRefreshed();
-        const now = Date.now();
-        
-        // If never refreshed or stale, trigger background refresh
-        if (!lastRefreshed || (now - lastRefreshed) > REFRESH_THRESHOLD_MS) {
-          console.log('Templates are stale, triggering background refresh...');
-          setIsBackgroundSyncing(true);
-          
-          // Send refresh request to Figma
-          parent.postMessage({
-            pluginMessage: {
-              type: 'REFRESH_ALL_TEMPLATES',
-              payload: {
-                templates: templates.map(t => ({
-                  id: t.id,
-                  componentKey: t.componentKey,
-                  isComponentSet: t.isComponentSet,
-                })),
-              },
-            },
-          }, '*');
-        }
-      } catch (error) {
-        console.error('Failed to check template freshness:', error);
-      }
-    };
-    
-    // Small delay to ensure plugin is ready
-    const timer = setTimeout(checkAndRefresh, 2000);
-    return () => clearTimeout(timer);
-  }, [templatesLoading, templates.length]);
+    // Auto-refresh logic here
+  }, []);
+  */
 
   // Close dropdowns when clicking outside
   useEffect(() => {
