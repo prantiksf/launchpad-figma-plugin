@@ -46,15 +46,31 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 export function useTemplates() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false); // Track if initial data was loaded
 
   useEffect(() => {
     apiRequest<any[]>('/api/templates')
-      .then(setTemplates)
+      .then(data => {
+        setTemplates(data);
+        setHasLoaded(true); // Mark as loaded after first successful fetch
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
   const save = useCallback(async (newTemplates: any[]) => {
+    // CRITICAL: Prevent saving empty array before initial data loads
+    // This protects against race conditions wiping the database
+    if (!hasLoaded && newTemplates.length === 0) {
+      console.warn('⚠️ Blocking save of empty templates - initial data not loaded yet');
+      return;
+    }
+    
+    // Additional safety: warn if trying to save empty when we had data
+    if (newTemplates.length === 0) {
+      console.warn('⚠️ Warning: Saving empty templates array to backend');
+    }
+    
     setTemplates(newTemplates);
     try {
       await apiRequest('/api/templates', {
@@ -66,7 +82,7 @@ export function useTemplates() {
       console.error('✗ Failed to save templates:', error);
       throw error;
     }
-  }, []);
+  }, [hasLoaded]);
 
   return { templates, setTemplates: save, loading };
 }
@@ -77,21 +93,30 @@ export function useTemplates() {
 export function useSavedItems() {
   const [savedItems, setSavedItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
     apiRequest<any[]>('/api/saved-items')
-      .then(setSavedItems)
+      .then(data => {
+        setSavedItems(data);
+        setHasLoaded(true);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
   const save = useCallback(async (newItems: any[]) => {
+    // Prevent saving empty array before initial data loads
+    if (!hasLoaded && newItems.length === 0) {
+      console.warn('⚠️ Blocking save of empty saved items - initial data not loaded yet');
+      return;
+    }
     setSavedItems(newItems);
     await apiRequest('/api/saved-items', {
       method: 'POST',
       body: JSON.stringify({ savedItems: newItems }),
     });
-  }, []);
+  }, [hasLoaded]);
 
   return { savedItems, setSavedItems: save, loading };
 }

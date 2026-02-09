@@ -1263,7 +1263,7 @@ export function App() {
 
     const updated = [...templates, newTemplate];
     
-    // Update local state
+    // Update local state and save to backend (setTemplates does both)
     setTemplates(updated);
     
     // Switch to the cloud and category where the template was saved
@@ -1276,9 +1276,6 @@ export function App() {
     if (currentDefaultCloud !== formCloud) {
       setDefaultCloud(formCloud);
     }
-    
-    // Save to backend
-    setTemplates(updated);
     
     // Show toast and go home
     parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `"${capturedComponent.name}" added!` } }, '*');
