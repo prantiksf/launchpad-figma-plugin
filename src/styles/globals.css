@@ -5913,6 +5913,30 @@ fieldset.slds-form-element legend {
   background: var(--slds-g-color-error-base-40);
 }
 
+/* Header Restore Button */
+.header__restore-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--slds-g-color-brand-base-50);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header__restore-btn:hover {
+  background: var(--slds-g-color-brand-base-40);
+}
+
+.header__restore-btn svg {
+  flex-shrink: 0;
+}
+
 /* ============ DARK MODE ============ */
 .header__dark-toggle {
   opacity: 0.6;
@@ -5969,6 +5993,14 @@ fieldset.slds-form-element legend {
 .app.dark-mode .header__icon-btn:hover {
   background: #2a2a2a;
   color: #e5e5e5;
+}
+
+.app.dark-mode .header__restore-btn {
+  background: #0066cc;
+}
+
+.app.dark-mode .header__restore-btn:hover {
+  background: #0077ee;
 }
 
 .app.dark-mode .header__dropdown {
