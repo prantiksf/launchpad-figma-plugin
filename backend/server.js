@@ -105,7 +105,7 @@ app.get('/api/templates', async (req, res) => {
 app.post('/api/templates', async (req, res) => {
   try {
     const templates = req.body.templates || [];
-    const userId = req.body.userId || req.headers['x-figma-user-id'] || null;
+    const userName = req.body.userName || req.headers['x-figma-user-name'] || null;
     
     // SERVER-SIDE PROTECTION: Prevent accidental data wipe
     const currentTemplates = await db.getTemplates();
@@ -127,7 +127,7 @@ app.post('/api/templates', async (req, res) => {
     // AUTO-BACKUP: Always backup current state before saving
     if (currentCount > 0) {
       const action = newCount > currentCount ? 'add' : (newCount < currentCount ? 'delete' : 'update');
-      await db.createBackup('templates', currentTemplates, action, userId);
+      await db.createBackup('templates', currentTemplates, action, userName);
       // Cleanup old backups (keep last 50)
       await db.cleanupOldBackups('templates', 50);
     }

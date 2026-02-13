@@ -141,15 +141,16 @@ interface ComponentInfo {
 
 // ============ MAIN COMPONENT ============
 export function App() {
-  // Figma user ID (from PLUGIN_READY message) - needed for user-specific data
+  // Figma user ID and name (from PLUGIN_READY message) - needed for user-specific data
   const [figmaUserId, setFigmaUserId] = useState<string | null>(null);
+  const [figmaUserName, setFigmaUserName] = useState<string | null>(null);
   
   // Onboarding state
   const [showSplash, setShowSplash] = useState(true);
   const [showMoreCloudsInSplash, setShowMoreCloudsInSplash] = useState(false);
   
   // Backend data hooks (shared team-wide)
-  const { templates, setTemplates, loading: templatesLoading } = useTemplates(figmaUserId);
+  const { templates, setTemplates, loading: templatesLoading } = useTemplates(figmaUserName);
   const { savedItems, setSavedItems, loading: savedItemsLoading } = useSavedItems();
   const { links: figmaLinks, setLinks: setFigmaLinks, loading: figmaLinksLoading } = useFigmaLinks();
   const { cloudLinks: cloudFigmaLinks, setCloudLinks: setCloudFigmaLinks, loading: cloudLinksLoading } = useCloudFigmaLinks();
@@ -648,9 +649,12 @@ export function App() {
         const msg = event.data?.pluginMessage;
         if (msg?.type === 'PLUGIN_READY') {
           window.removeEventListener('message', readyHandler);
-          // Capture Figma user ID for user-specific data
+          // Capture Figma user ID and name for user-specific data
           if (msg.user?.id) {
             setFigmaUserId(msg.user.id);
+          }
+          if (msg.user?.name) {
+            setFigmaUserName(msg.user.name);
           }
           
           // Try to migrate existing data from clientStorage to backend
@@ -815,10 +819,13 @@ export function App() {
 
       switch (msg.type) {
         case 'PLUGIN_READY':
-          // Plugin is ready - capture user ID if provided
+          // Plugin is ready - capture user ID and name if provided
           console.log('Plugin ready signal received');
           if (msg.user?.id) {
             setFigmaUserId(msg.user.id);
+          }
+          if (msg.user?.name) {
+            setFigmaUserName(msg.user.name);
           }
           break;
           
@@ -1831,7 +1838,7 @@ export function App() {
   async function handleCreateBackup() {
     setBackupCreating(true);
     try {
-      await createManualBackup('templates', figmaUserId || undefined);
+      await createManualBackup('templates', figmaUserName || undefined);
       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Backup created successfully!' } }, '*');
       // Reload backup list
       loadBackups();
@@ -5050,7 +5057,7 @@ export function App() {
                           </span>
                           <span className="backup-item__meta">
                             {backup.itemCount} templates • {backup.action} • {timeAgo}
-                            {backup.createdBy && ` • User: ${backup.createdBy.slice(-6)}`}
+                            {backup.createdBy && ` • by ${backup.createdBy}`}
                           </span>
                         </div>
                         <div className="backup-item__actions">
