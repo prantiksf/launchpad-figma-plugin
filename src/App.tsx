@@ -149,7 +149,7 @@ export function App() {
   const [showMoreCloudsInSplash, setShowMoreCloudsInSplash] = useState(false);
   
   // Backend data hooks (shared team-wide)
-  const { templates, setTemplates, loading: templatesLoading } = useTemplates();
+  const { templates, setTemplates, loading: templatesLoading } = useTemplates(figmaUserId);
   const { savedItems, setSavedItems, loading: savedItemsLoading } = useSavedItems();
   const { links: figmaLinks, setLinks: setFigmaLinks, loading: figmaLinksLoading } = useFigmaLinks();
   const { cloudLinks: cloudFigmaLinks, setCloudLinks: setCloudFigmaLinks, loading: cloudLinksLoading } = useCloudFigmaLinks();
@@ -5050,6 +5050,7 @@ export function App() {
                           </span>
                           <span className="backup-item__meta">
                             {backup.itemCount} templates • {backup.action} • {timeAgo}
+                            {backup.createdBy && ` • User: ${backup.createdBy.slice(-6)}`}
                           </span>
                         </div>
                         <div className="backup-item__actions">

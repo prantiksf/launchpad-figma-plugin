@@ -92,7 +92,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 /**
  * Hook for templates (shared team-wide)
  */
-export function useTemplates() {
+export function useTemplates(figmaUserId?: string | null) {
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false); // Track if initial data was loaded
@@ -124,14 +124,14 @@ export function useTemplates() {
     try {
       await apiRequest('/api/templates', {
         method: 'POST',
-        body: JSON.stringify({ templates: newTemplates }),
+        body: JSON.stringify({ templates: newTemplates, userId: figmaUserId }),
       });
       console.log('✓ Templates saved to backend:', newTemplates.length);
     } catch (error) {
       console.error('✗ Failed to save templates:', error);
       throw error;
     }
-  }, [hasLoaded]);
+  }, [hasLoaded, figmaUserId]);
 
   return { templates, setTemplates: save, loading };
 }
