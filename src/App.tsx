@@ -3366,9 +3366,6 @@ export function App() {
                     Trash ({deletedClouds.length})
                   </button>
                 )}
-                <button className="settings-header__reset" onClick={resetAllSettings}>
-                  Reset All
-                </button>
               </div>
             </div>
             <div className="settings-section">
