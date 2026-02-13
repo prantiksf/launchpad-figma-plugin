@@ -31,6 +31,11 @@ import {
   useOnboardingState,
   useHiddenClouds,
   useHousekeepingRules,
+  // Backup functions
+  getBackups,
+  restoreFromBackup,
+  createManualBackup,
+  BackupInfo,
 } from './lib/useBackendStorage';
 
 // Import API functions (for future auto-refresh feature)
@@ -79,6 +84,21 @@ const categoryLabels: Record<string, string> = {
   'slides': 'Slide',
   'resources': 'Resource',
 };
+
+// Helper function to get time ago string
+function getTimeAgo(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
 
 // ============ TYPES ============
 interface VariantInfo {
@@ -424,6 +444,13 @@ export function App() {
   }>>([]);
   const [showCloudTrashModal, setShowCloudTrashModal] = useState(false);
   const [deleteCloudConfirmId, setDeleteCloudConfirmId] = useState<string | null>(null);
+  
+  // Backup & Restore state
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [backupList, setBackupList] = useState<BackupInfo[]>([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupRestoring, setBackupRestoring] = useState<number | null>(null);
+  const [backupCreating, setBackupCreating] = useState(false);
   
   // Saved templates/variants (simple bookmark feature)
   // Format: [{templateId: string, variantKey?: string}, ...]
@@ -1767,6 +1794,58 @@ export function App() {
     
     // Remove from trash
     setDeletedClouds(deletedClouds.filter(d => d.cloud.id !== cloudId));
+  }
+  
+  // ============ BACKUP & RESTORE FUNCTIONS ============
+  
+  async function loadBackups() {
+    setBackupLoading(true);
+    try {
+      const backups = await getBackups('templates', 20);
+      setBackupList(backups);
+    } catch (error) {
+      console.error('Failed to load backups:', error);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to load backups' } }, '*');
+    } finally {
+      setBackupLoading(false);
+    }
+  }
+  
+  async function handleRestoreBackup(backupId: number) {
+    if (!confirm('Restore from this backup? Your current data will be backed up first.')) return;
+    
+    setBackupRestoring(backupId);
+    try {
+      await restoreFromBackup('templates', backupId);
+      // Reload the page to get fresh data
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Backup restored! Reloading...' } }, '*');
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+      console.error('Failed to restore backup:', error);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to restore backup' } }, '*');
+    } finally {
+      setBackupRestoring(null);
+    }
+  }
+  
+  async function handleCreateBackup() {
+    setBackupCreating(true);
+    try {
+      await createManualBackup('templates', figmaUserId || undefined);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Backup created successfully!' } }, '*');
+      // Reload backup list
+      loadBackups();
+    } catch (error) {
+      console.error('Failed to create backup:', error);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to create backup' } }, '*');
+    } finally {
+      setBackupCreating(false);
+    }
+  }
+  
+  function openBackupModal() {
+    setShowBackupModal(true);
+    loadBackups();
   }
   
   function resetAllSettings() {
@@ -3247,6 +3326,13 @@ export function App() {
                 <span className="settings-header__title">Manage Clouds and Sections</span>
               </div>
               <div className="settings-header__actions">
+                <button className="settings-header__backup" onClick={openBackupModal}>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                    <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                  </svg>
+                  Restore
+                </button>
                 {deletedClouds.length > 0 && (
                   <button className="settings-header__trash" onClick={() => setShowCloudTrashModal(true)}>
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -4903,6 +4989,81 @@ export function App() {
               >
                 Move to Trash
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Backup & Restore Modal */}
+      {showBackupModal && (
+        <div className="modal-overlay" onClick={() => setShowBackupModal(false)}>
+          <div className="modal modal--backup" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Restore from Backup</h3>
+              <button className="modal__close" onClick={() => setShowBackupModal(false)}>×</button>
+            </div>
+            <div className="modal__body">
+              <div className="backup-modal__actions">
+                <Button 
+                  variant="brand-outline" 
+                  size="small"
+                  onClick={handleCreateBackup}
+                  disabled={backupCreating}
+                >
+                  {backupCreating ? 'Creating...' : 'Create Backup Now'}
+                </Button>
+                <Button 
+                  variant="neutral" 
+                  size="small"
+                  onClick={loadBackups}
+                  disabled={backupLoading}
+                >
+                  {backupLoading ? 'Loading...' : 'Refresh List'}
+                </Button>
+              </div>
+              
+              {backupLoading ? (
+                <div className="backup-modal__loading">
+                  <Spinner size="medium" />
+                  <p>Loading backups...</p>
+                </div>
+              ) : backupList.length === 0 ? (
+                <p className="modal__text">No backups found. Backups are created automatically when data changes.</p>
+              ) : (
+                <div className="backup-list">
+                  {backupList.map(backup => {
+                    const date = new Date(backup.createdAt);
+                    const timeAgo = getTimeAgo(date);
+                    return (
+                      <div key={backup.id} className="backup-item">
+                        <div className="backup-item__info">
+                          <span className="backup-item__date">
+                            {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                          </span>
+                          <span className="backup-item__meta">
+                            {backup.itemCount} templates • {backup.action} • {timeAgo}
+                          </span>
+                        </div>
+                        <div className="backup-item__actions">
+                          <Button 
+                            variant="brand" 
+                            size="small"
+                            onClick={() => handleRestoreBackup(backup.id)}
+                            disabled={backupRestoring === backup.id}
+                          >
+                            {backupRestoring === backup.id ? 'Restoring...' : 'Restore'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              
+              <p className="backup-modal__note">
+                <strong>Note:</strong> Restoring a backup will replace all current templates. 
+                Your current data will be automatically backed up first.
+              </p>
             </div>
           </div>
         </div>

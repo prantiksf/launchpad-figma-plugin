@@ -15,6 +15,55 @@ import { useState, useEffect, useCallback } from 'react';
 // Heroku backend URL
 const API_BASE_URL = 'https://starterkit-da8649ad6366.herokuapp.com';
 
+// ============================================================================
+// BACKUP & RESTORE API FUNCTIONS
+// ============================================================================
+
+export interface BackupInfo {
+  id: number;
+  itemCount: number;
+  action: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface BackupData extends BackupInfo {
+  dataKey: string;
+  data: any;
+}
+
+/**
+ * Get list of backups for a data type
+ */
+export async function getBackups(dataKey: string, limit: number = 20): Promise<BackupInfo[]> {
+  const result = await apiRequest<{ backups: BackupInfo[] }>(`/api/backups/${dataKey}?limit=${limit}`);
+  return result.backups;
+}
+
+/**
+ * Get a specific backup with its data
+ */
+export async function getBackupById(dataKey: string, backupId: number): Promise<BackupData> {
+  return apiRequest<BackupData>(`/api/backups/${dataKey}/${backupId}`);
+}
+
+/**
+ * Restore from a backup
+ */
+export async function restoreFromBackup(dataKey: string, backupId: number): Promise<{ success: boolean; itemCount: number }> {
+  return apiRequest(`/api/backups/${dataKey}/${backupId}/restore`, { method: 'POST' });
+}
+
+/**
+ * Create a manual backup
+ */
+export async function createManualBackup(dataKey: string, userId?: string): Promise<{ success: boolean; itemCount: number }> {
+  return apiRequest(`/api/backups/${dataKey}/create`, { 
+    method: 'POST',
+    body: JSON.stringify({ userId })
+  });
+}
+
 // Helper for API requests
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   try {

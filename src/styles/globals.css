@@ -2383,6 +2383,99 @@ fieldset.slds-form-element legend {
   background: var(--slds-g-color-error-base-95);
 }
 
+.settings-header__backup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--slds-g-color-brand-base-50);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.settings-header__backup:hover {
+  background: var(--slds-g-color-brand-base-95);
+  color: var(--slds-g-color-brand-base-40);
+}
+
+/* Backup Modal Styles */
+.modal--backup {
+  max-width: 480px;
+  width: 90%;
+}
+
+.modal--backup .modal__body {
+  padding: 16px;
+}
+
+.backup-modal__actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.backup-modal__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--slds-g-color-neutral-base-50);
+}
+
+.backup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.backup-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--slds-g-color-neutral-base-97);
+  border-radius: 8px;
+  border: 1px solid var(--slds-g-color-neutral-base-90);
+}
+
+.backup-item__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.backup-item__date {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--slds-g-color-neutral-base-20);
+}
+
+.backup-item__meta {
+  font-size: 11px;
+  color: var(--slds-g-color-neutral-base-50);
+}
+
+.backup-item__actions {
+  flex-shrink: 0;
+}
+
+.backup-modal__note {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--slds-g-color-warning-base-95);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--slds-g-color-warning-base-30);
+  line-height: 1.4;
+}
+
 .settings-group {
   margin-bottom: 16px;
 }
@@ -6121,6 +6214,15 @@ fieldset.slds-form-element legend {
   color: #e5e5e5;
 }
 
+.app.dark-mode .settings-header__backup {
+  color: #6eb3ff;
+}
+
+.app.dark-mode .settings-header__backup:hover {
+  background: rgba(110, 179, 255, 0.15);
+  color: #8ec5ff;
+}
+
 .app.dark-mode .settings-header__trash {
   color: #888;
 }
@@ -6128,6 +6230,25 @@ fieldset.slds-form-element legend {
 .app.dark-mode .settings-header__trash:hover {
   background: #333;
   color: #b3b3b3;
+}
+
+/* Backup Modal Dark Mode */
+.app.dark-mode .backup-item {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.app.dark-mode .backup-item__date {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .backup-item__meta {
+  color: #888;
+}
+
+.app.dark-mode .backup-modal__note {
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
 }
 
 .app.dark-mode .settings-cloud-row__delete {
