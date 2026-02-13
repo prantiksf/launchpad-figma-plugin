@@ -1,6 +1,6 @@
 {
   "name": "figma-plugin-boilerplate",
-  "version": "1.11.0",
+  "version": "1.14.0",
   "description": "Figma plugin boilerplate with custom design system and Storybook",
   "private": true,
   "license": "MIT",
