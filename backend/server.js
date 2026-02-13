@@ -105,7 +105,25 @@ app.get('/api/templates', async (req, res) => {
 app.post('/api/templates', async (req, res) => {
   try {
     const templates = req.body.templates || [];
-    console.log(`💾 Saving ${templates.length} templates to database...`);
+    
+    // SERVER-SIDE PROTECTION: Prevent accidental data wipe
+    const currentTemplates = await db.getTemplates();
+    const currentCount = currentTemplates.length;
+    const newCount = templates.length;
+    
+    // Block if trying to save significantly fewer templates (potential data wipe)
+    // Allow: adding new (newCount > currentCount), small deletions (up to 50% reduction), or empty DB
+    if (currentCount > 5 && newCount < currentCount * 0.5) {
+      console.error(`🛑 BLOCKED: Attempted to save ${newCount} templates when ${currentCount} exist (>50% reduction)`);
+      return res.status(400).json({ 
+        error: 'Data protection triggered', 
+        message: `Cannot reduce templates from ${currentCount} to ${newCount}. This looks like accidental data loss.`,
+        currentCount,
+        attemptedCount: newCount
+      });
+    }
+    
+    console.log(`💾 Saving ${templates.length} templates to database... (was ${currentCount})`);
     await db.saveTemplates(templates);
     console.log(`✓ Successfully saved ${templates.length} templates`);
     res.json({ success: true, count: templates.length });
