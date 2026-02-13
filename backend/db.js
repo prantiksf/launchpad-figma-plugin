@@ -39,9 +39,25 @@ async function initialize() {
       )
     `);
     
-    // Create index for faster lookups
+    // Data backups table - stores automatic backups on every change
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS data_backups (
+        id SERIAL PRIMARY KEY,
+        data_key VARCHAR(100) NOT NULL,
+        data JSONB NOT NULL,
+        item_count INTEGER DEFAULT 0,
+        trigger_action VARCHAR(100),
+        created_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
+    // Create indexes for faster lookups
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(key)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_backups_key_created ON data_backups(data_key, created_at DESC)
     `);
     
     console.log('✓ Database tables initialized');
@@ -227,6 +243,119 @@ async function updateUserPreference(figmaUserId, field, value) {
   `, [jsonValue, figmaUserId]);
 }
 
+// ============================================================================
+// BACKUP FUNCTIONS
+// ============================================================================
+
+/**
+ * Create a backup of data before any write operation
+ * @param {string} dataKey - The key of the data being backed up (e.g., 'templates')
+ * @param {any} data - The data to backup
+ * @param {string} triggerAction - What action triggered this backup (e.g., 'save', 'delete')
+ * @param {string} createdBy - Optional identifier of who triggered the backup
+ */
+async function createBackup(dataKey, data, triggerAction = 'save', createdBy = null) {
+  try {
+    const itemCount = Array.isArray(data) ? data.length : (typeof data === 'object' ? Object.keys(data).length : 1);
+    await pool.query(`
+      INSERT INTO data_backups (data_key, data, item_count, trigger_action, created_by, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+    `, [dataKey, JSON.stringify(data), itemCount, triggerAction, createdBy]);
+    console.log(`📦 Backup created: ${dataKey} (${itemCount} items) - ${triggerAction}`);
+  } catch (error) {
+    console.error('Failed to create backup:', error);
+    // Don't throw - backup failure shouldn't block the main operation
+  }
+}
+
+/**
+ * Get list of backups for a data key
+ * @param {string} dataKey - The key to get backups for
+ * @param {number} limit - Maximum number of backups to return
+ */
+async function getBackups(dataKey, limit = 20) {
+  const result = await pool.query(`
+    SELECT id, data_key, item_count, trigger_action, created_by, created_at
+    FROM data_backups 
+    WHERE data_key = $1 
+    ORDER BY created_at DESC 
+    LIMIT $2
+  `, [dataKey, limit]);
+  return result.rows;
+}
+
+/**
+ * Get a specific backup by ID
+ * @param {number} backupId - The backup ID
+ */
+async function getBackupById(backupId) {
+  const result = await pool.query(
+    'SELECT * FROM data_backups WHERE id = $1',
+    [backupId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Restore data from a backup
+ * @param {number} backupId - The backup ID to restore from
+ */
+async function restoreFromBackup(backupId) {
+  const backup = await getBackupById(backupId);
+  if (!backup) {
+    throw new Error('Backup not found');
+  }
+  
+  // Create a backup of current state before restoring (so user can undo)
+  const currentData = await getSharedData(backup.data_key);
+  if (currentData) {
+    await createBackup(backup.data_key, currentData, 'pre-restore', null);
+  }
+  
+  // Restore the data
+  await saveSharedData(backup.data_key, backup.data);
+  console.log(`✓ Restored ${backup.data_key} from backup #${backupId}`);
+  
+  return backup;
+}
+
+/**
+ * Clean up old backups (keep only recent ones)
+ * @param {string} dataKey - The key to clean up
+ * @param {number} keepCount - Number of backups to keep
+ */
+async function cleanupOldBackups(dataKey, keepCount = 50) {
+  try {
+    await pool.query(`
+      DELETE FROM data_backups 
+      WHERE data_key = $1 
+      AND id NOT IN (
+        SELECT id FROM data_backups 
+        WHERE data_key = $1 
+        ORDER BY created_at DESC 
+        LIMIT $2
+      )
+    `, [dataKey, keepCount]);
+  } catch (error) {
+    console.error('Failed to cleanup backups:', error);
+  }
+}
+
+/**
+ * Get all backup keys (data types that have backups)
+ */
+async function getBackupKeys() {
+  const result = await pool.query(`
+    SELECT DISTINCT data_key, 
+           COUNT(*) as backup_count,
+           MAX(created_at) as latest_backup
+    FROM data_backups 
+    GROUP BY data_key 
+    ORDER BY latest_backup DESC
+  `);
+  return result.rows;
+}
+
 module.exports = {
   initialize,
   pool,
@@ -254,5 +383,12 @@ module.exports = {
   // User preferences
   getUserPreferences,
   saveUserPreferences,
-  updateUserPreference
+  updateUserPreference,
+  // Backups
+  createBackup,
+  getBackups,
+  getBackupById,
+  restoreFromBackup,
+  cleanupOldBackups,
+  getBackupKeys
 };

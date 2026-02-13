@@ -105,6 +105,7 @@ app.get('/api/templates', async (req, res) => {
 app.post('/api/templates', async (req, res) => {
   try {
     const templates = req.body.templates || [];
+    const userId = req.body.userId || req.headers['x-figma-user-id'] || null;
     
     // SERVER-SIDE PROTECTION: Prevent accidental data wipe
     const currentTemplates = await db.getTemplates();
@@ -121,6 +122,14 @@ app.post('/api/templates', async (req, res) => {
         currentCount,
         attemptedCount: newCount
       });
+    }
+    
+    // AUTO-BACKUP: Always backup current state before saving
+    if (currentCount > 0) {
+      const action = newCount > currentCount ? 'add' : (newCount < currentCount ? 'delete' : 'update');
+      await db.createBackup('templates', currentTemplates, action, userId);
+      // Cleanup old backups (keep last 50)
+      await db.cleanupOldBackups('templates', 50);
     }
     
     console.log(`💾 Saving ${templates.length} templates to database... (was ${currentCount})`);
@@ -168,7 +177,16 @@ app.get('/api/saved-items', async (req, res) => {
 
 app.post('/api/saved-items', async (req, res) => {
   try {
-    await db.saveSavedItems(req.body.savedItems);
+    const newItems = req.body.savedItems || [];
+    const currentItems = await db.getSavedItems();
+    
+    // Auto-backup before saving
+    if (currentItems.length > 0) {
+      await db.createBackup('saved_items', currentItems, 'save', null);
+      await db.cleanupOldBackups('saved_items', 30);
+    }
+    
+    await db.saveSavedItems(newItems);
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving items:', error);
@@ -231,7 +249,16 @@ app.get('/api/custom-clouds', async (req, res) => {
 
 app.post('/api/custom-clouds', async (req, res) => {
   try {
-    await db.saveCustomClouds(req.body.clouds);
+    const newClouds = req.body.clouds || [];
+    const currentClouds = await db.getCustomClouds();
+    
+    // Auto-backup before saving
+    if (currentClouds.length > 0) {
+      await db.createBackup('custom_clouds', currentClouds, 'save', null);
+      await db.cleanupOldBackups('custom_clouds', 30);
+    }
+    
+    await db.saveCustomClouds(newClouds);
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving custom clouds:', error);
@@ -448,6 +475,128 @@ app.post('/api/user/:figmaUserId/hidden-clouds', async (req, res) => {
   } catch (error) {
     console.error('Error saving hidden clouds:', error);
     res.status(500).json({ error: 'Failed to save hidden clouds' });
+  }
+});
+
+// ============================================================================
+// BACKUP & RESTORE ENDPOINTS
+// ============================================================================
+
+// Get all backup categories (data types that have backups)
+app.get('/api/backups', async (req, res) => {
+  try {
+    const keys = await db.getBackupKeys();
+    res.json({ backupTypes: keys });
+  } catch (error) {
+    console.error('Error fetching backup keys:', error);
+    res.status(500).json({ error: 'Failed to fetch backup keys' });
+  }
+});
+
+// Get backups for a specific data type
+app.get('/api/backups/:dataKey', async (req, res) => {
+  try {
+    const { dataKey } = req.params;
+    const limit = parseInt(req.query.limit) || 20;
+    const backups = await db.getBackups(dataKey, limit);
+    res.json({ 
+      dataKey, 
+      backups: backups.map(b => ({
+        id: b.id,
+        itemCount: b.item_count,
+        action: b.trigger_action,
+        createdBy: b.created_by,
+        createdAt: b.created_at
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching backups:', error);
+    res.status(500).json({ error: 'Failed to fetch backups' });
+  }
+});
+
+// Get a specific backup's data (for preview before restore)
+app.get('/api/backups/:dataKey/:backupId', async (req, res) => {
+  try {
+    const { backupId } = req.params;
+    const backup = await db.getBackupById(parseInt(backupId));
+    if (!backup) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+    res.json({
+      id: backup.id,
+      dataKey: backup.data_key,
+      itemCount: backup.item_count,
+      action: backup.trigger_action,
+      createdAt: backup.created_at,
+      data: backup.data // Include actual data for preview
+    });
+  } catch (error) {
+    console.error('Error fetching backup:', error);
+    res.status(500).json({ error: 'Failed to fetch backup' });
+  }
+});
+
+// Restore from a specific backup
+app.post('/api/backups/:dataKey/:backupId/restore', async (req, res) => {
+  try {
+    const { backupId } = req.params;
+    const backup = await db.restoreFromBackup(parseInt(backupId));
+    res.json({ 
+      success: true, 
+      message: `Restored ${backup.data_key} from backup #${backupId}`,
+      itemCount: backup.item_count,
+      restoredFrom: backup.created_at
+    });
+  } catch (error) {
+    console.error('Error restoring backup:', error);
+    res.status(500).json({ error: 'Failed to restore backup', details: error.message });
+  }
+});
+
+// Create a manual backup (user-initiated)
+app.post('/api/backups/:dataKey/create', async (req, res) => {
+  try {
+    const { dataKey } = req.params;
+    const userId = req.body.userId || null;
+    
+    // Get current data for this key
+    let currentData;
+    switch (dataKey) {
+      case 'templates':
+        currentData = await db.getTemplates();
+        break;
+      case 'saved_items':
+        currentData = await db.getSavedItems();
+        break;
+      case 'custom_clouds':
+        currentData = await db.getCustomClouds();
+        break;
+      case 'cloud_categories':
+        currentData = await db.getCloudCategories();
+        break;
+      case 'cloud_figma_links':
+        currentData = await db.getCloudFigmaLinks();
+        break;
+      default:
+        currentData = await db.getSharedData(dataKey);
+    }
+    
+    if (!currentData || (Array.isArray(currentData) && currentData.length === 0)) {
+      return res.status(400).json({ error: 'No data to backup' });
+    }
+    
+    await db.createBackup(dataKey, currentData, 'manual', userId);
+    const itemCount = Array.isArray(currentData) ? currentData.length : Object.keys(currentData).length;
+    
+    res.json({ 
+      success: true, 
+      message: `Manual backup created for ${dataKey}`,
+      itemCount
+    });
+  } catch (error) {
+    console.error('Error creating backup:', error);
+    res.status(500).json({ error: 'Failed to create backup' });
   }
 });
 
