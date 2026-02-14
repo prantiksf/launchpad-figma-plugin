@@ -686,11 +686,27 @@ app.post('/api/backups/:dataKey/create', async (req, res) => {
 // ACTIVITY LOG ENDPOINTS
 // ============================================================================
 
+// Log activity from frontend (page structure, sections, POCs)
+app.post('/api/activity-log', async (req, res) => {
+  try {
+    const { action, assetId, assetName, cloudId, cloudName, userName, assetData } = req.body;
+    if (!action || !assetId || !assetName) {
+      return res.status(400).json({ error: 'action, assetId, and assetName are required' });
+    }
+    await db.logActivityFromClient({ action, assetId, assetName, cloudId, cloudName, userName, assetData });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error logging activity:', error);
+    res.status(500).json({ error: 'Failed to log activity' });
+  }
+});
+
 // Get activity log
 app.get('/api/activity-log', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
-    const activities = await db.getActivityLog(limit);
+    const cloudId = req.query.cloudId || null;
+    const activities = await db.getActivityLog(limit, cloudId);
     res.json({
       activities: activities.map(a => ({
         id: a.id,

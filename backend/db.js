@@ -412,15 +412,46 @@ async function logActivity(action, asset, userName = null) {
 }
 
 /**
+ * Log activity from frontend (page structure, sections, POCs)
+ * @param {object} params - { action, assetId, assetName, cloudId, cloudName, userName, assetData }
+ */
+async function logActivityFromClient(params) {
+  try {
+    const { action, assetId, assetName, cloudId, cloudName, userName, assetData } = params;
+    await pool.query(`
+      INSERT INTO activity_log (action, asset_id, asset_name, asset_data, cloud_id, cloud_name, category, user_name, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    `, [
+      action,
+      assetId || 'unknown',
+      assetName || 'Untitled',
+      assetData ? JSON.stringify(assetData) : null,
+      cloudId || null,
+      cloudName || null,
+      null,
+      userName || null
+    ]);
+    console.log(`📝 Activity logged: ${action} - ${assetName} (cloud: ${cloudName || 'n/a'}) by ${userName || 'unknown'}`);
+  } catch (error) {
+    console.error('Failed to log activity from client:', error);
+  }
+}
+
+/**
  * Get activity log entries
  * @param {number} limit - Maximum number of entries to return
+ * @param {string} cloudId - Optional cloud ID to filter by
  */
-async function getActivityLog(limit = 100) {
-  const result = await pool.query(`
-    SELECT * FROM activity_log 
-    ORDER BY created_at DESC 
-    LIMIT $1
-  `, [limit]);
+async function getActivityLog(limit = 100, cloudId = null) {
+  let query = `SELECT * FROM activity_log `;
+  const params = [];
+  if (cloudId) {
+    params.push(cloudId);
+    query += `WHERE cloud_id = $1 `;
+  }
+  params.push(limit);
+  query += `ORDER BY created_at DESC LIMIT $${params.length}`;
+  const result = await pool.query(query, params);
   return result.rows;
 }
 
@@ -489,6 +520,7 @@ module.exports = {
   getBackupKeys,
   // Activity log
   logActivity,
+  logActivityFromClient,
   getActivityLog,
   markActivitiesRestored,
   getRestorableActivities
