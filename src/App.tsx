@@ -36,6 +36,10 @@ import {
   restoreFromBackup,
   createManualBackup,
   BackupInfo,
+  // Activity log functions
+  getActivityLog,
+  restoreFromActivityLog,
+  ActivityLogEntry,
 } from './lib/useBackendStorage';
 
 // Import API functions (for future auto-refresh feature)
@@ -451,6 +455,13 @@ export function App() {
   const [backupList, setBackupList] = useState<BackupInfo[]>([]);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupRestoring, setBackupRestoring] = useState<number | null>(null);
+  
+  // Activity History state
+  const [showActivityHistoryModal, setShowActivityHistoryModal] = useState(false);
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [selectedActivities, setSelectedActivities] = useState<Set<number>>(new Set());
+  const [activityRestoring, setActivityRestoring] = useState(false);
   const [backupCreating, setBackupCreating] = useState(false);
   
   // Saved templates/variants (simple bookmark feature)
@@ -1440,10 +1451,25 @@ export function App() {
   }
   
   function deleteTemplate(id: string) {
+    // Safety check: verify template exists
+    const templateExists = templates.find(t => t.id === id);
+    if (!templateExists) {
+      console.error('🛑 Template not found for soft delete:', id);
+      setDeleteConfirmId(null);
+      return;
+    }
+    
     // Soft delete - mark as deleted instead of removing
     const updated = templates.map(t => 
       t.id === id ? { ...t, deleted: true, deletedAt: Date.now() } : t
     );
+    
+    // Safety check: verify count is unchanged (soft delete shouldn't change count)
+    if (updated.length !== templates.length) {
+      console.error('🛑 Template count mismatch after soft delete');
+      return;
+    }
+    
     setTemplates(updated);
     // Also remove from saved (all variants of this template)
     const updatedSaved = savedItems.filter(item => item.templateId !== id);
@@ -1453,15 +1479,49 @@ export function App() {
   
   // Restore deleted template
   function restoreTemplate(id: string) {
+    // Safety check: verify template exists
+    const templateExists = templates.find(t => t.id === id);
+    if (!templateExists) {
+      console.error('🛑 Template not found for restore:', id);
+      return;
+    }
+    
     const updated = templates.map(t => 
       t.id === id ? { ...t, deleted: false, deletedAt: undefined } : t
     );
+    
+    // Safety check: verify count is unchanged
+    if (updated.length !== templates.length) {
+      console.error('🛑 Template count mismatch after restore');
+      return;
+    }
+    
     setTemplates(updated);
   }
   
   // Permanently delete template
   function permanentlyDeleteTemplate(id: string) {
+    // Safety check: verify template exists
+    const templateToDelete = templates.find(t => t.id === id);
+    if (!templateToDelete) {
+      console.error('🛑 Template not found for permanent delete:', id);
+      return;
+    }
+    
+    // Only allow permanent delete if template is already soft-deleted
+    if (!templateToDelete.deleted) {
+      console.error('🛑 Cannot permanently delete non-trashed template');
+      return;
+    }
+    
     const updated = templates.filter(t => t.id !== id);
+    
+    // Safety check: verify exactly 1 template was removed
+    if (updated.length !== templates.length - 1) {
+      console.error('🛑 Unexpected count change during permanent delete');
+      return;
+    }
+    
     setTemplates(updated);
   }
   
@@ -1793,11 +1853,30 @@ export function App() {
   // Permanently delete cloud from trash
   function permanentlyDeleteCloud(cloudId: string) {
     const cloudData = deletedClouds.find(d => d.cloud.id === cloudId);
-    if (!cloudData) return;
+    if (!cloudData) {
+      console.error('🛑 Cloud not found in trash:', cloudId);
+      return;
+    }
     
-    // Permanently delete templates
+    // Safety check: only delete templates that are already soft-deleted
     const templateIds = new Set(cloudData.templates.map(t => t.id));
-    setTemplates(templates.filter(t => !templateIds.has(t.id)));
+    const templatesToDelete = templates.filter(t => templateIds.has(t.id) && t.deleted);
+    
+    if (templatesToDelete.length !== cloudData.templates.length) {
+      console.warn('⚠️ Some templates were already restored, skipping those');
+    }
+    
+    // Calculate expected count
+    const expectedCount = templates.length - templatesToDelete.length;
+    const updated = templates.filter(t => !(templateIds.has(t.id) && t.deleted));
+    
+    // Safety check: verify count matches expectation
+    if (updated.length !== expectedCount) {
+      console.error('🛑 Unexpected count change during cloud permanent delete');
+      return;
+    }
+    
+    setTemplates(updated);
     
     // Remove from trash
     setDeletedClouds(deletedClouds.filter(d => d.cloud.id !== cloudId));
@@ -1853,6 +1932,87 @@ export function App() {
   function openBackupModal() {
     setShowBackupModal(true);
     loadBackups();
+  }
+  
+  // ============ ACTIVITY HISTORY FUNCTIONS ============
+  
+  async function loadActivityLog() {
+    setActivityLoading(true);
+    try {
+      const activities = await getActivityLog(100);
+      setActivityLog(activities);
+    } catch (error) {
+      console.error('Failed to load activity log:', error);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to load activity history' } }, '*');
+    } finally {
+      setActivityLoading(false);
+    }
+  }
+  
+  function openActivityHistoryModal() {
+    setShowActivityHistoryModal(true);
+    setSelectedActivities(new Set());
+    loadActivityLog();
+  }
+  
+  function toggleActivitySelection(activityId: number) {
+    setSelectedActivities(prev => {
+      const next = new Set(prev);
+      if (next.has(activityId)) {
+        next.delete(activityId);
+      } else {
+        next.add(activityId);
+      }
+      return next;
+    });
+  }
+  
+  function selectAllRestorableActivities() {
+    const restorable = activityLog.filter(a => 
+      (a.action === 'delete' || a.action === 'delete_forever') && !a.isRestored
+    );
+    setSelectedActivities(new Set(restorable.map(a => a.id)));
+  }
+  
+  async function handleRestoreSelected() {
+    if (selectedActivities.size === 0) return;
+    
+    setActivityRestoring(true);
+    try {
+      const result = await restoreFromActivityLog(Array.from(selectedActivities), figmaUserName || undefined);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: result.message } }, '*');
+      
+      // Reload templates and activity log
+      setShowActivityHistoryModal(false);
+      window.location.reload(); // Reload to get fresh data
+    } catch (error) {
+      console.error('Failed to restore items:', error);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to restore items' } }, '*');
+    } finally {
+      setActivityRestoring(false);
+    }
+  }
+  
+  function getActivityIcon(action: string): string {
+    switch (action) {
+      case 'add': return '➕';
+      case 'update': return '✏️';
+      case 'delete': return '🗑️';
+      case 'delete_forever': return '💀';
+      case 'restore': return '♻️';
+      default: return '📝';
+    }
+  }
+  
+  function getActivityActionLabel(action: string): string {
+    switch (action) {
+      case 'add': return 'Added';
+      case 'update': return 'Updated';
+      case 'delete': return 'Deleted';
+      case 'delete_forever': return 'Deleted forever';
+      case 'restore': return 'Restored';
+      default: return action;
+    }
   }
   
   function resetAllSettings() {
@@ -2467,13 +2627,13 @@ export function App() {
                         <div className="header__dropdown-divider"></div>
                         <button 
                           className="header__dropdown-menu-item"
-                          onClick={() => { openBackupModal(); setShowMoreMenu(false); }}
+                          onClick={() => { openActivityHistoryModal(); setShowMoreMenu(false); }}
                         >
                           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                             <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
                             <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
                           </svg>
-                          Restore from Backup
+                          Activity History
                         </button>
                       </div>
                     )}
@@ -3344,12 +3504,12 @@ export function App() {
                 <span className="settings-header__title">Manage Clouds and Sections</span>
               </div>
               <div className="settings-header__actions">
-                <button className="settings-header__backup" onClick={openBackupModal}>
+                <button className="settings-header__backup" onClick={openActivityHistoryModal}>
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                    <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                    <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
                   </svg>
-                  Restore
+                  Activity History
                 </button>
                 {deletedClouds.length > 0 && (
                   <button className="settings-header__trash" onClick={() => setShowCloudTrashModal(true)}>
@@ -5009,77 +5169,95 @@ export function App() {
         </div>
       )}
       
-      {/* Backup & Restore Modal */}
-      {showBackupModal && (
-        <div className="modal-overlay" onClick={() => setShowBackupModal(false)}>
-          <div className="modal modal--backup" onClick={(e) => e.stopPropagation()}>
+      {/* Activity History Modal */}
+      {showActivityHistoryModal && (
+        <div className="modal-overlay" onClick={() => setShowActivityHistoryModal(false)}>
+          <div className="modal modal--activity-history" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
-              <h3 className="modal__title">Restore from Backup</h3>
-              <button className="modal__close" onClick={() => setShowBackupModal(false)}>×</button>
+              <h3 className="modal__title">Activity History</h3>
+              <button className="modal__close" onClick={() => setShowActivityHistoryModal(false)}>×</button>
             </div>
             <div className="modal__body">
-              <div className="backup-modal__actions">
-                <Button 
-                  variant="brand-outline" 
-                  size="small"
-                  onClick={handleCreateBackup}
-                  disabled={backupCreating}
-                >
-                  {backupCreating ? 'Creating...' : 'Create Backup Now'}
-                </Button>
-                <Button 
-                  variant="neutral" 
-                  size="small"
-                  onClick={loadBackups}
-                  disabled={backupLoading}
-                >
-                  {backupLoading ? 'Loading...' : 'Refresh List'}
-                </Button>
-              </div>
+              <p className="activity-history__description">
+                All changes are tracked. Select deleted items to restore them without affecting other team members' work.
+              </p>
               
-              {backupLoading ? (
-                <div className="backup-modal__loading">
-                  <Spinner size="medium" />
-                  <p>Loading backups...</p>
+              {selectedActivities.size > 0 && (
+                <div className="activity-history__actions">
+                  <Button 
+                    variant="brand" 
+                    size="small"
+                    onClick={handleRestoreSelected}
+                    disabled={activityRestoring}
+                  >
+                    {activityRestoring ? 'Restoring...' : `Restore Selected (${selectedActivities.size})`}
+                  </Button>
+                  <Button 
+                    variant="neutral" 
+                    size="small"
+                    onClick={selectAllRestorableActivities}
+                  >
+                    Select All Deleted
+                  </Button>
                 </div>
-              ) : backupList.length === 0 ? (
-                <p className="modal__text">No backups found. Backups are created automatically when data changes.</p>
+              )}
+              
+              {activityLoading ? (
+                <div className="activity-history__loading">
+                  <Spinner size="medium" />
+                  <p>Loading activity history...</p>
+                </div>
+              ) : activityLog.length === 0 ? (
+                <p className="modal__text">No activity recorded yet. Activities are logged automatically when you add, update, or delete items.</p>
               ) : (
-                <div className="backup-list">
-                  {backupList.map(backup => {
-                    const date = new Date(backup.createdAt);
+                <div className="activity-list">
+                  {activityLog.map(activity => {
+                    const date = new Date(activity.createdAt);
                     const timeAgo = getTimeAgo(date);
+                    const isRestorable = (activity.action === 'delete' || activity.action === 'delete_forever') && !activity.isRestored;
+                    const isSelected = selectedActivities.has(activity.id);
+                    
                     return (
-                      <div key={backup.id} className="backup-item">
-                        <div className="backup-item__info">
-                          <span className="backup-item__date">
-                            {date.toLocaleDateString()} {date.toLocaleTimeString()}
-                          </span>
-                          <span className="backup-item__meta">
-                            {backup.itemCount} templates • {backup.action} • {timeAgo}
-                            {backup.createdBy && ` • by ${backup.createdBy}`}
-                          </span>
-                        </div>
-                        <div className="backup-item__actions">
-                          <Button 
-                            variant="brand" 
-                            size="small"
-                            onClick={() => handleRestoreBackup(backup.id)}
-                            disabled={backupRestoring === backup.id}
-                          >
-                            {backupRestoring === backup.id ? 'Restoring...' : 'Restore'}
-                          </Button>
+                      <div 
+                        key={activity.id} 
+                        className={`activity-item ${isRestorable ? 'activity-item--restorable' : ''} ${isSelected ? 'activity-item--selected' : ''}`}
+                        onClick={isRestorable ? () => toggleActivitySelection(activity.id) : undefined}
+                      >
+                        {isRestorable && (
+                          <div className="activity-item__checkbox">
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => toggleActivitySelection(activity.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        )}
+                        <div className="activity-item__content">
+                          <div className="activity-item__header">
+                            <span className="activity-item__icon">{getActivityIcon(activity.action)}</span>
+                            <span className="activity-item__action">
+                              {getActivityActionLabel(activity.action)}: {activity.assetName}
+                            </span>
+                            {activity.isRestored && (
+                              <span className="activity-item__restored-badge">Restored</span>
+                            )}
+                          </div>
+                          <div className="activity-item__details">
+                            {activity.cloudName && <span>{activity.cloudName}</span>}
+                            {activity.cloudName && activity.category && <span> → </span>}
+                            {activity.category && <span>{activity.category}</span>}
+                          </div>
+                          <div className="activity-item__meta">
+                            {timeAgo}
+                            {activity.userName && <span> • by {activity.userName}</span>}
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               )}
-              
-              <p className="backup-modal__note">
-                <strong>Note:</strong> Restoring a backup will replace all current templates. 
-                Your current data will be automatically backed up first.
-              </p>
             </div>
           </div>
         </div>

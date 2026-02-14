@@ -104,18 +104,63 @@ app.get('/api/templates', async (req, res) => {
 
 app.post('/api/templates', async (req, res) => {
   try {
-    const templates = req.body.templates || [];
+    const templates = req.body.templates;
     const userName = req.body.userName || req.headers['x-figma-user-name'] || null;
     
-    // SERVER-SIDE PROTECTION: Prevent accidental data wipe
+    // ========== STRICT VALIDATION ==========
+    
+    // 1. Must be an array
+    if (!Array.isArray(templates)) {
+      console.error('🛑 BLOCKED: templates is not an array:', typeof templates);
+      return res.status(400).json({ 
+        error: 'Invalid data format', 
+        message: 'Templates must be an array'
+      });
+    }
+    
+    // 2. Validate each template has required fields
+    const validTemplates = templates.filter(t => 
+      t && typeof t === 'object' && t.id && t.name
+    );
+    if (validTemplates.length !== templates.length) {
+      console.error(`🛑 BLOCKED: ${templates.length - validTemplates.length} templates missing id/name`);
+      return res.status(400).json({ 
+        error: 'Invalid template data', 
+        message: 'All templates must have id and name fields'
+      });
+    }
+    
+    // ========== DATA PROTECTION ==========
+    
     const currentTemplates = await db.getTemplates();
     const currentCount = currentTemplates.length;
     const newCount = templates.length;
     
-    // Block if trying to save significantly fewer templates (potential data wipe)
-    // Allow: adding new (newCount > currentCount), small deletions (up to 50% reduction), or empty DB
+    // 3. NEVER allow saving empty array when data exists
+    if (currentCount > 0 && newCount === 0) {
+      console.error(`🛑 BLOCKED: Attempted to clear all ${currentCount} templates`);
+      return res.status(400).json({ 
+        error: 'Data protection triggered', 
+        message: 'Cannot delete all templates at once. Delete them one at a time.',
+        currentCount
+      });
+    }
+    
+    // 4. Block large reductions (more than 2 templates deleted at once)
+    // Soft deletes don't reduce count, only permanent deletes do
+    if (currentCount >= 3 && newCount < currentCount - 2) {
+      console.error(`🛑 BLOCKED: Attempted bulk deletion (${currentCount} -> ${newCount})`);
+      return res.status(400).json({ 
+        error: 'Data protection triggered', 
+        message: `Cannot reduce templates from ${currentCount} to ${newCount}. Max 2 deletions at a time.`,
+        currentCount,
+        attemptedCount: newCount
+      });
+    }
+    
+    // 5. Block any reduction greater than 50% (catches edge cases)
     if (currentCount > 5 && newCount < currentCount * 0.5) {
-      console.error(`🛑 BLOCKED: Attempted to save ${newCount} templates when ${currentCount} exist (>50% reduction)`);
+      console.error(`🛑 BLOCKED: Attempted >50% reduction (${currentCount} -> ${newCount})`);
       return res.status(400).json({ 
         error: 'Data protection triggered', 
         message: `Cannot reduce templates from ${currentCount} to ${newCount}. This looks like accidental data loss.`,
@@ -124,13 +169,50 @@ app.post('/api/templates', async (req, res) => {
       });
     }
     
-    // AUTO-BACKUP: Always backup current state before saving
+    // ========== AUTO-BACKUP ==========
+    
     if (currentCount > 0) {
       const action = newCount > currentCount ? 'add' : (newCount < currentCount ? 'delete' : 'update');
       await db.createBackup('templates', currentTemplates, action, userName);
-      // Cleanup old backups (keep last 50)
       await db.cleanupOldBackups('templates', 50);
     }
+    
+    // ========== ACTIVITY LOGGING ==========
+    
+    // Detect what changed for activity logging
+    const currentIds = new Set(currentTemplates.map(t => t.id));
+    const newIds = new Set(templates.map(t => t.id));
+    
+    // Find added templates
+    const addedTemplates = templates.filter(t => !currentIds.has(t.id));
+    for (const t of addedTemplates) {
+      await db.logActivity('add', t, userName);
+    }
+    
+    // Find deleted templates (completely removed)
+    const permanentlyDeleted = currentTemplates.filter(t => !newIds.has(t.id));
+    for (const t of permanentlyDeleted) {
+      await db.logActivity('delete_forever', t, userName);
+    }
+    
+    // Find soft-deleted templates (marked as deleted but still in array)
+    for (const newT of templates) {
+      const oldT = currentTemplates.find(t => t.id === newT.id);
+      if (oldT && !oldT.deleted && newT.deleted) {
+        // Template was soft-deleted
+        await db.logActivity('delete', newT, userName);
+      } else if (oldT && oldT.deleted && !newT.deleted) {
+        // Template was restored
+        await db.logActivity('restore', newT, userName);
+      } else if (oldT && JSON.stringify(oldT) !== JSON.stringify(newT) && !addedTemplates.includes(newT)) {
+        // Template was updated (not added, not delete state change)
+        if (!newT.deleted) {
+          await db.logActivity('update', newT, userName);
+        }
+      }
+    }
+    
+    // ========== SAVE ==========
     
     console.log(`💾 Saving ${templates.length} templates to database... (was ${currentCount})`);
     await db.saveTemplates(templates);
@@ -597,6 +679,109 @@ app.post('/api/backups/:dataKey/create', async (req, res) => {
   } catch (error) {
     console.error('Error creating backup:', error);
     res.status(500).json({ error: 'Failed to create backup' });
+  }
+});
+
+// ============================================================================
+// ACTIVITY LOG ENDPOINTS
+// ============================================================================
+
+// Get activity log
+app.get('/api/activity-log', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const activities = await db.getActivityLog(limit);
+    res.json({
+      activities: activities.map(a => ({
+        id: a.id,
+        action: a.action,
+        assetId: a.asset_id,
+        assetName: a.asset_name,
+        assetData: a.asset_data,
+        cloudId: a.cloud_id,
+        cloudName: a.cloud_name,
+        category: a.category,
+        userName: a.user_name,
+        isRestored: a.is_restored,
+        createdAt: a.created_at
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching activity log:', error);
+    res.status(500).json({ error: 'Failed to fetch activity log' });
+  }
+});
+
+// Restore selected items from activity log
+app.post('/api/activity-log/restore', async (req, res) => {
+  try {
+    const { activityIds, userName } = req.body;
+    
+    if (!activityIds || !Array.isArray(activityIds) || activityIds.length === 0) {
+      return res.status(400).json({ error: 'No activities selected for restore' });
+    }
+    
+    // Get current templates
+    const currentTemplates = await db.getTemplates();
+    
+    // Get the activities to restore
+    const activitiesToRestore = [];
+    for (const activityId of activityIds) {
+      const activities = await db.getActivityLog(1000);
+      const activity = activities.find(a => a.id === activityId);
+      if (activity && (activity.action === 'delete' || activity.action === 'delete_forever') && !activity.is_restored) {
+        activitiesToRestore.push(activity);
+      }
+    }
+    
+    if (activitiesToRestore.length === 0) {
+      return res.status(400).json({ error: 'No restorable activities found' });
+    }
+    
+    // Restore the items - add them back to templates
+    let restoredCount = 0;
+    const restoredItems = [];
+    
+    for (const activity of activitiesToRestore) {
+      const assetData = activity.asset_data;
+      if (!assetData || !assetData.id) continue;
+      
+      // Check if item already exists
+      const exists = currentTemplates.find(t => t.id === assetData.id);
+      if (!exists) {
+        // Re-add the item (mark as not deleted)
+        const restoredItem = { ...assetData, deleted: false, deletedAt: undefined };
+        currentTemplates.push(restoredItem);
+        restoredItems.push(restoredItem);
+        restoredCount++;
+        
+        // Log the restore action
+        await db.logActivity('restore', { ...assetData, cloudName: activity.cloud_name }, userName);
+      } else if (exists.deleted) {
+        // Item exists but is soft-deleted, un-delete it
+        exists.deleted = false;
+        exists.deletedAt = undefined;
+        restoredCount++;
+        
+        await db.logActivity('restore', { ...exists, cloudName: activity.cloud_name }, userName);
+      }
+    }
+    
+    // Save updated templates
+    if (restoredCount > 0) {
+      await db.saveTemplates(currentTemplates);
+      // Mark activities as restored
+      await db.markActivitiesRestored(activityIds);
+    }
+    
+    res.json({
+      success: true,
+      restoredCount,
+      message: `Restored ${restoredCount} item${restoredCount !== 1 ? 's' : ''}`
+    });
+  } catch (error) {
+    console.error('Error restoring from activity log:', error);
+    res.status(500).json({ error: 'Failed to restore items', details: error.message });
   }
 });
 

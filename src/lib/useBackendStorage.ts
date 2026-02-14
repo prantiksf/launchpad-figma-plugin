@@ -10,7 +10,7 @@
  * 3. Replace localStorage calls in App.tsx with this hook
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // Heroku backend URL
 const API_BASE_URL = 'https://starterkit-da8649ad6366.herokuapp.com';
@@ -64,6 +64,42 @@ export async function createManualBackup(dataKey: string, userId?: string): Prom
   });
 }
 
+// ============================================================================
+// ACTIVITY LOG API FUNCTIONS
+// ============================================================================
+
+export interface ActivityLogEntry {
+  id: number;
+  action: 'add' | 'update' | 'delete' | 'delete_forever' | 'restore';
+  assetId: string;
+  assetName: string;
+  assetData: any;
+  cloudId: string | null;
+  cloudName: string | null;
+  category: string | null;
+  userName: string | null;
+  isRestored: boolean;
+  createdAt: string;
+}
+
+/**
+ * Get activity log entries
+ */
+export async function getActivityLog(limit: number = 100): Promise<ActivityLogEntry[]> {
+  const result = await apiRequest<{ activities: ActivityLogEntry[] }>(`/api/activity-log?limit=${limit}`);
+  return result.activities;
+}
+
+/**
+ * Restore selected items from activity log
+ */
+export async function restoreFromActivityLog(activityIds: number[], userName?: string): Promise<{ success: boolean; restoredCount: number; message: string }> {
+  return apiRequest(`/api/activity-log/restore`, {
+    method: 'POST',
+    body: JSON.stringify({ activityIds, userName })
+  });
+}
+
 // Helper for API requests
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   try {
@@ -93,43 +129,86 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
  * Hook for templates (shared team-wide)
  */
 export function useTemplates(figmaUserName?: string | null) {
-  const [templates, setTemplates] = useState<any[]>([]);
+  const [templates, setTemplatesState] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false); // Track if initial data was loaded
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const lastKnownCount = useRef<number>(0); // Track last known count for protection
 
   useEffect(() => {
     apiRequest<any[]>('/api/templates')
       .then(data => {
-        setTemplates(data);
-        setHasLoaded(true); // Mark as loaded after first successful fetch
+        setTemplatesState(data);
+        lastKnownCount.current = data.length;
+        setHasLoaded(true);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
   const save = useCallback(async (newTemplates: any[]) => {
-    // CRITICAL: Prevent saving empty array before initial data loads
-    // This protects against race conditions wiping the database
-    if (!hasLoaded && newTemplates.length === 0) {
-      console.warn('⚠️ Blocking save of empty templates - initial data not loaded yet');
+    // ========== STRICT VALIDATION ==========
+    
+    // 1. Must be a valid array
+    if (!newTemplates || !Array.isArray(newTemplates)) {
+      console.error('🛑 BLOCKED: Invalid templates data (not an array)');
       return;
     }
     
-    // Additional safety: warn if trying to save empty when we had data
-    if (newTemplates.length === 0) {
-      console.warn('⚠️ Warning: Saving empty templates array to backend');
+    // 2. Block saving before initial load
+    if (!hasLoaded) {
+      console.warn('⚠️ BLOCKED: Cannot save before initial data loaded');
+      return;
     }
     
-    setTemplates(newTemplates);
+    // 3. Validate all templates have required fields
+    const validTemplates = newTemplates.filter(t => t?.id && t?.name);
+    if (validTemplates.length !== newTemplates.length) {
+      console.error(`🛑 BLOCKED: ${newTemplates.length - validTemplates.length} templates missing id/name`);
+      return;
+    }
+    
+    // ========== DATA PROTECTION ==========
+    
+    const currentCount = lastKnownCount.current;
+    const newCount = newTemplates.length;
+    
+    // 4. NEVER allow clearing all templates
+    if (currentCount > 0 && newCount === 0) {
+      console.error(`🛑 BLOCKED: Attempted to clear all ${currentCount} templates`);
+      return;
+    }
+    
+    // 5. Block suspicious bulk deletions (more than 2 at once)
+    if (currentCount >= 3 && newCount < currentCount - 2) {
+      console.error(`🛑 BLOCKED: Suspicious bulk deletion (${currentCount} -> ${newCount})`);
+      return;
+    }
+    
+    // ========== SAVE ==========
+    
+    // Update local state
+    setTemplatesState(newTemplates);
+    lastKnownCount.current = newCount;
+    
     try {
       await apiRequest('/api/templates', {
         method: 'POST',
         body: JSON.stringify({ templates: newTemplates, userName: figmaUserName }),
       });
       console.log('✓ Templates saved to backend:', newTemplates.length);
-    } catch (error) {
+    } catch (error: any) {
       console.error('✗ Failed to save templates:', error);
-      throw error;
+      // If server blocked the save, revert local state
+      if (error?.message?.includes('400')) {
+        console.log('↩️ Reverting local state due to server rejection');
+        // Reload from server to get correct state
+        apiRequest<any[]>('/api/templates')
+          .then(data => {
+            setTemplatesState(data);
+            lastKnownCount.current = data.length;
+          })
+          .catch(console.error);
+      }
     }
   }, [hasLoaded, figmaUserName]);
 
@@ -140,14 +219,14 @@ export function useTemplates(figmaUserName?: string | null) {
  * Hook for saved items (shared team-wide)
  */
 export function useSavedItems() {
-  const [savedItems, setSavedItems] = useState<any[]>([]);
+  const [savedItems, setSavedItemsState] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
     apiRequest<any[]>('/api/saved-items')
       .then(data => {
-        setSavedItems(data);
+        setSavedItemsState(data);
         setHasLoaded(true);
       })
       .catch(console.error)
@@ -155,16 +234,27 @@ export function useSavedItems() {
   }, []);
 
   const save = useCallback(async (newItems: any[]) => {
-    // Prevent saving empty array before initial data loads
-    if (!hasLoaded && newItems.length === 0) {
-      console.warn('⚠️ Blocking save of empty saved items - initial data not loaded yet');
+    // Must be a valid array
+    if (!newItems || !Array.isArray(newItems)) {
+      console.error('🛑 BLOCKED: Invalid saved items data');
       return;
     }
-    setSavedItems(newItems);
-    await apiRequest('/api/saved-items', {
-      method: 'POST',
-      body: JSON.stringify({ savedItems: newItems }),
-    });
+    
+    // Block saving before initial load
+    if (!hasLoaded) {
+      console.warn('⚠️ BLOCKED: Cannot save saved items before initial load');
+      return;
+    }
+    
+    setSavedItemsState(newItems);
+    try {
+      await apiRequest('/api/saved-items', {
+        method: 'POST',
+        body: JSON.stringify({ savedItems: newItems }),
+      });
+    } catch (error) {
+      console.error('✗ Failed to save saved items:', error);
+    }
   }, [hasLoaded]);
 
   return { savedItems, setSavedItems: save, loading };

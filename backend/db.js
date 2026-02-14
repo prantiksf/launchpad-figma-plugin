@@ -52,12 +52,35 @@ async function initialize() {
       )
     `);
     
+    // Activity log table - tracks individual actions for granular recovery
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id SERIAL PRIMARY KEY,
+        action VARCHAR(20) NOT NULL,
+        asset_id VARCHAR(100) NOT NULL,
+        asset_name VARCHAR(255),
+        asset_data JSONB,
+        cloud_id VARCHAR(100),
+        cloud_name VARCHAR(100),
+        category VARCHAR(100),
+        user_name VARCHAR(255),
+        is_restored BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
     // Create indexes for faster lookups
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_shared_data_key ON shared_data(key)
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_backups_key_created ON data_backups(data_key, created_at DESC)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_activity_log_action ON activity_log(action, is_restored)
     `);
     
     console.log('✓ Database tables initialized');
@@ -356,6 +379,79 @@ async function getBackupKeys() {
   return result.rows;
 }
 
+// ============================================================================
+// ACTIVITY LOG FUNCTIONS
+// ============================================================================
+
+/**
+ * Log an activity (add, update, delete, restore)
+ * @param {string} action - 'add', 'update', 'delete', 'delete_forever', 'restore'
+ * @param {object} asset - The asset being acted upon
+ * @param {string} userName - Who performed the action
+ */
+async function logActivity(action, asset, userName = null) {
+  try {
+    await pool.query(`
+      INSERT INTO activity_log (action, asset_id, asset_name, asset_data, cloud_id, cloud_name, category, user_name, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    `, [
+      action,
+      asset.id,
+      asset.name,
+      JSON.stringify(asset),
+      asset.cloudId || null,
+      asset.cloudName || null,
+      asset.category || null,
+      userName
+    ]);
+    console.log(`📝 Activity logged: ${action} - ${asset.name} by ${userName || 'unknown'}`);
+  } catch (error) {
+    console.error('Failed to log activity:', error);
+    // Don't throw - activity logging shouldn't block the main operation
+  }
+}
+
+/**
+ * Get activity log entries
+ * @param {number} limit - Maximum number of entries to return
+ */
+async function getActivityLog(limit = 100) {
+  const result = await pool.query(`
+    SELECT * FROM activity_log 
+    ORDER BY created_at DESC 
+    LIMIT $1
+  `, [limit]);
+  return result.rows;
+}
+
+/**
+ * Mark activity entries as restored
+ * @param {number[]} activityIds - Array of activity IDs to mark as restored
+ */
+async function markActivitiesRestored(activityIds) {
+  if (!activityIds || activityIds.length === 0) return;
+  
+  const placeholders = activityIds.map((_, i) => `$${i + 1}`).join(', ');
+  await pool.query(`
+    UPDATE activity_log 
+    SET is_restored = TRUE 
+    WHERE id IN (${placeholders})
+  `, activityIds);
+}
+
+/**
+ * Get restorable activities (deleted items that haven't been restored)
+ */
+async function getRestorableActivities() {
+  const result = await pool.query(`
+    SELECT * FROM activity_log 
+    WHERE (action = 'delete' OR action = 'delete_forever')
+    AND is_restored = FALSE
+    ORDER BY created_at DESC
+  `);
+  return result.rows;
+}
+
 module.exports = {
   initialize,
   pool,
@@ -390,5 +486,10 @@ module.exports = {
   getBackupById,
   restoreFromBackup,
   cleanupOldBackups,
-  getBackupKeys
+  getBackupKeys,
+  // Activity log
+  logActivity,
+  getActivityLog,
+  markActivitiesRestored,
+  getRestorableActivities
 };
