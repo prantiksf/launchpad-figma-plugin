@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 
 // Import Design System Components
 import { 
@@ -33,17 +34,21 @@ import {
   useHousekeepingRules,
   // Backup functions
   getBackups,
+  getBackupKeys,
   restoreFromBackup,
   createManualBackup,
   BackupInfo,
   // Activity log functions
   getActivityLog,
   restoreFromActivityLog,
+  logActivityFromClient,
+  getActivityStats,
+  getTemplateAddMetadata,
   ActivityLogEntry,
 } from './lib/useBackendStorage';
 
-// Import API functions (for future auto-refresh feature)
-// import { getTemplatesLastRefreshed, setTemplatesLastRefreshed } from './lib/api';
+// Import API functions for in-place refresh (reload breaks Figma plugin)
+import { loadCustomClouds, loadEditableClouds } from './lib/api';
 
 // Import cloud icons
 import SalesCloudIcon from './assets/SalesCloud-icon.png';
@@ -55,6 +60,7 @@ import FieldServiceCloudIcon from './assets/FieldServiceCloud-icon.png';
 import GoogleSlideIcon from './assets/googleslide-icon.svg';
 import StarterKitIcon from './assets/Starter Kit _icon.png';
 import StarterKitIllustration from './assets/starterkit_illustration.png';
+import ActivityEmptyIllustration from './assets/Empty state.png';
 
 // ============ CONSTANTS ============
 const clouds = [
@@ -89,19 +95,38 @@ const categoryLabels: Record<string, string> = {
   'resources': 'Resource',
 };
 
-// Helper function to get time ago string
-function getTimeAgo(date: Date): string {
+// Helper to format time as "2:30 PM"
+function formatTime(date: Date): string {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `${hour}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
+// Helper function to format activity timestamp: Just Now, Today at time, Yesterday at time, dd/mm/yyyy at time
+function formatActivityTime(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
   
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
+  // Just Now - within 5 minutes
+  if (diffMins < 5) return 'Just Now';
+  
+  // Check if same day
+  const isToday = date.toDateString() === now.toDateString();
+  if (isToday) return `Today at ${formatTime(date)}`;
+  
+  // Check if yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${formatTime(date)}`;
+  
+  // dd/mm/yyyy at time
+  const d = date.getDate().toString().padStart(2, '0');
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y} at ${formatTime(date)}`;
 }
 
 // ============ TYPES ============
@@ -152,15 +177,23 @@ export function App() {
   // Onboarding state
   const [showSplash, setShowSplash] = useState(true);
   const [showMoreCloudsInSplash, setShowMoreCloudsInSplash] = useState(false);
+  // Safety: force show UI after 5s to prevent infinite loading (e.g. API down, PLUGIN_READY delayed)
+  const [forceShowAfterTimeout, setForceShowAfterTimeout] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setForceShowAfterTimeout(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
   
   // Backend data hooks (shared team-wide)
-  const { templates, setTemplates, loading: templatesLoading } = useTemplates(figmaUserName);
+  const { templates, setTemplates, loading: templatesLoading, refetch: refetchTemplates } = useTemplates(figmaUserName);
   const { savedItems, setSavedItems, loading: savedItemsLoading } = useSavedItems();
   const { links: figmaLinks, setLinks: setFigmaLinks, loading: figmaLinksLoading } = useFigmaLinks();
   const { cloudLinks: cloudFigmaLinks, setCloudLinks: setCloudFigmaLinks, loading: cloudLinksLoading } = useCloudFigmaLinks();
   const { clouds: customClouds, setClouds: setCustomClouds, loading: customCloudsLoading } = useCustomClouds();
   const { editableClouds, setEditableClouds, loading: editableCloudsLoading } = useEditableClouds();
   const { categories: cloudCategories, setCategories: setCloudCategories, loading: categoriesLoading } = useCloudCategories();
+  const cloudCategoriesRef = useRef(cloudCategories);
+  cloudCategoriesRef.current = cloudCategories;
   const { symbols: statusSymbols, setSymbols: setStatusSymbols, loading: statusSymbolsLoading } = useStatusSymbols();
   const { pocs: cloudPOCs, setPocs: setCloudPOCs, loading: pocsLoading } = useCloudPocs();
   
@@ -188,6 +221,8 @@ export function App() {
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [moveMenuOpen, setMoveMenuOpen] = useState<string | null>(null);
+  const [createSectionForTemplate, setCreateSectionForTemplate] = useState<string | null>(null);
+  const [newSectionName, setNewSectionName] = useState('');
   const [selectedVariants, setSelectedVariants] = useState<Record<string, Record<string, string>>>({});
   const [selectedSlides, setSelectedSlides] = useState<Record<string, string[]>>({}); // For multi-select
   const [isScaffolding, setIsScaffolding] = useState(false);
@@ -197,6 +232,62 @@ export function App() {
   const [isEditingStatusBadges, setIsEditingStatusBadges] = useState(false);
   const [selectedCoverVariant, setSelectedCoverVariant] = useState<{templateId: string; variantKey?: string; name: string} | null>(null);
   const [showCoverSelector, setShowCoverSelector] = useState(false);
+  
+  // Variant grid hover popover - show larger preview after delay, click outside to dismiss
+  const [variantPopover, setVariantPopover] = useState<{
+    templateId: string;
+    templateName: string;
+    variant: VariantInfo;
+  } | null>(null);
+  const [variantPopoverVisible, setVariantPopoverVisible] = useState(false);
+  const variantPopoverShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const variantPopoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const variantPopoverRef = useRef<HTMLDivElement | null>(null);
+  const variantPopoverVisibleRef = useRef(false);
+  variantPopoverVisibleRef.current = variantPopoverVisible;
+  const variantPopoverVariantKeyRef = useRef<string | null>(null);
+  variantPopoverVariantKeyRef.current = variantPopover?.variant?.key ?? null;
+  const [variantPopoverHighResPreview, setVariantPopoverHighResPreview] = useState<string | null>(null);
+  
+  // Click outside to dismiss variant popover
+  useEffect(() => {
+    if (!variantPopoverVisible || !variantPopover) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (variantPopoverRef.current && !variantPopoverRef.current.contains(target)) {
+        setVariantPopoverVisible(false);
+        setVariantPopover(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [variantPopoverVisible, variantPopover]);
+
+  // Request high-res preview when popover becomes visible (runs in Figma plugin)
+  useEffect(() => {
+    if (!variantPopoverVisible || !variantPopover) {
+      setVariantPopoverHighResPreview(null);
+      return;
+    }
+    setVariantPopoverHighResPreview(null);
+    const isInFigma = typeof window !== 'undefined' && window.parent !== window && typeof (window.parent as any).postMessage === 'function';
+    if (isInFigma) {
+      (window.parent as any).postMessage({
+        pluginMessage: {
+          type: 'REQUEST_VARIANT_PREVIEW',
+          payload: { variantKey: variantPopover.variant.key },
+        },
+      }, '*');
+    }
+  }, [variantPopoverVisible, variantPopover?.variant.key]);
+
+  // Cleanup variant popover timers on unmount
+  useEffect(() => {
+    return () => {
+      if (variantPopoverShowTimerRef.current) clearTimeout(variantPopoverShowTimerRef.current);
+      if (variantPopoverHideTimerRef.current) clearTimeout(variantPopoverHideTimerRef.current);
+    };
+  }, []);
   
   // Cloud POCs (Point of Contact) - per cloud
   interface CloudPOC {
@@ -456,13 +547,36 @@ export function App() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupRestoring, setBackupRestoring] = useState<number | null>(null);
   
+  // Version History state (simplified: most recent backup summary only)
+  const [showDataRecoveryModal, setShowDataRecoveryModal] = useState(false);
+  const [latestBackupSummary, setLatestBackupSummary] = useState<{
+    clouds: number;
+    assets: number;
+    structures: number;
+    backupDate: string;
+    backupsToRestore: { dataKey: string; backupId: number }[];
+  } | null>(null);
+  const [dataRecoveryLoading, setDataRecoveryLoading] = useState(false);
+  const [dataRecoveryError, setDataRecoveryError] = useState<string | null>(null);
+  const [dataRecoveryRestoring, setDataRecoveryRestoring] = useState(false);
+  
   // Activity History state
   const [showActivityHistoryModal, setShowActivityHistoryModal] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [selectedActivities, setSelectedActivities] = useState<Set<number>>(new Set());
   const [activityRestoring, setActivityRestoring] = useState(false);
+  const [activityHistoryCloudFilter, setActivityHistoryCloudFilter] = useState<string>('');
+  const [showActivityHistoryCloudSelector, setShowActivityHistoryCloudSelector] = useState(false);
+  const [activityHistoryTimeFilter, setActivityHistoryTimeFilter] = useState<'7d' | '30d' | 'all'>('all');
+  const [showActivityHistoryTimeFilter, setShowActivityHistoryTimeFilter] = useState(false);
+  const [activityHistorySortBy, setActivityHistorySortBy] = useState<'recency' | 'types' | 'designer'>('recency');
+  const [activityHistoryGroupBy, setActivityHistoryGroupBy] = useState<'all' | 'none'>('none');
+  const [showActivityHistorySort, setShowActivityHistorySort] = useState(false);
+  const [activityHistoryStats, setActivityHistoryStats] = useState<{ componentsAdded: number; componentsReused: number; designersEngaged: number } | null>(null);
   const [backupCreating, setBackupCreating] = useState(false);
+  const [celebrationStats, setCelebrationStats] = useState<{ componentsAdded: number; componentsReused: number; designersEngaged: number } | null>(null);
+  const [templateAddMetadata, setTemplateAddMetadata] = useState<Record<string, { userName: string | null; createdAt: string }>>({});
   
   // Saved templates/variants (simple bookmark feature)
   // Format: [{templateId: string, variantKey?: string}, ...]
@@ -505,6 +619,16 @@ export function App() {
   const splashMoreDropdownRef = useRef<HTMLDivElement>(null);
   const coverSelectorRef = useRef<HTMLDivElement>(null);
   const moveMenuRef = useRef<HTMLDivElement>(null);
+  const activityHistoryCloudSelectorRef = useRef<HTMLDivElement>(null);
+  const activityHistoryTimeFilterRef = useRef<HTMLDivElement>(null);
+  const activityHistorySortRef = useRef<HTMLDivElement>(null);
+  const templatesRef = useRef<Template[]>([]);
+  const categoryPillsRef = useRef<HTMLDivElement>(null);
+
+  // Keep templatesRef in sync for message handler
+  useEffect(() => {
+    templatesRef.current = templates;
+  }, [templates]);
 
   // Migration function: Copy data from figma.clientStorage to backend
   const migrateFromClientStorage = async () => {
@@ -533,15 +657,16 @@ export function App() {
             // IMPORTANT: Only migrate if backend is empty to avoid overwriting
             // Backend data takes precedence over local clientStorage
             
-            // Skip template migration - backend is the source of truth now
-            // Templates are loaded from backend via useTemplates hook
-            if (msg.templates && msg.templates.length > 0) {
-              console.log(`⏭️ Skipping template migration (${msg.templates.length} local) - backend is source of truth`);
+            // Migrate templates when backend is empty (sync local/published plugin to database)
+            if (msg.templates && msg.templates.length > 0 && templates.length === 0) {
+              setTemplates(msg.templates);
+              console.log(`✓ Migrated ${msg.templates.length} templates from local to database`);
             }
 
-            // Skip saved items migration - backend is the source of truth
-            if (msg.savedItems && msg.savedItems.length > 0) {
-              console.log(`⏭️ Skipping saved items migration (${msg.savedItems.length} local) - backend is source of truth`);
+            // Migrate saved items when backend is empty
+            if (msg.savedItems && msg.savedItems.length > 0 && savedItems.length === 0) {
+              setSavedItems(msg.savedItems);
+              console.log(`✓ Migrated ${msg.savedItems.length} saved items from local to database`);
             }
 
             // Migrate figma links
@@ -572,10 +697,22 @@ export function App() {
               console.log('✓ Migrated editable clouds');
             }
 
-            // Migrate cloud categories
+            // Migrate cloud categories - merge clientStorage into backend (don't overwrite existing)
             if (msg.cloudCategories && Object.keys(msg.cloudCategories).length > 0) {
-              setCloudCategories(msg.cloudCategories);
-              console.log('✓ Migrated cloud categories');
+              const current = cloudCategoriesRef.current;
+              const merged = { ...current };
+              let changed = false;
+              for (const [cloudId, cats] of Object.entries(msg.cloudCategories)) {
+                const arr = Array.isArray(cats) ? cats : [];
+                if (arr.length > 0 && (!merged[cloudId] || merged[cloudId].length === 0)) {
+                  merged[cloudId] = arr;
+                  changed = true;
+                }
+              }
+              if (changed) {
+                setCloudCategories(merged);
+                console.log('✓ Migrated cloud categories from local');
+              }
             }
 
             // Migrate status symbols
@@ -798,6 +935,8 @@ export function App() {
     }));
   }
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
+  const [contentRefreshKey, setContentRefreshKey] = useState(0);
+  const [scrollToTemplateId, setScrollToTemplateId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
@@ -814,6 +953,21 @@ export function App() {
       [sectionId]: !prev[sectionId]
     }));
   };
+
+  // Sync expandedSections when housekeeping rules load (backend may have different rule ids)
+  useEffect(() => {
+    setExpandedSections(prev => {
+      const next = { ...prev };
+      let changed = false;
+      housekeepingRules.forEach(rule => {
+        if (rule?.id && !(rule.id in next)) {
+          next[rule.id] = false;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [housekeepingRules]);
   const [addStep, setAddStep] = useState<'instructions' | 'loading' | 'configure'>('instructions');
   const [capturedComponent, setCapturedComponent] = useState<ComponentInfo | null>(null);
   const [formName, setFormName] = useState('');
@@ -821,6 +975,29 @@ export function App() {
   const [formCategory, setFormCategory] = useState('components');
   const [formDescription, setFormDescription] = useState('');
   const [formGoogleSlideLink, setFormGoogleSlideLink] = useState('');
+
+  // Dynamic category options based on selected cloud
+  const formCategoryOptions = useMemo(() => {
+    const defaultCats = [
+      { id: 'cover-pages', label: 'Covers' },
+      { id: 'components', label: 'Components' },
+      { id: 'slides', label: 'Slides' },
+      { id: 'resources', label: 'Resources' },
+    ];
+    const cloudCats = cloudCategories[formCloud] || defaultCats;
+    // Filter out non-selectable categories (team-housekeeping, all, saved)
+    return cloudCats
+      .filter(cat => !['team-housekeeping', 'all', 'saved'].includes(cat.id))
+      .map(cat => ({ value: cat.id, label: cat.label }));
+  }, [formCloud, cloudCategories]);
+
+  // Reset formCategory when formCloud changes if current category doesn't exist in new cloud
+  useEffect(() => {
+    const validCategories = formCategoryOptions.map(opt => opt.value);
+    if (!validCategories.includes(formCategory) && validCategories.length > 0) {
+      setFormCategory(validCategories[0]);
+    }
+  }, [formCloud, formCategoryOptions, formCategory]);
 
   // ============ MESSAGE HANDLER ============
   useEffect(() => {
@@ -881,9 +1058,29 @@ export function App() {
           setAddStep('instructions');
           break;
 
-        case 'INSERT_SUCCESS':
+        case 'INSERT_SUCCESS': {
           setInsertingId(null);
+          const count = msg.count ?? 1;
+          const templateName = msg.templateName || 'Component';
+          const cloudId = msg.cloudId || selectedClouds[0] || undefined;
+          const cloudName = msg.cloudName || allClouds.find(c => c.id === cloudId)?.name;
+          const template = templatesRef.current.find((t: Template) => t.id === msg.templateId);
+          const preview = template?.preview ?? (template?.variants?.[0] as { preview?: string } | undefined)?.preview;
+          const assetData: { preview?: string; nodeId?: string } = {};
+          if (preview) assetData.preview = preview;
+          if (msg.nodeId) assetData.nodeId = msg.nodeId;
+          logActivityFromClient({
+            action: 'component_insert',
+            assetId: msg.templateId || `insert-${Date.now()}`,
+            assetName: count > 1 ? `${templateName} (${count} items)` : templateName,
+            cloudId,
+            cloudName,
+            userName: msg.userName ?? figmaUserName ?? undefined,
+            assetData: Object.keys(assetData).length > 0 ? assetData : undefined,
+          });
+          fetchCelebrationStats();
           break;
+        }
 
         case 'INSERT_ERROR':
           setInsertingId(null);
@@ -916,6 +1113,16 @@ export function App() {
 
         case 'TEMPLATE_REFRESH_ERROR':
           setRefreshingId(null);
+          break;
+
+        case 'VARIANT_PREVIEW_RESULT':
+          if (variantPopoverVariantKeyRef.current === msg.variantKey) {
+            setVariantPopoverHighResPreview(msg.imageData || null);
+          }
+          break;
+
+        case 'VARIANT_PREVIEW_ERROR':
+          setVariantPopoverHighResPreview(null);
           break;
 
         case 'ALL_TEMPLATES_REFRESHED':
@@ -1026,12 +1233,52 @@ export function App() {
       if (moveMenuRef.current && !moveMenuRef.current.contains(event.target as Node)) {
         setMoveMenuOpen(null);
       }
+      if (activityHistoryCloudSelectorRef.current && !activityHistoryCloudSelectorRef.current.contains(event.target as Node)) {
+        setShowActivityHistoryCloudSelector(false);
+      }
+      if (activityHistoryTimeFilterRef.current && !activityHistoryTimeFilterRef.current.contains(event.target as Node)) {
+        setShowActivityHistoryTimeFilter(false);
+      }
+      if (activityHistorySortRef.current && !activityHistorySortRef.current.contains(event.target as Node)) {
+        setShowActivityHistorySort(false);
+      }
     }
     
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+
+  // Fetch celebration stats (components added, reused, designers)
+  const fetchCelebrationStats = async () => {
+    try {
+      const stats = await getActivityStats();
+      setCelebrationStats(stats);
+    } catch {
+      // Silently ignore - stats are optional
+    }
+  };
+
+  // Load celebration stats on mount
+  useEffect(() => {
+    fetchCelebrationStats();
+  }, []);
+
+  // Fetch template add metadata (who added, when) for main library display
+  const fetchTemplateAddMetadata = async () => {
+    try {
+      const metadata = await getTemplateAddMetadata();
+      setTemplateAddMetadata(metadata);
+    } catch {
+      // Silently ignore - metadata is optional
+    }
+  };
+
+  useEffect(() => {
+    if (templates.length > 0) {
+      fetchTemplateAddMetadata();
+    }
+  }, [templates.length]);
 
   // ============ ACTIONS ============
   
@@ -1198,7 +1445,7 @@ export function App() {
     }
     
     if (activeCategory === 'team-housekeeping') {
-      // Team Housekeeping shows welcome screen, no templates
+      // Team Housekeeping shows welcome/accordion screen, no templates
       return false;
     }
     
@@ -1380,6 +1627,8 @@ export function App() {
             templateName: template.name, 
             componentKeys: keysToInsert,
             slideNames: slideNames,
+            cloudId: template.cloudId,
+            cloudName: allClouds.find(c => c.id === template.cloudId)?.name,
           },
         },
       }, '*');
@@ -1392,6 +1641,8 @@ export function App() {
             templateId: template.id, 
             templateName: template.name, 
             componentKey: template.componentKey,
+            cloudId: template.cloudId,
+            cloudName: allClouds.find(c => c.id === template.cloudId)?.name,
           },
         },
       }, '*');
@@ -1596,6 +1847,62 @@ export function App() {
       }
     }, 200);
   }
+  
+  // Create new section and move template to it
+  function createSectionAndMoveTemplate() {
+    if (!createSectionForTemplate || !newSectionName.trim()) return;
+    
+    const template = templates.find(t => t.id === createSectionForTemplate);
+    if (!template) return;
+    
+    const cloudId = template.cloudId || selectedClouds[0];
+    const newCategoryId = newSectionName.trim().toLowerCase().replace(/\s+/g, '-');
+    
+    // Get current categories for this cloud
+    const currentCategories = cloudCategories[cloudId] || baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved');
+    
+    // Check if category already exists
+    if (currentCategories.some(c => c.id === newCategoryId)) {
+      // Just move to existing category
+      moveTemplateToCategory(createSectionForTemplate, newCategoryId);
+    } else {
+      // Add new category to the cloud
+      const newCategory = { id: newCategoryId, label: newSectionName.trim() };
+      const updatedCategories = [...currentCategories, newCategory];
+      
+      // Update cloud categories
+      const updated = { ...cloudCategories, [cloudId]: updatedCategories };
+      setCloudCategories(updated);
+      
+      // Move template to new category
+      const updatedTemplates = templates.map(t => 
+        t.id === createSectionForTemplate ? { ...t, category: newCategoryId } : t
+      );
+      setTemplates(updatedTemplates);
+      
+      // Auto-switch to the new category
+      setActiveCategory(newCategoryId);
+      
+      // Scroll pill and template into view
+      setTimeout(() => {
+        const pillElement = document.querySelector(`[data-category="${newCategoryId}"]`);
+        if (pillElement) {
+          pillElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+        const element = document.getElementById(`template-${createSectionForTemplate}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('template-item--highlight');
+          setTimeout(() => element.classList.remove('template-item--highlight'), 2000);
+        }
+      }, 200);
+    }
+    
+    // Reset state
+    setCreateSectionForTemplate(null);
+    setNewSectionName('');
+    setMoveMenuOpen(null);
+  }
 
   // Export/Import functions removed - data is now automatically synced via backend
 
@@ -1674,7 +1981,16 @@ export function App() {
       setCustomClouds(updatedClouds);
       setSelectedClouds([newCloud.id]);
       setDefaultCloud(newCloud.id);
-      setCustomClouds(updatedClouds);
+      // Seed default categories for new cloud so they persist in DB
+      const defaultCats = [
+        { id: 'team-housekeeping', label: 'Team Housekeeping' },
+        { id: 'all', label: 'All Assets' },
+        { id: 'cover-pages', label: 'Covers' },
+        { id: 'components', label: 'Components' },
+        { id: 'slides', label: 'Slides' },
+        { id: 'resources', label: 'Resources' },
+      ];
+      setCloudCategories({ ...cloudCategories, [newCloud.id]: defaultCats });
       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${newCloud.name} added!` } }, '*');
       
       // Reset form
@@ -1694,8 +2010,9 @@ export function App() {
   // Editable default clouds and custom clouds now come from hooks above
   // editableClouds and customClouds are already defined from useEditableClouds and useCustomClouds hooks
 
-  // Combined clouds list (default + custom)
-  const allClouds = [...(editableClouds || clouds), ...customClouds];
+  // Combined clouds list (default + custom) - guard against null/malformed data from restore
+  const editableArr = Array.isArray(editableClouds) ? editableClouds : clouds;
+  const allClouds = [...editableArr, ...(customClouds ?? [])];
   
   // Visible clouds (excluding hidden ones)
   const visibleClouds = allClouds.filter(cloud => !hiddenClouds.includes(cloud.id));
@@ -1709,6 +2026,43 @@ export function App() {
   const currentCategories = savedCount > 0 
     ? [...baseCategories, { id: 'saved', label: 'Saved', iconOnly: true }]
     : baseCategories;
+
+  // Category pills overflow: when 2nd row fills, show +x and expand as accordion
+  const [categoryPillsExpanded, setCategoryPillsExpanded] = useState(false);
+  const [categoryPillsOverflowCount, setCategoryPillsOverflowCount] = useState(0);
+  const categoryPillsCategoriesKey = currentCategories.map(c => c.id).join(',');
+  const prevCategoriesKeyRef = useRef(categoryPillsCategoriesKey);
+  useEffect(() => {
+    if (prevCategoriesKeyRef.current !== categoryPillsCategoriesKey) {
+      prevCategoriesKeyRef.current = categoryPillsCategoriesKey;
+      setCategoryPillsOverflowCount(0);
+      setCategoryPillsExpanded(false);
+    }
+  }, [categoryPillsCategoriesKey]);
+  useLayoutEffect(() => {
+    if (view !== 'home') return;
+    // Only measure when expanded or when showing all pills (overflowCount 0)
+    // When collapsed, don't re-measure to avoid feedback loop
+    if (!categoryPillsExpanded && categoryPillsOverflowCount > 0) return;
+    const el = categoryPillsRef.current;
+    if (!el) return;
+    const containerRect = el.getBoundingClientRect();
+    const rowHeight = 36; // pill ~28px + gap 8px
+    const maxBottom = containerRect.top + rowHeight * 2;
+    let overflowCount = 0;
+    for (let i = 0; i < el.children.length; i++) {
+      const child = el.children[i] as HTMLElement;
+      if (child.classList.contains('category-pill--overflow') || child.classList.contains('category-pills__show-less')) continue;
+      if (child.getBoundingClientRect().bottom > maxBottom + 4) overflowCount++;
+    }
+    setCategoryPillsOverflowCount(overflowCount);
+  }, [view, currentCategories, categoryPillsExpanded, categoryPillsOverflowCount]);
+
+  // When collapsed, show one fewer pill so +x fits on row 2 (never goes to row 3)
+  const visibleCategories = categoryPillsOverflowCount > 0 && !categoryPillsExpanded
+    ? currentCategories.slice(0, Math.max(0, currentCategories.length - categoryPillsOverflowCount - 1))
+    : currentCategories;
+  const hiddenCount = currentCategories.length - visibleCategories.length;
   
   // Auto-fallback to "all" if saved category is empty
   useEffect(() => {
@@ -1723,6 +2077,24 @@ export function App() {
       setShowWelcomeScreen(true);
     }
   }, [activeCategory]);
+
+  // Scroll to template when navigating from Activity History
+  useEffect(() => {
+    if (!scrollToTemplateId || view !== 'home') return;
+    const tryScroll = (attempt = 0) => {
+      const el = document.getElementById(`template-${scrollToTemplateId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setScrollToTemplateId(null);
+      } else if (attempt < 20) {
+        setTimeout(() => tryScroll(attempt + 1), 150);
+      } else {
+        setScrollToTemplateId(null);
+      }
+    };
+    const t = setTimeout(() => tryScroll(), 200);
+    return () => clearTimeout(t);
+  }, [scrollToTemplateId, view, contentRefreshKey]);
     
   // Helper functions for settings
   function toggleCloudVisibility(cloudId: string) {
@@ -1934,14 +2306,116 @@ export function App() {
     loadBackups();
   }
   
+  // ============ DATA RECOVERY FUNCTIONS ============
+  
+  async function loadLatestBackupSummary() {
+    setDataRecoveryLoading(true);
+    setDataRecoveryError(null);
+    try {
+      const keys = await getBackupKeys();
+      const SAFE_RESTORE_TYPES = ['custom_clouds', 'templates', 'editable_clouds'];
+      let clouds = 0, assets = 0, structures = 0;
+      let latestDate: Date | null = null;
+      const backupsToRestore: { dataKey: string; backupId: number }[] = [];
+
+      for (const keyInfo of keys) {
+        const dataKey = keyInfo.data_key;
+        if (!SAFE_RESTORE_TYPES.includes(dataKey)) continue;
+        const backups = await getBackups(dataKey, 1);
+        if (backups.length === 0) continue;
+        const latest = backups[0];
+        const itemCount = latest.itemCount ?? (latest as any).item_count ?? 0;
+        const createdAt = latest.createdAt ?? (latest as any).created_at;
+        const date = createdAt ? new Date(createdAt) : new Date();
+        if (!latestDate || date.getTime() > latestDate.getTime()) latestDate = date;
+
+        if (dataKey === 'templates' && itemCount === 0) continue;
+        backupsToRestore.push({ dataKey, backupId: latest.id });
+
+        if (dataKey === 'custom_clouds') clouds = itemCount;
+        else if (dataKey === 'templates') assets = itemCount;
+        else if (dataKey === 'editable_clouds') structures = itemCount;
+      }
+
+      const backupDate = latestDate && !isNaN(latestDate.getTime())
+        ? formatActivityTime(latestDate)
+        : 'Unknown';
+
+      setLatestBackupSummary({
+        clouds,
+        assets,
+        structures,
+        backupDate,
+        backupsToRestore,
+      });
+    } catch (error) {
+      console.error('Failed to load backup summary:', error);
+      setDataRecoveryError('Unable to load backups. Check your connection and try again.');
+      setLatestBackupSummary(null);
+    } finally {
+      setDataRecoveryLoading(false);
+    }
+  }
+
+  function openDataRecoveryModal() {
+    setShowDataRecoveryModal(true);
+    setLatestBackupSummary(null);
+    loadLatestBackupSummary();
+  }
+
+  async function handleDataRecoveryRestore() {
+    if (!latestBackupSummary || latestBackupSummary.backupsToRestore.length === 0) return;
+    if (!confirm('Restore from your most recent backup? Your current data will be backed up first.')) return;
+
+    setDataRecoveryRestoring(true);
+    try {
+      const errors: string[] = [];
+      for (const { dataKey, backupId } of latestBackupSummary.backupsToRestore) {
+        try {
+          await restoreFromBackup(dataKey, backupId, true);
+        } catch (err) {
+          console.error(`Failed to restore ${dataKey}:`, err);
+          errors.push(`${dataKey}: ${(err as Error).message}`);
+        }
+      }
+      if (errors.length > 0) {
+        parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Restore had errors: ${errors.join('; ')}` } }, '*');
+        setDataRecoveryError(`Some restores failed. You may need to refresh. ${errors.join('; ')}`);
+        return;
+      }
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Backup restored!' } }, '*');
+      setShowDataRecoveryModal(false);
+      setDataRecoveryError(null);
+      // In-place refresh - sanitize data to prevent null/undefined causing white screen
+      try {
+        const [customData, editableData] = await Promise.all([
+          loadCustomClouds().then((d) => (Array.isArray(d) ? d : [])),
+          loadEditableClouds().then((d) => (d != null ? d : null)),
+        ]);
+        setCustomClouds(customData);
+        setEditableClouds(editableData);
+        await refetchTemplates();
+      } catch (refreshErr) {
+        console.error('Refresh after restore:', refreshErr);
+        parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Data refreshed. If something looks wrong, close and reopen the plugin.' } }, '*');
+      }
+    } catch (error) {
+      console.error('Failed to restore:', error);
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to restore backup' } }, '*');
+      setDataRecoveryError('Restore failed. Your data was backed up before the attempt.');
+    } finally {
+      setDataRecoveryRestoring(false);
+    }
+  }
+  
   // ============ ACTIVITY HISTORY FUNCTIONS ============
   
-  async function loadActivityLog() {
+async function loadActivityLog(cloudId?: string) {
     setActivityLoading(true);
     try {
-      const activities = await getActivityLog(100);
+      const activities = await getActivityLog(100, (cloudId ?? activityHistoryCloudFilter) || undefined);
       setActivityLog(activities);
-    } catch (error) {
+   } catch (error) {
       console.error('Failed to load activity log:', error);
       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to load activity history' } }, '*');
     } finally {
@@ -1949,10 +2423,22 @@ export function App() {
     }
   }
   
+  async function fetchActivityHistoryStats(cloudId?: string) {
+    try {
+      const stats = await getActivityStats(cloudId || undefined);
+      setActivityHistoryStats(stats);
+    } catch {
+      setActivityHistoryStats(null);
+    }
+  }
+
   function openActivityHistoryModal() {
+    const initialCloud = defaultCloud || visibleClouds[0]?.id || 'sales';
     setShowActivityHistoryModal(true);
     setSelectedActivities(new Set());
-    loadActivityLog();
+    setActivityHistoryCloudFilter(initialCloud);
+    loadActivityLog(initialCloud);
+    fetchActivityHistoryStats(initialCloud);
   }
   
   function toggleActivitySelection(activityId: number) {
@@ -1982,9 +2468,13 @@ export function App() {
       const result = await restoreFromActivityLog(Array.from(selectedActivities), figmaUserName || undefined);
       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: result.message } }, '*');
       
-      // Reload templates and activity log
       setShowActivityHistoryModal(false);
-      window.location.reload(); // Reload to get fresh data
+      setSelectedActivities(new Set());
+      // Refresh data without full page reload (reload breaks Figma plugin)
+      await refetchTemplates();
+      const cloudId = activityHistoryCloudFilter || defaultCloud || visibleClouds[0]?.id || 'sales';
+      loadActivityLog(cloudId);
+      fetchActivityHistoryStats(cloudId);
     } catch (error) {
       console.error('Failed to restore items:', error);
       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Failed to restore items' } }, '*');
@@ -1993,25 +2483,41 @@ export function App() {
     }
   }
   
-  function getActivityIcon(action: string): string {
+  function getActivityActionLabel(action: string): string {
     switch (action) {
-      case 'add': return '➕';
-      case 'update': return '✏️';
-      case 'delete': return '🗑️';
-      case 'delete_forever': return '💀';
-      case 'restore': return '♻️';
-      default: return '📝';
+      case 'add': return 'Added to library';
+      case 'update': return 'Updated';
+      case 'delete': return 'Moved to Trash';
+      case 'delete_forever': return 'Deleted Forever';
+      case 'restore': return 'Restored';
+      case 'page_structure': return 'Page structure';
+      case 'section_create': return 'Section created';
+      case 'section_update': return 'Section updated';
+      case 'section_delete': return 'Section deleted';
+      case 'poc_add': return 'POC added';
+      case 'poc_update': return 'POC updated';
+      case 'poc_delete': return 'POC removed';
+      case 'component_insert': return 'Component inserted';
+      default: return action.replace(/_/g, ' ');
     }
   }
   
-  function getActivityActionLabel(action: string): string {
+  function getActivityBadgeClass(action: string): string {
     switch (action) {
-      case 'add': return 'Added';
-      case 'update': return 'Updated';
-      case 'delete': return 'Deleted';
-      case 'delete_forever': return 'Deleted forever';
-      case 'restore': return 'Restored';
-      default: return action;
+      case 'add': return 'activity-badge--added';
+      case 'update': return 'activity-badge--updated';
+      case 'delete': return 'activity-badge--deleted';
+      case 'delete_forever': return 'activity-badge--deleted-forever';
+      case 'restore': return 'activity-badge--restored';
+      case 'page_structure': return 'activity-badge--scaffold';
+      case 'section_create': return 'activity-badge--added';
+      case 'section_update': return 'activity-badge--updated';
+      case 'section_delete': return 'activity-badge--deleted';
+      case 'poc_add': return 'activity-badge--added';
+      case 'poc_update': return 'activity-badge--updated';
+      case 'poc_delete': return 'activity-badge--deleted';
+      case 'component_insert': return 'activity-badge--added';
+      default: return 'activity-badge--updated';
     }
   }
   
@@ -2240,12 +2746,21 @@ export function App() {
     }
   }
 
-  const VERSION = '1.11.0';
+  const VERSION = '1.15.1';
+
+  // Safety: after 10s, force show UI even if loading (prevents stuck blank screen)
+  useEffect(() => {
+    if (forceShowAfterTimeout && (selectedClouds.length === 0 || !cloudSelectionReady)) {
+      setSelectedClouds(prev => (prev.length === 0 ? ['sales'] : prev));
+      setCloudSelectionReady(true);
+      setShowSplash(false);
+    }
+  }, [forceShowAfterTimeout, selectedClouds.length, cloudSelectionReady]);
 
   // ============ RENDER ============
   
   // Wait for onboarding state to load before rendering anything (prevents flash)
-  if (onboardingLoading || hasCompletedOnboarding === null) {
+  if (!forceShowAfterTimeout && (onboardingLoading || hasCompletedOnboarding === null)) {
     return (
       <div className="splash-screen">
         <div className="splash-screen__logo">
@@ -2274,7 +2789,8 @@ export function App() {
 
   // Show loading state while waiting for splash screen data to sync (prevents UI snap)
   // Don't render splash screen until cloudSelectionReady is true AND selectedClouds is set
-  if (showSplash && hasCompletedOnboarding === true && 
+  // Skip when forceShowAfterTimeout to prevent stuck blank screen
+  if (!forceShowAfterTimeout && showSplash && hasCompletedOnboarding === true && 
       (!cloudSelectionReady || selectedClouds.length === 0 || customCloudsLoading || hiddenCloudsLoading || defaultCloudLoading)) {
     return (
       <div className="splash-screen">
@@ -2310,7 +2826,7 @@ export function App() {
   if (showSplash && hasCompletedOnboarding === true && cloudSelectionReady && selectedClouds.length > 0 && 
       !customCloudsLoading && !hiddenCloudsLoading && !defaultCloudLoading) {
     const displayedClouds = clouds.filter(c => !hiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
-    const visibleCustomClouds = customClouds.filter(c => !hiddenClouds.includes(c.id));
+    const visibleCustomClouds = (customClouds ?? []).filter(c => !hiddenClouds.includes(c.id));
     const hasMoreClouds = visibleCustomClouds.length > 0;
     
     return (
@@ -2388,6 +2904,8 @@ export function App() {
           </button>
         )}
 
+        <span className="splash-screen__version">v{VERSION}</span>
+
         {/* Add Cloud Modal (for splash screen) */}
         {showAddCloudModal && (
           <div className="modal-overlay" onClick={cancelAddCloud}>
@@ -2442,7 +2960,8 @@ export function App() {
   }
   
   // Show loading state while data is loading (but onboarding state is known)
-  if (isLoading) {
+  // Skip when forceShowAfterTimeout to prevent stuck blank screen
+  if (!forceShowAfterTimeout && isLoading) {
     return (
       <div className="app">
         <div className="loading-state">
@@ -2526,6 +3045,15 @@ export function App() {
               </div>
             )}
             </div>
+            {celebrationStats && (celebrationStats.componentsAdded > 0 || celebrationStats.componentsReused > 0 || celebrationStats.designersEngaged > 0) && (
+              <div className="header__celebration-stats">
+                <span>{celebrationStats.componentsAdded} components added</span>
+                <span className="header__celebration-sep">:</span>
+                <span>{celebrationStats.componentsReused} components reused</span>
+                <span className="header__celebration-sep">:</span>
+                <span>{celebrationStats.designersEngaged} designers engaged</span>
+              </div>
+            )}
             
             <div className="header__actions">
               {view === 'home' ? (
@@ -2634,6 +3162,15 @@ export function App() {
                             <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
                           </svg>
                           Activity History
+                        </button>
+                        <button 
+                          className="header__dropdown-menu-item"
+                          onClick={() => { openDataRecoveryModal(); setShowMoreMenu(false); }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 1a7 7 0 0 0-7 7v2a1 1 0 0 0 .5.87l7 4a1 1 0 0 0 1 0l7-4a1 1 0 0 0 .5-.87V8a7 7 0 0 0-7-7z"/>
+                          </svg>
+                          Version History
                         </button>
                       </div>
                     )}
@@ -2944,8 +3481,11 @@ export function App() {
 
         {/* Category Pills (only on home) */}
         {view === 'home' && (
-          <div className="category-pills">
-            {currentCategories.map(cat => (
+          <div
+            ref={categoryPillsRef}
+            className="category-pills"
+          >
+            {visibleCategories.map(cat => (
               <button
                 key={cat.id}
                 className={`category-pill ${cat.iconOnly ? 'category-pill--icon' : ''} ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
@@ -2969,14 +3509,32 @@ export function App() {
                 )}
               </button>
             ))}
-        </div>
+            {categoryPillsOverflowCount > 0 && !categoryPillsExpanded && (
+              <button
+                type="button"
+                className="category-pill category-pill--overflow"
+                onClick={() => setCategoryPillsExpanded(true)}
+              >
+                +{hiddenCount}
+              </button>
+            )}
+            {categoryPillsOverflowCount > 0 && categoryPillsExpanded && (
+              <button
+                type="button"
+                className="category-pills__show-less"
+                onClick={() => setCategoryPillsExpanded(false)}
+              >
+                Show less
+              </button>
+            )}
+          </div>
         )}
         </div>
       </div>
 
       {/* Content Container - Scrollable */}
       <div className="content-container">
-        <div className={`content ${view === 'scaffold' ? 'content--scaffold' : ''}`}>
+        <div className={`content ${view === 'scaffold' ? 'content--scaffold' : ''}`} key={view === 'home' ? `home-${contentRefreshKey}` : 'scaffold'}>
         {view === 'scaffold' ? (
           <div className="scaffold-section scaffold-section--fixed-footer">
             <div className="scaffold-section__scrollable">
@@ -3179,6 +3737,8 @@ export function App() {
                             <button className="scaffold-section-header__delete" onClick={() => {
                               if (confirm(`Delete "${section.name}" section?`)) {
                                 setScaffoldSections(scaffoldSections.filter((_, i) => i !== sectionIndex));
+                                const cloud = allClouds.find(c => c.id === selectedClouds[0]);
+                                logActivityFromClient({ action: 'page_structure', assetId: 'scaffold-section-delete', assetName: `Deleted section "${section.name}"`, cloudId: selectedClouds[0] || undefined, cloudName: cloud?.name, userName: figmaUserName || undefined });
                               }
                             }}>×</button>
                           </div>
@@ -3396,6 +3956,8 @@ export function App() {
                         name: 'NEW SECTION',
                         pages: [{ id: `page-${Date.now()}`, name: 'New Page', status: '🟢' }]
                       }]);
+                      const cloud = allClouds.find(c => c.id === selectedClouds[0]);
+                      logActivityFromClient({ action: 'page_structure', assetId: 'scaffold-section-add', assetName: 'Added page section', cloudId: selectedClouds[0] || undefined, cloudName: cloud?.name, userName: figmaUserName || undefined });
                     }}
                   >+ Add Section</button>
                 )}
@@ -3559,11 +4121,11 @@ export function App() {
                                         reader.onload = (event) => {
                                           const iconUrl = event.target?.result as string;
                                           if (cloud.isCustom) {
-                                            const updatedCustom = customClouds.map(c => 
+                                            const updatedCustom = (customClouds ?? []).map(c => 
                                               c.id === cloud.id ? { ...c, icon: iconUrl } : c
                                             );
                                             setCustomClouds(updatedCustom);
-                                          } else {
+                                          } else if (Array.isArray(editableClouds)) {
                                             const updated = editableClouds.map(c => 
                                               c.id === cloud.id ? { ...c, icon: iconUrl } : c
                                             );
@@ -3589,7 +4151,7 @@ export function App() {
                                       );
                                       setCustomClouds(updatedCustom);
                                       parent.postMessage({ pluginMessage: { type: 'SAVE_CUSTOM_CLOUDS', clouds: updatedCustom } }, '*');
-                                    } else {
+                                    } else if (Array.isArray(editableClouds)) {
                                       const updated = editableClouds.map(c => 
                                         c.id === cloud.id ? { ...c, name: e.target.value } : c
                                       );
@@ -3692,9 +4254,15 @@ export function App() {
                                           cats[index] = { ...cat, label: e.target.value };
                                           updateCloudCategories(cloud.id, cats);
                                         }}
+                                        onBlur={() => {
+                                          if (cat.label.trim()) {
+                                            logActivityFromClient({ action: 'section_update', assetId: cat.id, assetName: cat.label, cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
+                                          }
+                                        }}
                                       />
                                       {cat.id !== 'all' && (
                                         <button className="settings-category-item__delete" onClick={() => {
+                                          logActivityFromClient({ action: 'section_delete', assetId: cat.id, assetName: cat.label, cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
                                           const cats = (cloudCategories[cloud.id] || defaultCategories).filter((_, i) => i !== index);
                                           updateCloudCategories(cloud.id, cats);
                                         }}>×</button>
@@ -3704,9 +4272,11 @@ export function App() {
                                   <button
                                     className="settings-add-category-btn settings-add-category-btn--small"
                                     onClick={() => {
+                                      const newId = `custom-${Date.now()}`;
                                       const cats = [...(cloudCategories[cloud.id] || defaultCategories)];
-                                      cats.push({ id: `custom-${Date.now()}`, label: 'New Category' });
+                                      cats.push({ id: newId, label: 'New Category' });
                                       updateCloudCategories(cloud.id, cats);
+                                      logActivityFromClient({ action: 'section_create', assetId: newId, assetName: 'New Category', cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
                                     }}
                                   >+ Add Category</button>
                                 </div>
@@ -3744,6 +4314,7 @@ export function App() {
                                       <button 
                                         className="settings-poc-item__delete" 
                                         onClick={() => {
+                                          logActivityFromClient({ action: 'poc_delete', assetId: `poc-${index}`, assetName: poc.name || poc.email || 'POC', cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
                                           const pocs = (cloudPOCs[cloud.id] || []).filter((_, i) => i !== index);
                                           updateCloudPOCs(cloud.id, pocs);
                                         }}
@@ -3757,6 +4328,7 @@ export function App() {
                                         const pocs = [...(cloudPOCs[cloud.id] || [])];
                                         pocs.push({ name: '', email: '' });
                                         updateCloudPOCs(cloud.id, pocs);
+                                        logActivityFromClient({ action: 'poc_add', assetId: `poc-${Date.now()}`, assetName: 'POC added', cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
                                       }}
                                     >+ Add POC</button>
                                   )}
@@ -3872,7 +4444,7 @@ export function App() {
                     <RadioGroup
                       name="templateType"
                       label="Select Type"
-                      options={categoryOptions}
+                      options={formCategoryOptions}
                       value={formCategory}
                       onChange={setFormCategory}
                       direction="horizontal"
@@ -4629,8 +5201,15 @@ export function App() {
           <EmptyState
             icon={<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>}
             title={`No ${activeCategory === 'all' ? 'templates' : categories.find(c => c.id === activeCategory)?.label.toLowerCase() || 'templates'} yet`}
-            description={`Add your first ${activeCategory === 'all' ? 'template' : categories.find(c => c.id === activeCategory)?.label.toLowerCase().replace(/s$/, '') || 'template'} to get started`}
-            action={<Button variant="brand-outline" onClick={startAddFlow}>Add Template</Button>}
+            description={`Add your first ${activeCategory === 'all' ? 'template' : categories.find(c => c.id === activeCategory)?.label.toLowerCase().replace(/s$/, '') || 'template'} to get started. If you expected data, try Version History.`}
+            action={
+              <div className="empty-state__actions">
+                <Button variant="brand-outline" onClick={startAddFlow}>Add Template</Button>
+                <button type="button" className="empty-state__recovery-link" onClick={() => setShowDataRecoveryModal(true)}>
+                  Version History
+                </button>
+              </div>
+            }
           />
         ) : filteredTemplates.length === 0 ? (
           <EmptyState
@@ -4670,6 +5249,20 @@ export function App() {
                     <span className="template-item__size">{template.size.width}×{template.size.height}</span>
                   )}
           </div>
+          {(() => {
+            const meta = templateAddMetadata[template.id];
+            if (!meta || (!meta.userName && !meta.createdAt)) return null;
+            return (
+              <div className="template-item__meta">
+                <span className="template-item__meta-added">
+                  {meta.userName ? `Added by ${meta.userName}` : ''}
+                </span>
+                <span className="template-item__meta-time">
+                  {meta.createdAt ? formatActivityTime(new Date(meta.createdAt)) : ''}
+                </span>
+              </div>
+            );
+          })()}
           
                 {/* Variant Grid - Visual slide selector */}
                 {template.isComponentSet && template.variants && template.variants.length > 1 && (() => {
@@ -4718,12 +5311,22 @@ export function App() {
                           </button>
                         </div>
                       )}
-                      <div className={`variant-grid__items variant-grid__items--${
-                        displayVariants.length === 1 ? 'single' :
-                        displayVariants.length === 2 ? 'duo' :
-                        displayVariants.length === 4 ? 'quad' :
-                        'default'
-                      }`}>
+                      <div 
+                        className={`variant-grid__items variant-grid__items--${
+                          displayVariants.length === 1 ? 'single' :
+                          displayVariants.length === 2 ? 'duo' :
+                          displayVariants.length === 4 ? 'quad' :
+                          'default'
+                        }`}
+                        onMouseLeave={() => {
+                          if (variantPopoverHideTimerRef.current) clearTimeout(variantPopoverHideTimerRef.current);
+                          variantPopoverHideTimerRef.current = setTimeout(() => {
+                            setVariantPopoverVisible(false);
+                            setVariantPopover(null);
+                            variantPopoverHideTimerRef.current = null;
+                          }, 200);
+                        }}
+                      >
                         {displayVariants.map(variant => {
                           const isSelected = selected.includes(variant.key);
                           return (
@@ -4731,6 +5334,26 @@ export function App() {
                               key={variant.key}
                               className={`variant-grid__item ${isSelected ? 'is-selected' : ''}`}
                               onClick={() => toggleSlideSelection(template.id, variant.key)}
+                              onMouseEnter={() => {
+                                if (variantPopoverHideTimerRef.current) {
+                                  clearTimeout(variantPopoverHideTimerRef.current);
+                                  variantPopoverHideTimerRef.current = null;
+                                }
+                                setVariantPopover({
+                                  templateId: template.id,
+                                  templateName: template.name,
+                                  variant,
+                                });
+                                if (variantPopoverVisibleRef.current) {
+                                  // Already visible - just update content, no delay (prevents jumping)
+                                } else {
+                                  if (variantPopoverShowTimerRef.current) clearTimeout(variantPopoverShowTimerRef.current);
+                                  variantPopoverShowTimerRef.current = setTimeout(() => {
+                                    setVariantPopoverVisible(true);
+                                    variantPopoverShowTimerRef.current = null;
+                                  }, 1500);
+                                }
+                              }}
                             >
                               <div className="variant-grid__thumb-wrapper">
                                 {variant.preview ? (
@@ -4943,16 +5566,36 @@ export function App() {
                               </svg>
                             </div>
                             <div className="template-item__more-submenu">
-                              {baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved' && c.id !== template.category).map(cat => (
-                                <button
-                                  key={cat.id}
-                                  className="template-item__more-option"
-                                  onClick={() => moveTemplateToCategory(template.id, cat.id)}
-                                >
-                                  {cat.label}
-                                </button>
-                              ))}
+                              {(() => {
+                                const moveToCats = baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved' && c.id !== template.category);
+                                if (!moveToCats.some(c => c.id === 'resources')) {
+                                  moveToCats.push({ id: 'resources', label: 'Resources' });
+                                }
+                                return moveToCats.map(cat => (
+                                  <button
+                                    key={cat.id}
+                                    className="template-item__more-option"
+                                    onClick={() => moveTemplateToCategory(template.id, cat.id)}
+                                  >
+                                    {cat.label}
+                                  </button>
+                                ));
+                              })()}
                             </div>
+                            
+                            {/* Create New Section - same hierarchy as Refresh/Delete */}
+                            <button
+                              className="template-item__more-option template-item__more-option--create"
+                              onClick={() => {
+                                setCreateSectionForTemplate(template.id);
+                                setMoveMenuOpen(null);
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                              </svg>
+                              Create New Section
+                            </button>
                             
                             <div className="template-item__more-divider"></div>
                             
@@ -4994,6 +5637,53 @@ export function App() {
         )}
         </div>
       </div>
+
+      {/* Variant grid hover popover - larger preview after 1.5s delay, fixed at top of plugin */}
+      {variantPopoverVisible && variantPopover && typeof document !== 'undefined' && document.body && createPortal(
+        <div
+          ref={variantPopoverRef}
+          className="variant-grid-popover"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            top: 72,
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+          }}
+          onMouseEnter={() => {
+            if (variantPopoverHideTimerRef.current) {
+              clearTimeout(variantPopoverHideTimerRef.current);
+              variantPopoverHideTimerRef.current = null;
+            }
+          }}
+          onMouseLeave={() => {
+            variantPopoverHideTimerRef.current = setTimeout(() => {
+              setVariantPopoverVisible(false);
+              setVariantPopover(null);
+              variantPopoverHideTimerRef.current = null;
+            }, 200);
+          }}
+        >
+          <div className="variant-grid-popover__content">
+            <div className="variant-grid-popover__preview">
+              {(variantPopoverHighResPreview || variantPopover.variant.preview) ? (
+                <img src={variantPopoverHighResPreview || variantPopover.variant.preview || ''} alt={variantPopover.variant.displayName} />
+              ) : (
+                <div className="variant-grid-popover__empty">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                  </svg>
+                </div>
+              )}
+            </div>
+            <div className="variant-grid-popover__meta">
+              <span className="variant-grid-popover__name">{variantPopover.variant.displayName}</span>
+              <span className="variant-grid-popover__template">{variantPopover.templateName}</span>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Footer - Fixed at bottom for all views */}
       <footer className="app-footer">
@@ -5055,6 +5745,45 @@ export function App() {
                 disabled={!newCloudName.trim() || !newCloudIcon}
               >
                 Add Cloud
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Create New Section Modal */}
+      {createSectionForTemplate && (
+        <div className="modal-overlay" onClick={() => { setCreateSectionForTemplate(null); setNewSectionName(''); }}>
+          <div className="modal modal--small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">Create New Section</h3>
+              <button className="modal__close" onClick={() => { setCreateSectionForTemplate(null); setNewSectionName(''); }}>×</button>
+            </div>
+            <div className="modal__body">
+              <p className="modal__text" style={{ marginBottom: '12px' }}>
+                Enter a name for the new section. "<strong>{templates.find(t => t.id === createSectionForTemplate)?.name}</strong>" will be moved to this section.
+              </p>
+              <Input
+                label="Section Name"
+                placeholder="e.g., Icons, Patterns, Templates..."
+                value={newSectionName}
+                onChange={(e) => setNewSectionName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newSectionName.trim()) {
+                    createSectionAndMoveTemplate();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <div className="modal__footer">
+              <Button variant="neutral" onClick={() => { setCreateSectionForTemplate(null); setNewSectionName(''); }}>Cancel</Button>
+              <Button 
+                variant="brand" 
+                onClick={createSectionAndMoveTemplate}
+                disabled={!newSectionName.trim()}
+              >
+                Create & Move
               </Button>
             </div>
           </div>
@@ -5171,22 +5900,289 @@ export function App() {
       
       {/* Activity History Modal */}
       {showActivityHistoryModal && (
-        <div className="modal-overlay" onClick={() => setShowActivityHistoryModal(false)}>
+        <div className="modal-overlay modal-overlay--activity-history" onClick={() => setShowActivityHistoryModal(false)}>
           <div className="modal modal--activity-history" onClick={(e) => e.stopPropagation()}>
-            <div className="modal__header">
-              <h3 className="modal__title">Activity History</h3>
-              <button className="modal__close" onClick={() => setShowActivityHistoryModal(false)}>×</button>
+            <div className="modal__header modal__header--activity-history">
+              <div className="modal__header-top">
+                <h3 className="modal__title">Activity History</h3>
+                <button className="modal__close" onClick={() => setShowActivityHistoryModal(false)}>×</button>
+              </div>
+              <p className="activity-history__description activity-history__description--above-divider">
+                Everything stays safe. Restore deleted items without affecting others.
+              </p>
             </div>
             <div className="modal__body">
-              <p className="activity-history__description">
-                All changes are tracked. Select deleted items to restore them without affecting other team members' work.
-              </p>
+              <div className="activity-history__intro">
+                <div className="activity-history__filter">
+                <div className="activity-history__cloud-switcher" ref={activityHistoryCloudSelectorRef}>
+                  <button
+                    className="activity-history__cloud-switcher-btn"
+                    onClick={() => setShowActivityHistoryCloudSelector(!showActivityHistoryCloudSelector)}
+                  >
+                    <img
+                      src={(allClouds.find(c => c.id === activityHistoryCloudFilter) ?? allClouds[0])?.icon || SalesCloudIcon}
+                      alt="Cloud"
+                      className="activity-history__cloud-switcher-icon"
+                    />
+                    <span className="activity-history__cloud-switcher-text">
+                      {(allClouds.find(c => c.id === activityHistoryCloudFilter) ?? allClouds[0])?.name || 'Sales Cloud'}
+                    </span>
+                    <svg className="activity-history__cloud-switcher-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
+                  </button>
+                  {showActivityHistoryCloudSelector && (
+                    <div className="cloud-selector-dropdown cloud-selector-dropdown--activity-history">
+                      <div className="cloud-selector-dropdown__header">Select Cloud</div>
+                      {visibleClouds.map(cloud => (
+                        <div
+                          key={cloud.id}
+                          className={`cloud-selector-dropdown__item ${activityHistoryCloudFilter === cloud.id ? 'is-selected' : ''}`}
+                          onClick={() => {
+                            setActivityHistoryCloudFilter(cloud.id);
+                            loadActivityLog(cloud.id);
+                            fetchActivityHistoryStats(cloud.id);
+                            setShowActivityHistoryCloudSelector(false);
+                          }}
+                        >
+                          <img src={cloud.icon} alt={cloud.name} className="cloud-selector-dropdown__icon" />
+                          <span className="cloud-selector-dropdown__name">{cloud.name}</span>
+                          {defaultCloud === cloud.id && (
+                            <span className="cloud-selector-dropdown__default-badge">Default</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="activity-history__time-filter" ref={activityHistoryTimeFilterRef}>
+                  <button
+                    className="activity-history__time-filter-btn"
+                    onClick={() => setShowActivityHistoryTimeFilter(!showActivityHistoryTimeFilter)}
+                  >
+                    <span className="activity-history__time-filter-text">
+                      {activityHistoryTimeFilter === '7d' ? 'Last 7 days' : activityHistoryTimeFilter === '30d' ? 'Last 30 days' : 'All time'}
+                    </span>
+                    <svg className="activity-history__time-filter-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+                      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
+                  </button>
+                  {showActivityHistoryTimeFilter && (
+                    <div className="cloud-selector-dropdown cloud-selector-dropdown--activity-history cloud-selector-dropdown--time-filter">
+                      {[
+                        { value: '7d' as const, label: 'Last 7 days' },
+                        { value: '30d' as const, label: 'Last 30 days' },
+                        { value: 'all' as const, label: 'All time' },
+                      ].map(opt => (
+                        <div
+                          key={opt.value}
+                          className={`cloud-selector-dropdown__item ${activityHistoryTimeFilter === opt.value ? 'is-selected' : ''}`}
+                          onClick={() => {
+                            setActivityHistoryTimeFilter(opt.value);
+                            setShowActivityHistoryTimeFilter(false);
+                          }}
+                        >
+                          <span className="cloud-selector-dropdown__name">{opt.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="activity-history__sort" ref={activityHistorySortRef}>
+                  <button
+                    className="activity-history__sort-btn"
+                    onClick={() => setShowActivityHistorySort(!showActivityHistorySort)}
+                    title="Sort & group"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18M7 12h10M10 18h4"/>
+                    </svg>
+                  </button>
+                  {showActivityHistorySort && (
+                    <div className="cloud-selector-dropdown cloud-selector-dropdown--activity-history cloud-selector-dropdown--sort">
+                      <div className="cloud-selector-dropdown__header">Sort by</div>
+                      {[
+                        { value: 'recency' as const, label: 'Recency' },
+                        { value: 'types' as const, label: 'Types' },
+                        { value: 'designer' as const, label: 'Designer name' },
+                      ].map(opt => (
+                        <div
+                          key={opt.value}
+                          className={`cloud-selector-dropdown__item ${activityHistorySortBy === opt.value ? 'is-selected' : ''}`}
+                          onClick={() => {
+                            setActivityHistorySortBy(opt.value);
+                          }}
+                        >
+                          <span className="cloud-selector-dropdown__name">{opt.label}</span>
+                        </div>
+                      ))}
+                      <div className="activity-history__sort-toggle-row" onClick={e => e.stopPropagation()}>
+                        <label className="slds-checkbox_toggle activity-history__slds-toggle">
+                          <input
+                            type="checkbox"
+                            checked={activityHistoryGroupBy === 'all'}
+                            onChange={e => setActivityHistoryGroupBy(e.target.checked ? 'all' : 'none')}
+                          />
+                          <span className="slds-form-element__label">Group by tags</span>
+                          <span className="slds-checkbox_faux" aria-hidden="true" />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                </div>
+                <div className="activity-history__kpi">
+                  <span>{(activityHistoryStats ?? celebrationStats)?.componentsAdded ?? 0} added</span>
+                  <span className="activity-history__kpi-sep">:</span>
+                  <span>{(activityHistoryStats ?? celebrationStats)?.componentsReused ?? 0} reused</span>
+                  <span className="activity-history__kpi-sep">:</span>
+                  <span>{(activityHistoryStats ?? celebrationStats)?.designersEngaged ?? 0} designers engaged</span>
+                </div>
+              </div>
               
-              {selectedActivities.size > 0 && (
-                <div className="activity-history__actions">
+              <div className={`activity-history__content ${selectedActivities.size > 0 ? 'activity-history__content--has-actions' : ''}`}>
+              {activityLoading ? (
+                <div className="activity-history__loading activity-history__loading--shimmer">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="activity-history__shimmer-item">
+                      <div className="activity-history__shimmer-checkbox" />
+                      <div className="activity-history__shimmer-preview" />
+                      <div className="activity-history__shimmer-content">
+                        <div className="activity-history__shimmer-line activity-history__shimmer-line--short" />
+                        <div className="activity-history__shimmer-line activity-history__shimmer-line--medium" />
+                        <div className="activity-history__shimmer-line activity-history__shimmer-line--long" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : activityLog.length === 0 ? (
+                <div className="activity-history__empty">
+                  <img src={ActivityEmptyIllustration} alt="" className="activity-history__empty-illustration" />
+                  <h3 className="activity-history__empty-title">No activity yet</h3>
+                  <p className="activity-history__empty-description">Activities are logged automatically when you add, update, or delete items.</p>
+                </div>
+              ) : (() => {
+                const now = Date.now();
+                let filteredActivityLog = activityLog.filter(a => {
+                  if (activityHistoryTimeFilter === 'all') return true;
+                  const d = new Date(a.createdAt).getTime();
+                  if (activityHistoryTimeFilter === '7d') return d >= now - 7 * 24 * 60 * 60 * 1000;
+                  if (activityHistoryTimeFilter === '30d') return d >= now - 30 * 24 * 60 * 60 * 1000;
+                  return true;
+                });
+                filteredActivityLog = [...filteredActivityLog].sort((a, b) => {
+                  if (activityHistorySortBy === 'recency') {
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                  }
+                  if (activityHistorySortBy === 'types') {
+                    return (a.action || '').localeCompare(b.action || '');
+                  }
+                  if (activityHistorySortBy === 'designer') {
+                    return (a.userName || '').localeCompare(b.userName || '');
+                  }
+                  return 0;
+                });
+                const getTagLabel = (action: string) => getActivityActionLabel(action);
+                const renderActivityItem = (activity: ActivityLogEntry) => {
+                  const date = new Date(activity.createdAt);
+                  const timestamp = formatActivityTime(date);
+                  const isRestorable = (activity.action === 'delete' || activity.action === 'delete_forever') && !activity.isRestored;
+                  const isSelected = selectedActivities.has(activity.id);
+                  const storedPreview = activity.assetData?.preview;
+                  const templatePreview = ['add', 'update', 'component_insert'].includes(activity.action) && activity.assetId
+                    ? (templates.find(t => t.id === activity.assetId)?.preview ?? (templates.find(t => t.id === activity.assetId)?.variants?.[0] as { preview?: string } | undefined)?.preview)
+                    : undefined;
+                  const preview = storedPreview ?? templatePreview;
+                  const nodeId = activity.assetData?.nodeId as string | undefined;
+                  const canGoToComponent = !isRestorable && nodeId;
+                  const canFocusTemplate = !isRestorable && !nodeId && activity.assetId && activity.cloudId && ['add', 'update', 'component_insert', 'restore'].includes(activity.action);
+                  const handleActivityClick = () => {
+                    if (canGoToComponent) {
+                      parent.postMessage({ pluginMessage: { type: 'SELECT_NODE', nodeId } }, '*');
+                      setShowActivityHistoryModal(false);
+                    } else if (canFocusTemplate) {
+                      const template = templates.find(t => t.id === activity.assetId);
+                      const templateCategory = template?.category ?? activity.category ?? 'all';
+                      const categoriesForCloud = cloudCategories[activity.cloudId!] || defaultCategories;
+                      const validCategory = categoriesForCloud.some(c => c.id === templateCategory) ? templateCategory : 'all';
+                      setSelectedClouds([activity.cloudId!]);
+                      setView('home');
+                      setShowWelcomeScreen(false);
+                      setActiveCategory(validCategory);
+                      setContentRefreshKey(k => k + 1);
+                      setScrollToTemplateId(activity.assetId!);
+                      setShowActivityHistoryModal(false);
+                    }
+                  };
+                  return (
+                    <div className={`activity-item ${isRestorable ? 'activity-item--restorable' : ''} ${isSelected ? 'activity-item--selected' : ''} ${(canGoToComponent || canFocusTemplate) ? 'activity-item--clickable' : ''}`}
+                      key={activity.id}
+                      onClick={isRestorable ? () => toggleActivitySelection(activity.id) : (canGoToComponent || canFocusTemplate) ? handleActivityClick : undefined}
+                    >
+                      <div className="activity-item__checkbox">
+                        <input type="checkbox" checked={isSelected} onChange={isRestorable ? () => toggleActivitySelection(activity.id) : undefined} onClick={(e) => e.stopPropagation()} disabled={!isRestorable} />
+                      </div>
+                      <div className="activity-item__preview">
+                        {preview ? <img src={preview} alt={activity.assetName} /> : (
+                          <div className="activity-item__preview-placeholder">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                          </div>
+                        )}
+                      </div>
+                      <div className="activity-item__content">
+                        <div className="activity-item__header">
+                          <span className={`activity-badge ${getActivityBadgeClass(activity.action)}`}>{getActivityActionLabel(activity.action)}</span>
+                          <span className="activity-item__timestamp">{timestamp}</span>
+                        </div>
+                        <div className="activity-item__name">{activity.assetName}</div>
+                        <div className="activity-item__meta">
+                          {activity.cloudName && <span>{activity.cloudName}</span>}
+                          {activity.cloudName && activity.userName && <span> • </span>}
+                          {activity.userName && <span>by {activity.userName}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                };
+                const tagOrder = ['add', 'update', 'component_insert', 'restore', 'delete', 'delete_forever', 'page_structure', 'section_create', 'section_update', 'section_delete', 'poc_add', 'poc_update', 'poc_delete'];
+                return filteredActivityLog.length === 0 ? (
+                  <div className="activity-history__empty">
+                    <img src={ActivityEmptyIllustration} alt="" className="activity-history__empty-illustration" />
+                    <h3 className="activity-history__empty-title">No activity in this period</h3>
+                    <p className="activity-history__empty-description">Try selecting a different time range.</p>
+                  </div>
+                ) : (
+                <div className="activity-list">
+                  {activityHistoryGroupBy === 'all' ? (
+                    (() => {
+                      const grouped = filteredActivityLog.reduce<Record<string, ActivityLogEntry[]>>((acc, a) => {
+                        const tag = a.action || 'other';
+                        if (!acc[tag]) acc[tag] = [];
+                        acc[tag].push(a);
+                        return acc;
+                      }, {});
+                      const orderedTags = [...new Set([...tagOrder.filter(t => grouped[t]), ...Object.keys(grouped).filter(k => !tagOrder.includes(k))])];
+                      return orderedTags.map(tag => (
+                        <div key={tag} className="activity-history__group">
+                          <div className="activity-history__group-header">{getTagLabel(tag)}</div>
+                          {grouped[tag].map(a => renderActivityItem(a))}
+                        </div>
+                      ));
+                    })()
+                  ) : (
+                    filteredActivityLog.map(a => renderActivityItem(a))
+                  )}
+                </div>
+              );
+            })()}
+            
+            {selectedActivities.size > 0 && (
+              <div className="activity-history__footer">
+                <div className="activity-history__actions activity-history__actions--animated">
                   <Button 
                     variant="brand" 
                     size="small"
+                    className="activity-history__action-btn"
                     onClick={handleRestoreSelected}
                     disabled={activityRestoring}
                   >
@@ -5195,67 +6191,90 @@ export function App() {
                   <Button 
                     variant="neutral" 
                     size="small"
-                    onClick={selectAllRestorableActivities}
+                    className="activity-history__action-btn"
+                    onClick={() => setSelectedActivities(new Set())}
                   >
-                    Select All Deleted
+                    Cancel
                   </Button>
                 </div>
-              )}
-              
-              {activityLoading ? (
-                <div className="activity-history__loading">
-                  <Spinner size="medium" />
-                  <p>Loading activity history...</p>
+              </div>
+            )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Version History Modal */}
+      {showDataRecoveryModal && (
+        <div className="modal-overlay modal-overlay--activity-history" onClick={() => setShowDataRecoveryModal(false)}>
+          <div className="modal modal--activity-history modal--data-recovery" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header modal__header--activity-history">
+              <div className="modal__header-top">
+                <div className="data-recovery__title-row">
+                  <span className="data-recovery__title-icon" aria-hidden>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                  </span>
+                  <h3 className="modal__title">Version History</h3>
                 </div>
-              ) : activityLog.length === 0 ? (
-                <p className="modal__text">No activity recorded yet. Activities are logged automatically when you add, update, or delete items.</p>
+                <button className="modal__close" onClick={() => setShowDataRecoveryModal(false)} aria-label="Close">×</button>
+              </div>
+              <p className="activity-history__description activity-history__description--above-divider">
+                Restore from your most recent backup.
+              </p>
+            </div>
+            <div className="modal__body">
+              {dataRecoveryError ? (
+                <div className="data-recovery__error">
+                  <p>{dataRecoveryError}</p>
+                  <Button variant="brand-outline" size="small" onClick={loadLatestBackupSummary}>
+                    Retry
+                  </Button>
+                </div>
+              ) : dataRecoveryLoading ? (
+                <div className="data-recovery__loading">
+                  <Spinner size="small" />
+                  <span>Loading backups...</span>
+                </div>
+              ) : !latestBackupSummary || latestBackupSummary.backupsToRestore.length === 0 ? (
+                <div className="data-recovery__empty">
+                  <div className="data-recovery__empty-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                  </div>
+                  <h3 className="data-recovery__empty-title">No backups yet</h3>
+                  <p className="data-recovery__empty-description">Save templates or customize clouds to create your first backup.</p>
+                </div>
               ) : (
-                <div className="activity-list">
-                  {activityLog.map(activity => {
-                    const date = new Date(activity.createdAt);
-                    const timeAgo = getTimeAgo(date);
-                    const isRestorable = (activity.action === 'delete' || activity.action === 'delete_forever') && !activity.isRestored;
-                    const isSelected = selectedActivities.has(activity.id);
-                    
-                    return (
-                      <div 
-                        key={activity.id} 
-                        className={`activity-item ${isRestorable ? 'activity-item--restorable' : ''} ${isSelected ? 'activity-item--selected' : ''}`}
-                        onClick={isRestorable ? () => toggleActivitySelection(activity.id) : undefined}
-                      >
-                        {isRestorable && (
-                          <div className="activity-item__checkbox">
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected}
-                              onChange={() => toggleActivitySelection(activity.id)}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </div>
-                        )}
-                        <div className="activity-item__content">
-                          <div className="activity-item__header">
-                            <span className="activity-item__icon">{getActivityIcon(activity.action)}</span>
-                            <span className="activity-item__action">
-                              {getActivityActionLabel(activity.action)}: {activity.assetName}
-                            </span>
-                            {activity.isRestored && (
-                              <span className="activity-item__restored-badge">Restored</span>
-                            )}
-                          </div>
-                          <div className="activity-item__details">
-                            {activity.cloudName && <span>{activity.cloudName}</span>}
-                            {activity.cloudName && activity.category && <span> → </span>}
-                            {activity.category && <span>{activity.category}</span>}
-                          </div>
-                          <div className="activity-item__meta">
-                            {timeAgo}
-                            {activity.userName && <span> • by {activity.userName}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="version-history__simplified">
+                  <div className="version-history__summary">
+                    <div className="version-history__summary-row">
+                      <span className="version-history__summary-count">{latestBackupSummary.clouds}</span>
+                      <span className="version-history__summary-label">clouds</span>
+                    </div>
+                    <div className="version-history__summary-row">
+                      <span className="version-history__summary-count">{latestBackupSummary.assets}</span>
+                      <span className="version-history__summary-label">assets</span>
+                    </div>
+                    <div className="version-history__summary-row">
+                      <span className="version-history__summary-count">{latestBackupSummary.structures}</span>
+                      <span className="version-history__summary-label">structures</span>
+                    </div>
+                  </div>
+                  <p className="version-history__backup-date">Backup: {latestBackupSummary.backupDate}</p>
+                  <p className="version-history__assurance">Don&apos;t worry — your data is safe with us. We&apos;ll back up your current state before restoring.</p>
+                  <Button
+                    variant="brand"
+                    size="medium"
+                    className="version-history__cta"
+                    onClick={handleDataRecoveryRestore}
+                    disabled={dataRecoveryRestoring}
+                  >
+                    {dataRecoveryRestoring ? 'Restoring...' : 'Backup and Restore'}
+                  </Button>
                 </div>
               )}
             </div>

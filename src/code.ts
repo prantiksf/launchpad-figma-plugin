@@ -2,7 +2,7 @@
 // Helps designers quickly insert pre-built templates from Team Library
 
 const STORAGE_KEY = 'launchpad_templates';
-const PLUGIN_VERSION = '1.15.0';
+const PLUGIN_VERSION = '1.15.1';
 
 // Build identifiers injected at build time - these make each build unique
 // This ensures Figma's CDN recognizes each build as a new version
@@ -432,7 +432,7 @@ figma.ui.onmessage = async (msg) => {
           try {
             const bytes = await child.exportAsync({
               format: 'PNG',
-              constraint: { type: 'WIDTH', value: 300 }
+              constraint: { type: 'WIDTH', value: 960 }
             });
             variantPreview = `data:image/png;base64,${figma.base64Encode(bytes)}`;
           } catch {
@@ -519,7 +519,7 @@ figma.ui.onmessage = async (msg) => {
 
   // ============ IMPORT COMPONENT ============
   if (msg.type === 'IMPORT_COMPONENT') {
-    const { templateName, componentKey, isComponentSet, variantSelection } = msg.payload;
+    const { templateName, componentKey, isComponentSet, variantSelection, templateId, cloudId, cloudName } = msg.payload;
     
     try {
       const component = await figma.importComponentByKeyAsync(componentKey);
@@ -568,7 +568,7 @@ figma.ui.onmessage = async (msg) => {
       figma.currentPage.selection = [instance];
       figma.viewport.scrollAndZoomIntoView([instance]);
       
-      figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, nodeId: instance.id });
+      figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, templateId, cloudId, cloudName, nodeId: instance.id, userName: figma.currentUser?.name ?? null });
       
     } catch (error) {
       figma.notify('⚠️ Failed to import template', { error: true });
@@ -579,7 +579,7 @@ figma.ui.onmessage = async (msg) => {
 
   // ============ IMPORT MULTIPLE COMPONENTS ============
   if (msg.type === 'IMPORT_MULTIPLE_COMPONENTS') {
-    const { templateName, componentKeys, slideNames } = msg.payload;
+    const { templateName, componentKeys, slideNames, templateId, cloudId, cloudName } = msg.payload;
     
     try {
       const instances: InstanceNode[] = [];
@@ -615,7 +615,7 @@ figma.ui.onmessage = async (msg) => {
         } else {
           figma.notify(`✓ Inserted ${instances.length} slide${instances.length !== 1 ? 's' : ''} from "${templateName}"`);
         }
-        figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, count: instances.length });
+        figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, templateId, cloudId, cloudName, count: instances.length, nodeId: instances[0]?.id, userName: figma.currentUser?.name ?? null });
       } else {
         figma.notify('⚠️ Component not published to Team Library. Please publish first.', { error: true, timeout: 5000 });
         figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'Component not in Team Library' });
@@ -624,6 +624,29 @@ figma.ui.onmessage = async (msg) => {
     } catch (error) {
       figma.notify('⚠️ Failed to import - ensure component is published', { error: true });
       figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'Failed to import templates' });
+    }
+    return;
+  }
+
+  // ============ SELECT NODE (go to component from Activity History) ============
+  if (msg.type === 'SELECT_NODE') {
+    const { nodeId } = msg;
+    if (nodeId) {
+      (async () => {
+        try {
+          await figma.loadAllPagesAsync();
+          const node = figma.getNodeById(nodeId);
+          if (node && 'visible' in node) {
+            figma.currentPage.selection = [node as SceneNode];
+            figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+            figma.notify('Located component');
+          } else {
+            figma.notify('Component no longer exists on canvas', { error: true });
+          }
+        } catch {
+          figma.notify('Could not locate component', { error: true });
+        }
+      })();
     }
     return;
   }
@@ -803,6 +826,27 @@ figma.ui.onmessage = async (msg) => {
     return;
   }
 
+  // ============ REQUEST VARIANT PREVIEW (high-res for popover) ============
+  if (msg.type === 'REQUEST_VARIANT_PREVIEW') {
+    const { variantKey } = msg.payload;
+    if (!variantKey) return;
+    try {
+      const component = await figma.importComponentByKeyAsync(variantKey);
+      const bytes = await component.exportAsync({
+        format: 'PNG',
+        constraint: { type: 'WIDTH', value: 960 }
+      });
+      figma.ui.postMessage({
+        type: 'VARIANT_PREVIEW_RESULT',
+        variantKey,
+        imageData: `data:image/png;base64,${figma.base64Encode(bytes)}`,
+      });
+    } catch {
+      figma.ui.postMessage({ type: 'VARIANT_PREVIEW_ERROR', variantKey });
+    }
+    return;
+  }
+
   // ============ GET PREVIEW ============
   if (msg.type === 'GET_PREVIEW') {
     const { componentKey } = msg.payload;
@@ -884,7 +928,7 @@ figma.ui.onmessage = async (msg) => {
                 try {
                   const bytes = await child.exportAsync({
                     format: 'PNG',
-                    constraint: { type: 'WIDTH', value: 300 }
+                    constraint: { type: 'WIDTH', value: 960 }
                   });
                   variantPreview = `data:image/png;base64,${figma.base64Encode(bytes)}`;
                 } catch {
@@ -998,7 +1042,7 @@ figma.ui.onmessage = async (msg) => {
               try {
                 const bytes = await child.exportAsync({
                   format: 'PNG',
-                  constraint: { type: 'WIDTH', value: 300 }
+                  constraint: { type: 'WIDTH', value: 960 }
                 });
                 variantPreview = `data:image/png;base64,${figma.base64Encode(bytes)}`;
               } catch {

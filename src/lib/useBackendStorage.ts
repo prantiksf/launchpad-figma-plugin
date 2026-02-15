@@ -32,6 +32,20 @@ export interface BackupData extends BackupInfo {
   data: any;
 }
 
+export interface BackupKeyInfo {
+  data_key: string;
+  backup_count: string;
+  latest_backup: string;
+}
+
+/**
+ * Get all backup keys (data types that have backups) with latest backup info
+ */
+export async function getBackupKeys(): Promise<BackupKeyInfo[]> {
+  const result = await apiRequest<{ backupTypes: BackupKeyInfo[] }>('/api/backups');
+  return result.backupTypes;
+}
+
 /**
  * Get list of backups for a data type
  */
@@ -49,9 +63,10 @@ export async function getBackupById(dataKey: string, backupId: number): Promise<
 
 /**
  * Restore from a backup
+ * @param merge - If true, merge backup with current data (never erase). If false, full replace.
  */
-export async function restoreFromBackup(dataKey: string, backupId: number): Promise<{ success: boolean; itemCount: number }> {
-  return apiRequest(`/api/backups/${dataKey}/${backupId}/restore`, { method: 'POST' });
+export async function restoreFromBackup(dataKey: string, backupId: number, merge: boolean = false): Promise<{ success: boolean; itemCount: number }> {
+  return apiRequest(`/api/backups/${dataKey}/${backupId}/restore?merge=${merge}`, { method: 'POST' });
 }
 
 /**
@@ -70,7 +85,7 @@ export async function createManualBackup(dataKey: string, userId?: string): Prom
 
 export interface ActivityLogEntry {
   id: number;
-  action: 'add' | 'update' | 'delete' | 'delete_forever' | 'restore';
+  action: 'add' | 'update' | 'delete' | 'delete_forever' | 'restore' | 'page_structure' | 'section_create' | 'section_update' | 'section_delete' | 'poc_add' | 'poc_update' | 'poc_delete' | 'component_insert';
   assetId: string;
   assetName: string;
   assetData: any;
@@ -82,11 +97,39 @@ export interface ActivityLogEntry {
   createdAt: string;
 }
 
+export interface LogActivityParams {
+  action: string;
+  assetId: string;
+  assetName: string;
+  cloudId?: string | null;
+  cloudName?: string | null;
+  userName?: string | null;
+  assetData?: any;
+}
+
+/**
+ * Log activity from frontend (page structure, sections, POCs)
+ */
+export async function logActivityFromClient(params: LogActivityParams): Promise<void> {
+  try {
+    await apiRequest(`/api/activity-log`, {
+      method: 'POST',
+      body: JSON.stringify(params)
+    });
+  } catch (error) {
+    console.error('Failed to log activity:', error);
+  }
+}
+
 /**
  * Get activity log entries
+ * @param limit - Max entries to return
+ * @param cloudId - Optional cloud ID to filter by
  */
-export async function getActivityLog(limit: number = 100): Promise<ActivityLogEntry[]> {
-  const result = await apiRequest<{ activities: ActivityLogEntry[] }>(`/api/activity-log?limit=${limit}`);
+export async function getActivityLog(limit: number = 100, cloudId?: string | null): Promise<ActivityLogEntry[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cloudId) params.set('cloudId', cloudId);
+  const result = await apiRequest<{ activities: ActivityLogEntry[] }>(`/api/activity-log?${params}`);
   return result.activities;
 }
 
@@ -100,164 +143,408 @@ export async function restoreFromActivityLog(activityIds: number[], userName?: s
   });
 }
 
-// Helper for API requests
-async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+/**
+ * Get celebration stats (components added, reused, designers engaged)
+ * @param cloudId - Optional cloud ID to filter stats by cloud
+ */
+export async function getActivityStats(cloudId?: string | null): Promise<{ componentsAdded: number; componentsReused: number; designersEngaged: number }> {
+  const params = cloudId ? `?cloudId=${encodeURIComponent(cloudId)}` : '';
+  return apiRequest(`/api/activity-log/stats${params}`);
+}
+
+/**
+ * Get template add metadata - who added each template and when
+ * Returns { [assetId]: { userName, createdAt } }
+ */
+export async function getTemplateAddMetadata(cloudId?: string | null): Promise<Record<string, { userName: string | null; createdAt: string }>> {
+  const params = cloudId ? `?cloudId=${encodeURIComponent(cloudId)}` : '';
+  return apiRequest(`/api/activity-log/template-metadata${params}`);
+}
+
+// ============================================================================
+// ROBUST STORAGE: Retry + ClientStorage Fallback
+// ============================================================================
+
+const isInFigma = typeof window !== 'undefined' && window.parent !== window && typeof (window.parent as any).postMessage === 'function';
+
+/** API request with retry (3 attempts, exponential backoff) */
+async function apiRequestWithRetry<T>(endpoint: string, options: RequestInit = {}, attempt = 1): Promise<T> {
+  const maxAttempts = 3;
+  const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: { 'Content-Type': 'application/json', ...options.headers },
       ...options,
     });
-    
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`API Error ${response.status} for ${endpoint}:`, errorText);
       throw new Error(`API Error: ${response.status} - ${errorText.substring(0, 100)}`);
     }
-    
     return response.json();
   } catch (error) {
-    console.error(`Failed to fetch ${API_BASE_URL}${endpoint}:`, error);
+    if (attempt < maxAttempts) {
+      await new Promise(r => setTimeout(r, delayMs));
+      return apiRequestWithRetry<T>(endpoint, options, attempt + 1);
+    }
     throw error;
   }
+}
+
+const LAST_KNOWN_GOOD_KEY = 'starter-kit-last-known-good';
+
+/** Save to Figma clientStorage (backup + fallback when API fails) */
+function saveToClientStorage(type: string, data: any, isFallback = false): void {
+  if (isInFigma) {
+    try {
+      const msg: any = type === 'custom-clouds' ? { type: 'SAVE_CUSTOM_CLOUDS', clouds: data } :
+        type === 'cloud-categories' ? { type: 'SAVE_CLOUD_CATEGORIES', categories: data } :
+        type === 'editable-clouds' ? { type: 'SAVE_EDITABLE_CLOUDS', clouds: data } :
+        type === 'status-symbols' ? { type: 'SAVE_STATUS_SYMBOLS', symbols: data } :
+        type === 'templates' ? { type: 'SAVE_TEMPLATES', templates: data } :
+        type === 'saved-items' ? { type: 'SAVE_SAVED_TEMPLATES', savedItems: data } : null;
+      if (msg) {
+        (window.parent as any).postMessage({ pluginMessage: msg }, '*');
+        if (isFallback) console.log(`✓ Saved to local storage (API unavailable): ${type}`);
+      }
+    } catch (e) {
+      console.error('Failed to save to clientStorage:', e);
+    }
+  } else {
+    try {
+      if (type === 'templates' || type === 'saved-items') {
+        localStorage.setItem(`starter-kit-${type}`, JSON.stringify(data || []));
+      }
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e);
+    }
+  }
+}
+
+/** Load from Figma clientStorage when API unavailable */
+function loadFromClientStorage<T>(type: string): Promise<T> {
+  if (!isInFigma && (type === 'templates' || type === 'saved-items')) {
+    try {
+      const raw = localStorage.getItem(`starter-kit-${type}`);
+      const data = raw ? JSON.parse(raw) : [];
+      return Promise.resolve(data as T);
+    } catch {
+      return Promise.resolve([] as T);
+    }
+  }
+  if (!isInFigma) {
+    return Promise.resolve((type === 'custom-clouds' ? [] : type === 'cloud-categories' ? {} : type === 'editable-clouds' ? null : []) as T);
+  }
+  return new Promise((resolve) => {
+    const loadType = type === 'custom-clouds' ? 'LOAD_CUSTOM_CLOUDS' :
+      type === 'cloud-categories' ? 'LOAD_CLOUD_CATEGORIES' :
+      type === 'editable-clouds' ? 'LOAD_EDITABLE_CLOUDS' :
+      type === 'status-symbols' ? 'LOAD_STATUS_SYMBOLS' :
+      type === 'templates' ? 'LOAD_TEMPLATES' :
+      type === 'saved-items' ? 'LOAD_SAVED_TEMPLATES' : '';
+    const expectType = type === 'custom-clouds' ? 'CUSTOM_CLOUDS_LOADED' :
+      type === 'cloud-categories' ? 'CLOUD_CATEGORIES_LOADED' :
+      type === 'editable-clouds' ? 'EDITABLE_CLOUDS_LOADED' :
+      type === 'status-symbols' ? 'STATUS_SYMBOLS_LOADED' :
+      type === 'templates' ? 'TEMPLATES_LOADED' :
+      type === 'saved-items' ? 'SAVED_TEMPLATES_LOADED' : '';
+    const getData = (msg: any) => type === 'custom-clouds' ? (msg.clouds ?? []) :
+      type === 'cloud-categories' ? (msg.categories ?? {}) :
+      type === 'editable-clouds' ? (msg.clouds ?? null) :
+      type === 'status-symbols' ? (msg.symbols ?? []) :
+      type === 'templates' ? (msg.templates ?? []) :
+      type === 'saved-items' ? (msg.savedItems ?? []) : [];
+    const fallback = (type === 'custom-clouds' || type === 'templates' || type === 'saved-items' ? [] : type === 'cloud-categories' ? {} : type === 'editable-clouds' ? null : []) as T;
+    if (!loadType || !expectType) {
+      resolve(fallback);
+      return;
+    }
+    const handler = (e: MessageEvent) => {
+      const msg = e.data?.pluginMessage;
+      if (msg?.type === expectType) {
+        window.removeEventListener('message', handler);
+        console.log(`✓ Loaded from local storage (fallback): ${type}`);
+        resolve(getData(msg) as T);
+      }
+    };
+    window.addEventListener('message', handler);
+    (window.parent as any).postMessage({ pluginMessage: { type: loadType } }, '*');
+    setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve(fallback);
+    }, 2000);
+  });
+}
+
+/** Store lastKnownGood for detecting data loss when API returns empty */
+function saveLastKnownGood(updates: { templatesCount?: number; savedItemsCount?: number }): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const existing = loadLastKnownGood();
+      const merged = {
+        templatesCount: updates.templatesCount ?? existing?.templatesCount ?? 0,
+        savedItemsCount: updates.savedItemsCount ?? existing?.savedItemsCount ?? 0,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(LAST_KNOWN_GOOD_KEY, JSON.stringify(merged));
+    }
+  } catch {}
+}
+
+/** Load lastKnownGood from storage */
+function loadLastKnownGood(): { templatesCount: number; savedItemsCount: number } | null {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(LAST_KNOWN_GOOD_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return { templatesCount: parsed.templatesCount ?? 0, savedItemsCount: parsed.savedItemsCount ?? 0 };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// Alias for backwards compatibility
+async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  return apiRequestWithRetry<T>(endpoint, options);
 }
 
 // ============================================================================
 // SHARED DATA HOOKS (Team-wide)
 // ============================================================================
 
+function showToast(message: string, isError = false): void {
+  try {
+    if (typeof (window.parent as any).postMessage === 'function') {
+      (window.parent as any).postMessage({
+        pluginMessage: { type: 'SHOW_TOAST', message, options: { error: isError } }
+      }, '*');
+    }
+  } catch {}
+}
+
 /**
  * Hook for templates (shared team-wide)
+ * Robust: clientStorage fallback, optimistic save, background retry, lastKnownGood
  */
 export function useTemplates(figmaUserName?: string | null) {
   const [templates, setTemplatesState] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const lastKnownCount = useRef<number>(0); // Track last known count for protection
+  const [usingFallback, setUsingFallback] = useState(false);
+  const lastKnownCount = useRef<number>(0);
+  const retryRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    apiRequest<any[]>('/api/templates')
-      .then(data => {
-        setTemplatesState(data);
-        lastKnownCount.current = data.length;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiRequest<any[]>('/api/templates');
+        if (cancelled) return;
+        const safe = Array.isArray(data) ? data : [];
+        setTemplatesState(safe);
+        lastKnownCount.current = safe.length;
         setHasLoaded(true);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+        saveToClientStorage('templates', data);
+        saveLastKnownGood({ templatesCount: data.length });
+      } catch {
+        if (cancelled) return;
+        const cached = await loadFromClientStorage<any[]>('templates');
+        if (Array.isArray(cached) && cached.length > 0) {
+          setTemplatesState(cached);
+          lastKnownCount.current = cached.length;
+          setHasLoaded(true);
+          setUsingFallback(true);
+          showToast('Using cached data. Syncing when connection is back.');
+        } else {
+          setTemplatesState([]);
+          setHasLoaded(true);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!usingFallback) return;
+    const retry = async () => {
+      try {
+        const data = await apiRequest<any[]>('/api/templates');
+        const safe = Array.isArray(data) ? data : [];
+        setTemplatesState(safe);
+        lastKnownCount.current = safe.length;
+        saveToClientStorage('templates', data);
+        saveLastKnownGood({ templatesCount: data.length });
+        setUsingFallback(false);
+        if (retryRef.current) {
+          clearInterval(retryRef.current);
+          retryRef.current = null;
+        }
+        showToast('Synced with server');
+      } catch {}
+    };
+    const id = setInterval(retry, 30000);
+    retryRef.current = id;
+    const onVisibility = () => { if (document.visibilityState === 'visible') retry(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (retryRef.current) clearInterval(retryRef.current);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [usingFallback]);
+
   const save = useCallback(async (newTemplates: any[]) => {
-    // ========== STRICT VALIDATION ==========
-    
-    // 1. Must be a valid array
     if (!newTemplates || !Array.isArray(newTemplates)) {
       console.error('🛑 BLOCKED: Invalid templates data (not an array)');
       return;
     }
-    
-    // 2. Block saving before initial load
     if (!hasLoaded) {
       console.warn('⚠️ BLOCKED: Cannot save before initial data loaded');
       return;
     }
-    
-    // 3. Validate all templates have required fields
     const validTemplates = newTemplates.filter(t => t?.id && t?.name);
     if (validTemplates.length !== newTemplates.length) {
       console.error(`🛑 BLOCKED: ${newTemplates.length - validTemplates.length} templates missing id/name`);
       return;
     }
-    
-    // ========== DATA PROTECTION ==========
-    
     const currentCount = lastKnownCount.current;
     const newCount = newTemplates.length;
-    
-    // 4. NEVER allow clearing all templates
     if (currentCount > 0 && newCount === 0) {
       console.error(`🛑 BLOCKED: Attempted to clear all ${currentCount} templates`);
       return;
     }
-    
-    // 5. Block suspicious bulk deletions (more than 2 at once)
     if (currentCount >= 3 && newCount < currentCount - 2) {
       console.error(`🛑 BLOCKED: Suspicious bulk deletion (${currentCount} -> ${newCount})`);
       return;
     }
-    
-    // ========== SAVE ==========
-    
-    // Update local state
     setTemplatesState(newTemplates);
     lastKnownCount.current = newCount;
-    
+    saveToClientStorage('templates', newTemplates);
     try {
       await apiRequest('/api/templates', {
         method: 'POST',
         body: JSON.stringify({ templates: newTemplates, userName: figmaUserName }),
       });
+      saveLastKnownGood({ templatesCount: newCount });
       console.log('✓ Templates saved to backend:', newTemplates.length);
     } catch (error: any) {
       console.error('✗ Failed to save templates:', error);
-      // If server blocked the save, revert local state
       if (error?.message?.includes('400')) {
-        console.log('↩️ Reverting local state due to server rejection');
-        // Reload from server to get correct state
         apiRequest<any[]>('/api/templates')
           .then(data => {
             setTemplatesState(data);
             lastKnownCount.current = data.length;
+            saveToClientStorage('templates', data);
           })
           .catch(console.error);
       }
     }
   }, [hasLoaded, figmaUserName]);
 
-  return { templates, setTemplates: save, loading };
+  const refetch = useCallback(async () => {
+    try {
+      const data = await apiRequest<any[]>('/api/templates');
+      const safe = Array.isArray(data) ? data : [];
+      setTemplatesState(safe);
+      lastKnownCount.current = safe.length;
+      saveToClientStorage('templates', data);
+      saveLastKnownGood({ templatesCount: data.length });
+      setUsingFallback(false);
+    } catch (e) {
+      console.error('Failed to refetch templates:', e);
+    }
+  }, []);
+
+  return { templates, setTemplates: save, loading, refetch, usingFallback };
 }
 
 /**
  * Hook for saved items (shared team-wide)
+ * Robust: clientStorage fallback, optimistic save, background retry
  */
 export function useSavedItems() {
   const [savedItems, setSavedItemsState] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const retryRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    apiRequest<any[]>('/api/saved-items')
-      .then(data => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiRequest<any[]>('/api/saved-items');
+        if (cancelled) return;
         setSavedItemsState(data);
         setHasLoaded(true);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+        saveToClientStorage('saved-items', data);
+        saveLastKnownGood({ savedItemsCount: data.length });
+      } catch {
+        if (cancelled) return;
+        const cached = await loadFromClientStorage<any[]>('saved-items');
+        if (Array.isArray(cached) && cached.length > 0) {
+          setSavedItemsState(cached);
+          setHasLoaded(true);
+          setUsingFallback(true);
+          showToast('Using cached data. Syncing when connection is back.');
+        } else {
+          setSavedItemsState([]);
+          setHasLoaded(true);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!usingFallback) return;
+    const id = setInterval(async () => {
+      try {
+        const data = await apiRequest<any[]>('/api/saved-items');
+        setSavedItemsState(data);
+        saveToClientStorage('saved-items', data);
+        saveLastKnownGood({ savedItemsCount: data.length });
+        setUsingFallback(false);
+        if (retryRef.current) {
+          clearInterval(retryRef.current);
+          retryRef.current = null;
+        }
+        showToast('Synced with server');
+      } catch {}
+    }, 30000);
+    retryRef.current = id;
+    return () => {
+      if (retryRef.current) clearInterval(retryRef.current);
+    };
+  }, [usingFallback]);
+
   const save = useCallback(async (newItems: any[]) => {
-    // Must be a valid array
     if (!newItems || !Array.isArray(newItems)) {
       console.error('🛑 BLOCKED: Invalid saved items data');
       return;
     }
-    
-    // Block saving before initial load
     if (!hasLoaded) {
       console.warn('⚠️ BLOCKED: Cannot save saved items before initial load');
       return;
     }
-    
     setSavedItemsState(newItems);
+    saveToClientStorage('saved-items', newItems);
     try {
       await apiRequest('/api/saved-items', {
         method: 'POST',
         body: JSON.stringify({ savedItems: newItems }),
       });
+      saveLastKnownGood({ savedItemsCount: newItems.length });
     } catch (error) {
       console.error('✗ Failed to save saved items:', error);
     }
   }, [hasLoaded]);
 
-  return { savedItems, setSavedItems: save, loading };
+  return { savedItems, setSavedItems: save, loading, usingFallback };
 }
 
 /**
@@ -312,6 +599,7 @@ export function useCloudFigmaLinks() {
 
 /**
  * Hook for custom clouds (shared team-wide)
+ * Robust: retries API, falls back to clientStorage when API fails
  */
 export function useCustomClouds() {
   const [clouds, setClouds] = useState<any[]>([]);
@@ -320,16 +608,25 @@ export function useCustomClouds() {
   useEffect(() => {
     apiRequest<any[]>('/api/custom-clouds')
       .then(setClouds)
-      .catch(console.error)
+      .catch(async () => {
+        const fallback = await loadFromClientStorage<any[]>('custom-clouds');
+        setClouds(fallback ?? []);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const save = useCallback(async (newClouds: any[]) => {
     setClouds(newClouds);
-    await apiRequest('/api/custom-clouds', {
-      method: 'POST',
-      body: JSON.stringify({ clouds: newClouds }),
-    });
+    try {
+      await apiRequest('/api/custom-clouds', {
+        method: 'POST',
+        body: JSON.stringify({ clouds: newClouds }),
+      });
+      saveToClientStorage('custom-clouds', newClouds); // Always backup locally
+    } catch (error) {
+      console.error('API save failed, using local storage fallback:', error);
+      saveToClientStorage('custom-clouds', newClouds, true);
+    }
   }, []);
 
   return { clouds, setClouds: save, loading };
@@ -337,6 +634,7 @@ export function useCustomClouds() {
 
 /**
  * Hook for editable clouds config (shared team-wide)
+ * Robust: retries API, falls back to clientStorage when API fails
  */
 export function useEditableClouds() {
   const [editableClouds, setEditableClouds] = useState<any | null>(null);
@@ -345,23 +643,45 @@ export function useEditableClouds() {
   useEffect(() => {
     apiRequest<any | null>('/api/editable-clouds')
       .then(setEditableClouds)
-      .catch(console.error)
+      .catch(async () => {
+        const fallback = await loadFromClientStorage<any | null>('editable-clouds');
+        setEditableClouds(fallback ?? null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const save = useCallback(async (newClouds: any) => {
     setEditableClouds(newClouds);
-    await apiRequest('/api/editable-clouds', {
-      method: 'POST',
-      body: JSON.stringify({ clouds: newClouds }),
-    });
+    try {
+      await apiRequest('/api/editable-clouds', {
+        method: 'POST',
+        body: JSON.stringify({ clouds: newClouds }),
+      });
+      saveToClientStorage('editable-clouds', newClouds); // Always backup locally
+    } catch (error) {
+      console.error('API save failed, using local storage fallback:', error);
+      saveToClientStorage('editable-clouds', newClouds, true);
+    }
   }, []);
 
   return { editableClouds, setEditableClouds: save, loading };
 }
 
+const DEFAULT_CATEGORIES = [
+  { id: 'team-housekeeping', label: 'Team Housekeeping' },
+  { id: 'all', label: 'All Assets' },
+  { id: 'cover-pages', label: 'Covers' },
+  { id: 'components', label: 'Components' },
+  { id: 'slides', label: 'Slides' },
+  { id: 'resources', label: 'Resources' },
+];
+
+const BUILT_IN_CLOUD_IDS = ['sales', 'service', 'marketing', 'commerce', 'revenue', 'fieldservice'];
+
 /**
  * Hook for cloud categories (shared team-wide)
+ * Robust: retries API, falls back to clientStorage when API fails
+ * Seeds defaults when backend returns empty so Select Type and Settings always show categories
  */
 export function useCloudCategories() {
   const [categories, setCategories] = useState<Record<string, any>>({});
@@ -369,17 +689,42 @@ export function useCloudCategories() {
 
   useEffect(() => {
     apiRequest<Record<string, any>>('/api/cloud-categories')
-      .then(setCategories)
-      .catch(console.error)
+      .then((data) => {
+        const isEmpty = !data || Object.keys(data).length === 0 ||
+          !Object.values(data).some((arr: any) => Array.isArray(arr) && arr.length > 0);
+        if (isEmpty) {
+          const seeded: Record<string, any> = {};
+          for (const cloudId of BUILT_IN_CLOUD_IDS) {
+            seeded[cloudId] = [...DEFAULT_CATEGORIES];
+          }
+          setCategories(seeded);
+          apiRequest('/api/cloud-categories', {
+            method: 'POST',
+            body: JSON.stringify({ categories: seeded }),
+          }).catch(() => saveToClientStorage('cloud-categories', seeded, true));
+        } else {
+          setCategories(data || {});
+        }
+      })
+      .catch(async () => {
+        const fallback = await loadFromClientStorage<Record<string, any>>('cloud-categories');
+        setCategories(fallback ?? {});
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const save = useCallback(async (newCategories: Record<string, any>) => {
     setCategories(newCategories);
-    await apiRequest('/api/cloud-categories', {
-      method: 'POST',
-      body: JSON.stringify({ categories: newCategories }),
-    });
+    try {
+      await apiRequest('/api/cloud-categories', {
+        method: 'POST',
+        body: JSON.stringify({ categories: newCategories }),
+      });
+      saveToClientStorage('cloud-categories', newCategories); // Always backup locally
+    } catch (error) {
+      console.error('API save failed, using local storage fallback:', error);
+      saveToClientStorage('cloud-categories', newCategories, true);
+    }
   }, []);
 
   return { categories, setCategories: save, loading };
@@ -387,6 +732,7 @@ export function useCloudCategories() {
 
 /**
  * Hook for status symbols (shared team-wide)
+ * Robust: retries API, falls back to clientStorage when API fails
  */
 export function useStatusSymbols() {
   const defaultSymbols = [
@@ -400,16 +746,25 @@ export function useStatusSymbols() {
   useEffect(() => {
     apiRequest<any[]>('/api/status-symbols')
       .then(loaded => setSymbols(loaded.length > 0 ? loaded : defaultSymbols))
-      .catch(() => setSymbols(defaultSymbols)) // Fallback to defaults on error
+      .catch(async () => {
+        const fallback = await loadFromClientStorage<any[]>('status-symbols');
+        setSymbols(fallback?.length ? fallback : defaultSymbols);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const save = useCallback(async (newSymbols: any[]) => {
     setSymbols(newSymbols);
-    await apiRequest('/api/status-symbols', {
-      method: 'POST',
-      body: JSON.stringify({ symbols: newSymbols }),
-    });
+    try {
+      await apiRequest('/api/status-symbols', {
+        method: 'POST',
+        body: JSON.stringify({ symbols: newSymbols }),
+      });
+      saveToClientStorage('status-symbols', newSymbols); // Always backup locally
+    } catch (error) {
+      console.error('API save failed, using local storage fallback:', error);
+      saveToClientStorage('status-symbols', newSymbols, true);
+    }
   }, []);
 
   return { symbols, setSymbols: save, loading };
@@ -510,7 +865,10 @@ export function useDefaultCloud(figmaUserId: string | null) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!figmaUserId) return;
+    if (!figmaUserId) {
+      setLoading(false);
+      return;
+    }
     apiRequest<{ cloudId: string | null }>(`/api/user/${figmaUserId}/default-cloud`)
       .then(res => setDefaultCloud(res.cloudId))
       .catch(console.error)
@@ -538,9 +896,20 @@ export function useOnboardingState(figmaUserId: string | null) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!figmaUserId) return;
+    if (!figmaUserId) {
+      // Keep loading=true while waiting for user ID - prevents showing onboarding
+      // before we can fetch real state (avoids flash of "Get Started" for returning users)
+      const fallback = setTimeout(() => setLoading(false), 2500);
+      return () => clearTimeout(fallback);
+    }
     apiRequest<{ hasCompleted: boolean; skipSplash: boolean }>(`/api/user/${figmaUserId}/onboarding`)
-      .then(setState)
+      .then((apiState) => {
+        setState((prev) => ({
+          // Prefer true: don't overwrite migration-set hasCompleted with stale API false
+          hasCompleted: prev.hasCompleted || apiState.hasCompleted,
+          skipSplash: apiState.skipSplash ?? prev.skipSplash,
+        }));
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [figmaUserId]);
@@ -566,7 +935,10 @@ export function useHiddenClouds(figmaUserId: string | null) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!figmaUserId) return;
+    if (!figmaUserId) {
+      setLoading(false);
+      return;
+    }
     apiRequest<{ hiddenClouds: string[] }>(`/api/user/${figmaUserId}/hidden-clouds`)
       .then(res => setHiddenClouds(res.hiddenClouds))
       .catch(console.error)

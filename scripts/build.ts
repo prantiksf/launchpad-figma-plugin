@@ -43,6 +43,7 @@ async function buildAll(mode: Mode): Promise<void> {
     },
     define: {
       'process.env.NODE_ENV': JSON.stringify(mode),
+      'process.env.STARTER_KIT_API_URL': JSON.stringify(process.env.STARTER_KIT_API_URL || ''),
     },
   });
 
@@ -83,6 +84,9 @@ async function buildAll(mode: Mode): Promise<void> {
   const uiB64 = Buffer.from(uiJsWithBuildId, 'utf8').toString('base64');
   const loader = [
     '<script>(function(){',
+    'window.onerror=function(m,u,l,c,e){',
+    'var r=document.getElementById("root");if(r){r.innerHTML=\'<div style="padding:20px;color:red;font:13px monospace">Error: \'+m+\'</div>\';}',
+    'return true;};',
     'try{',
     'if(typeof atob==="undefined"){',
     'throw new Error("atob not available");',
@@ -110,6 +114,7 @@ async function buildAll(mode: Mode): Promise<void> {
   inlineHtml = inlineHtml.replace('</head>', `${cssTag}</head>`);
   inlineHtml = inlineHtml.replace(/<script\s+src=["']ui\.js["']><\/script>/, loader);
   inlineHtml = inlineHtml.replace('<body', `<body data-build="${buildHash}" data-build-time="${buildTime}"`);
+  inlineHtml = inlineHtml.replace(/\{\{VERSION\}\}/g, version);
 
   // 4) Build controller with __html__ defined at build time
   // Inject build hash and timestamp into code for cache busting

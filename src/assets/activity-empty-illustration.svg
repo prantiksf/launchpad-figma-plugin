@@ -1,0 +1,18 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Pot -->
+  <path d="M30 75H90L85 95H35L30 75Z" fill="#E8E8E8"/>
+  <path d="M25 75L30 75L35 95H85L90 75H95L90 100H30L25 75Z" fill="#F5F5F5" stroke="#E0E0E0" stroke-width="1"/>
+  <!-- Pot rim -->
+  <ellipse cx="60" cy="75" rx="32" ry="6" fill="#EEEEEE"/>
+  <!-- Soil/pebbles -->
+  <circle cx="45" cy="72" r="3" fill="#9E9E9E"/>
+  <circle cx="60" cy="74" r="2.5" fill="#BDBDBD"/>
+  <circle cx="75" cy="71" r="2" fill="#9E9E9E"/>
+  <!-- Cactus main body -->
+  <path d="M52 45V72C52 74 58 74 58 72V45C58 42 55 40 55 40C55 40 52 42 52 45Z" fill="#4DB6AC"/>
+  <path d="M55 40C55 40 52 42 52 45V72C52 74 58 74 58 72V45C58 42 55 40 55 40Z" fill="#80CBC4" opacity="0.6"/>
+  <!-- Cactus arms -->
+  <path d="M58 52H75V58C75 60 72 62 70 62H58V52Z" fill="#4DB6AC"/>
+  <path d="M62 35H48V42C48 44 50 46 52 46H62V35Z" fill="#4DB6AC"/>
+  <path d="M58 28H70V34C70 36 68 38 66 38H58V28Z" fill="#26A69A"/>
+</svg>

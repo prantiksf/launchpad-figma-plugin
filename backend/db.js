@@ -322,24 +322,113 @@ async function getBackupById(backupId) {
 /**
  * Restore data from a backup
  * @param {number} backupId - The backup ID to restore from
+ * @param {boolean} merge - If true, merge backup with current data (never erase). If false, full replace.
  */
-async function restoreFromBackup(backupId) {
+async function restoreFromBackup(backupId, merge = false) {
   const backup = await getBackupById(backupId);
   if (!backup) {
     throw new Error('Backup not found');
   }
-  
+  if (backup.data === undefined || backup.data === null) {
+    throw new Error('Backup has no data');
+  }
+
   // Create a backup of current state before restoring (so user can undo)
   const currentData = await getSharedData(backup.data_key);
   if (currentData) {
     await createBackup(backup.data_key, currentData, 'pre-restore', null);
   }
-  
-  // Restore the data
-  await saveSharedData(backup.data_key, backup.data);
-  console.log(`✓ Restored ${backup.data_key} from backup #${backupId}`);
+
+  let dataToSave = backup.data;
+  if (merge && currentData) {
+    dataToSave = mergeBackupData(backup.data_key, currentData, backup.data);
+  }
+
+  // Never overwrite with empty for critical types
+  const criticalKeys = ['templates', 'custom_clouds'];
+  if (criticalKeys.includes(backup.data_key)) {
+    const isEmpty = Array.isArray(dataToSave) ? dataToSave.length === 0 : (typeof dataToSave === 'object' && Object.keys(dataToSave || {}).length === 0);
+    if (isEmpty && currentData && ((Array.isArray(currentData) && currentData.length > 0) || (typeof currentData === 'object' && Object.keys(currentData).length > 0))) {
+      console.warn(`Skipping restore of ${backup.data_key}: backup would overwrite with empty`);
+      return backup;
+    }
+  }
+
+  await saveSharedData(backup.data_key, dataToSave);
+  console.log(`✓ Restored ${backup.data_key} from backup #${backupId} (merge: ${merge})`);
   
   return backup;
+}
+
+/**
+ * Merge backup data with current data - never erase, only add from backup
+ */
+function mergeBackupData(dataKey, currentData, backupData) {
+  if (Array.isArray(currentData) && Array.isArray(backupData)) {
+    const getKey = (item) => {
+      if (item.id) return `id:${item.id}`;
+      if (item.templateId) return `t:${item.templateId}:${item.variantKey || ''}`;
+      return null;
+    };
+    const currentKeys = new Set(currentData.map(getKey).filter(Boolean));
+    const merged = [...currentData];
+    for (const item of backupData) {
+      const key = getKey(item);
+      if (key && !currentKeys.has(key)) {
+        merged.push(item);
+        currentKeys.add(key);
+      }
+    }
+    return merged;
+  }
+  // Object-valued data: editable_clouds, cloud_categories, cloud_pocs, cloud_figma_links
+  if (typeof currentData === 'object' && currentData !== null && typeof backupData === 'object' && backupData !== null) {
+    const objectMergeKeys = ['editable_clouds', 'cloud_categories', 'cloud_pocs', 'cloud_figma_links'];
+    if (objectMergeKeys.includes(dataKey)) {
+      const result = { ...currentData };
+      for (const cloudId of Object.keys(backupData)) {
+        const backupVal = backupData[cloudId];
+        const currentVal = result[cloudId];
+        if (Array.isArray(backupVal)) {
+          // cloud_categories, cloud_pocs, cloud_figma_links: merge arrays by id
+          const currArr = Array.isArray(currentVal) ? currentVal : [];
+          const getItemKey = (item) => item.id ? `id:${item.id}` : (item.name ? `name:${item.name}` : null);
+          const currKeys = new Set(currArr.map(getItemKey).filter(Boolean));
+          const mergedArr = [...currArr];
+          for (const item of backupVal) {
+            const k = getItemKey(item);
+            if (k && !currKeys.has(k)) {
+              mergedArr.push(item);
+              currKeys.add(k);
+            }
+          }
+          result[cloudId] = mergedArr;
+        } else if (typeof backupVal === 'object' && backupVal !== null) {
+          // editable_clouds: deep merge cloud config (sections, pages)
+          result[cloudId] = deepMergeObjects(currentVal || {}, backupVal);
+        }
+      }
+      return result;
+    }
+    return { ...currentData, ...backupData };
+  }
+  return backupData;
+}
+
+function deepMergeObjects(target, source) {
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    const srcVal = source[key];
+    const tgtVal = result[key];
+    if (Array.isArray(srcVal)) {
+      result[key] = Array.isArray(tgtVal) ? [...tgtVal, ...srcVal.filter(s => !tgtVal.some(t => JSON.stringify(t) === JSON.stringify(s)))] : [...srcVal];
+    } else if (typeof srcVal === 'object' && srcVal !== null && typeof tgtVal === 'object' && tgtVal !== null) {
+      result[key] = deepMergeObjects(tgtVal, srcVal);
+    } else {
+      result[key] = srcVal;
+    }
+  }
+  return result;
 }
 
 /**
@@ -483,6 +572,68 @@ async function getRestorableActivities() {
   return result.rows;
 }
 
+/**
+ * Get celebration stats: components added, reused, designers engaged
+ * @param {string|null} cloudId - Optional cloud ID to filter stats
+ */
+async function getActivityStats(cloudId = null) {
+  const addActions = ['add', 'component_insert', 'poc_add', 'section_create'];
+  const placeholders = addActions.map((_, i) => `$${i + 1}`).join(', ');
+  const params = [...addActions];
+  const cloudFilter = cloudId ? ` AND cloud_id = $${params.length + 1}` : '';
+  if (cloudId) params.push(cloudId);
+
+  const added = await pool.query(`
+    SELECT COUNT(*) as count FROM activity_log 
+    WHERE action IN (${placeholders})${cloudFilter}
+  `, params);
+
+  const reused = await pool.query(`
+    SELECT COUNT(*) as count FROM activity_log 
+    WHERE action = 'component_insert'${cloudId ? ' AND cloud_id = $1' : ''}
+  `, cloudId ? [cloudId] : []);
+
+  const designersParams = cloudId ? [cloudId] : [];
+  const designersFilter = cloudId ? ' AND cloud_id = $1' : '';
+  const designers = await pool.query(`
+    SELECT COUNT(DISTINCT user_name) as count FROM activity_log 
+    WHERE user_name IS NOT NULL AND user_name != ''${designersFilter}
+  `, designersParams);
+
+  return {
+    componentsAdded: parseInt(added.rows[0]?.count || '0', 10),
+    componentsReused: parseInt(reused.rows[0]?.count || '0', 10),
+    designersEngaged: parseInt(designers.rows[0]?.count || '0', 10)
+  };
+}
+
+/**
+ * Get "added by" metadata for templates - most recent add per asset
+ * Returns { [assetId]: { userName, createdAt } }
+ */
+async function getTemplateAddMetadata(cloudId = null) {
+  let query = `
+    SELECT DISTINCT ON (asset_id) asset_id, user_name, created_at
+    FROM activity_log
+    WHERE action = 'add'
+  `;
+  const params = [];
+  if (cloudId) {
+    params.push(cloudId);
+    query += ` AND cloud_id = $1`;
+  }
+  query += ` ORDER BY asset_id, created_at DESC`;
+  const result = await pool.query(query, params);
+  const metadata = {};
+  for (const row of result.rows) {
+    metadata[row.asset_id] = {
+      userName: row.user_name,
+      createdAt: row.created_at
+    };
+  }
+  return metadata;
+}
+
 module.exports = {
   initialize,
   pool,
@@ -523,5 +674,7 @@ module.exports = {
   logActivityFromClient,
   getActivityLog,
   markActivitiesRestored,
-  getRestorableActivities
+  getRestorableActivities,
+  getActivityStats,
+  getTemplateAddMetadata
 };

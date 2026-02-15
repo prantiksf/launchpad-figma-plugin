@@ -289,6 +289,11 @@ app.get('/api/figma-links', async (req, res) => {
 
 app.post('/api/figma-links', async (req, res) => {
   try {
+    const currentLinks = await db.getFigmaLinks();
+    if (currentLinks && currentLinks.length > 0) {
+      await db.createBackup('figma_links', currentLinks, 'save', null);
+      await db.cleanupOldBackups('figma_links', 30);
+    }
     await db.saveFigmaLinks(req.body.links);
     res.json({ success: true });
   } catch (error) {
@@ -310,6 +315,11 @@ app.get('/api/cloud-figma-links', async (req, res) => {
 
 app.post('/api/cloud-figma-links', async (req, res) => {
   try {
+    const currentLinks = await db.getCloudFigmaLinks();
+    if (currentLinks && Object.keys(currentLinks).length > 0) {
+      await db.createBackup('cloud_figma_links', currentLinks, 'save', null);
+      await db.cleanupOldBackups('cloud_figma_links', 30);
+    }
     await db.saveCloudFigmaLinks(req.body.links);
     res.json({ success: true });
   } catch (error) {
@@ -361,6 +371,11 @@ app.get('/api/editable-clouds', async (req, res) => {
 
 app.post('/api/editable-clouds', async (req, res) => {
   try {
+    const currentClouds = await db.getEditableClouds();
+    if (currentClouds) {
+      await db.createBackup('editable_clouds', currentClouds, 'save', null);
+      await db.cleanupOldBackups('editable_clouds', 30);
+    }
     await db.saveEditableClouds(req.body.clouds);
     res.json({ success: true });
   } catch (error) {
@@ -382,6 +397,11 @@ app.get('/api/cloud-categories', async (req, res) => {
 
 app.post('/api/cloud-categories', async (req, res) => {
   try {
+    const currentCategories = await db.getCloudCategories();
+    if (currentCategories && Object.keys(currentCategories).length > 0) {
+      await db.createBackup('cloud_categories', currentCategories, 'save', null);
+      await db.cleanupOldBackups('cloud_categories', 30);
+    }
     await db.saveCloudCategories(req.body.categories);
     res.json({ success: true });
   } catch (error) {
@@ -403,6 +423,11 @@ app.get('/api/status-symbols', async (req, res) => {
 
 app.post('/api/status-symbols', async (req, res) => {
   try {
+    const currentSymbols = await db.getStatusSymbols();
+    if (currentSymbols && currentSymbols.length > 0) {
+      await db.createBackup('status_symbols', currentSymbols, 'save', null);
+      await db.cleanupOldBackups('status_symbols', 30);
+    }
     await db.saveStatusSymbols(req.body.symbols);
     res.json({ success: true });
   } catch (error) {
@@ -424,6 +449,11 @@ app.get('/api/cloud-pocs', async (req, res) => {
 
 app.post('/api/cloud-pocs', async (req, res) => {
   try {
+    const currentPocs = await db.getCloudPocs();
+    if (currentPocs && Object.keys(currentPocs).length > 0) {
+      await db.createBackup('cloud_pocs', currentPocs, 'save', null);
+      await db.cleanupOldBackups('cloud_pocs', 30);
+    }
     await db.saveCloudPocs(req.body.pocs);
     res.json({ success: true });
   } catch (error) {
@@ -445,6 +475,11 @@ app.get('/api/housekeeping-rules', async (req, res) => {
 
 app.post('/api/housekeeping-rules', async (req, res) => {
   try {
+    const currentRules = await db.getSharedData('housekeeping-rules') || [];
+    if (Array.isArray(currentRules) && currentRules.length > 0) {
+      await db.createBackup('housekeeping_rules', currentRules, 'save', null);
+      await db.cleanupOldBackups('housekeeping_rules', 30);
+    }
     await db.saveSharedData('housekeeping-rules', req.body.rules);
     res.json({ success: true });
   } catch (error) {
@@ -623,7 +658,8 @@ app.get('/api/backups/:dataKey/:backupId', async (req, res) => {
 app.post('/api/backups/:dataKey/:backupId/restore', async (req, res) => {
   try {
     const { backupId } = req.params;
-    const backup = await db.restoreFromBackup(parseInt(backupId));
+    const merge = req.query.merge === 'true' || req.body?.merge === true;
+    const backup = await db.restoreFromBackup(parseInt(backupId), merge);
     res.json({ 
       success: true, 
       message: `Restored ${backup.data_key} from backup #${backupId}`,
@@ -654,17 +690,35 @@ app.post('/api/backups/:dataKey/create', async (req, res) => {
       case 'custom_clouds':
         currentData = await db.getCustomClouds();
         break;
+      case 'editable_clouds':
+        currentData = await db.getEditableClouds();
+        break;
       case 'cloud_categories':
         currentData = await db.getCloudCategories();
         break;
+      case 'cloud_pocs':
+        currentData = await db.getCloudPocs();
+        break;
+      case 'status_symbols':
+        currentData = await db.getStatusSymbols();
+        break;
+      case 'figma_links':
+        currentData = await db.getFigmaLinks();
+        break;
       case 'cloud_figma_links':
         currentData = await db.getCloudFigmaLinks();
+        break;
+      case 'housekeeping_rules':
+        currentData = await db.getSharedData('housekeeping-rules') || [];
         break;
       default:
         currentData = await db.getSharedData(dataKey);
     }
     
-    if (!currentData || (Array.isArray(currentData) && currentData.length === 0)) {
+    const isEmpty = !currentData ||
+      (Array.isArray(currentData) && currentData.length === 0) ||
+      (typeof currentData === 'object' && !Array.isArray(currentData) && Object.keys(currentData).length === 0);
+    if (isEmpty) {
       return res.status(400).json({ error: 'No data to backup' });
     }
     
@@ -698,6 +752,30 @@ app.post('/api/activity-log', async (req, res) => {
   } catch (error) {
     console.error('Error logging activity:', error);
     res.status(500).json({ error: 'Failed to log activity' });
+  }
+});
+
+// Get activity stats (celebration metrics)
+app.get('/api/activity-log/stats', async (req, res) => {
+  try {
+    const cloudId = req.query.cloudId || null;
+    const stats = await db.getActivityStats(cloudId);
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching activity stats:', error);
+    res.status(500).json({ error: 'Failed to fetch activity stats' });
+  }
+});
+
+// Get template add metadata (who added, when - for main library display)
+app.get('/api/activity-log/template-metadata', async (req, res) => {
+  try {
+    const cloudId = req.query.cloudId || null;
+    const metadata = await db.getTemplateAddMetadata(cloudId);
+    res.json(metadata);
+  } catch (error) {
+    console.error('Error fetching template metadata:', error);
+    res.status(500).json({ error: 'Failed to fetch template metadata' });
   }
 });
 
