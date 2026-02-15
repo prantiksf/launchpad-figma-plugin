@@ -33,6 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const errMsg = this.state.error?.message ?? 'Unknown error';
       return (
         <div
           style={{
@@ -49,6 +50,9 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <p style={{ margin: '0 0 12px', fontSize: 14, color: '#333' }}>
             Something went wrong.
+          </p>
+          <p style={{ margin: '0 0 8px', fontSize: 11, color: '#999', maxWidth: 280, wordBreak: 'break-word' }}>
+            {errMsg}
           </p>
           <p style={{ margin: '0 0 16px', fontSize: 12, color: '#666' }}>
             Please close the plugin and open it again to recover.

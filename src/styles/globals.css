@@ -1068,7 +1068,7 @@ fieldset.slds-form-element legend {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   color: var(--slds-g-color-neutral-base-50);
   margin-bottom: 8px;
@@ -1544,8 +1544,8 @@ fieldset.slds-form-element legend {
 }
 
 .variant-grid-popover__preview {
-  width: 320px;
-  height: 180px;
+  width: 400px;
+  height: 225px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1725,7 +1725,7 @@ fieldset.slds-form-element legend {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 20px 12px;
+  padding: 12px 20px 16px;
   position: relative;
   box-sizing: content-box;
 }
@@ -1805,19 +1805,22 @@ fieldset.slds-form-element legend {
   box-shadow: 0 2px 6px rgba(0, 123, 255, 0.2);
 }
 
-/* Saved pill - icon only style */
-.category-pill--icon {
-  width: 28px;
-  min-width: 28px;
-  padding: 6px;
-  display: flex;
+/* Saved pill - icon + label style (both visible) */
+.category-pill--icon-label {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
 }
 
-.category-pill--icon svg {
+.category-pill--icon-label svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
+}
+
+.category-pill--icon-label span {
+  display: inline;
+  white-space: nowrap;
 }
 
 .category-pill[data-category="saved"] {
@@ -1906,6 +1909,11 @@ fieldset.slds-form-element legend {
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease;
+}
+
+.header__dropdown-menu-item svg {
+  flex-shrink: 0;
+  overflow: visible;
 }
 
 .header__dropdown-menu-item:hover {
@@ -6066,6 +6074,78 @@ fieldset.slds-form-element legend {
   background: var(--slds-g-color-error-base-40);
 }
 
+/* Restore Confirmation Modal - above Version History */
+.restore-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 16px;
+  animation: fadeIn 0.15s ease;
+}
+
+.restore-confirm-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 360px;
+  padding: 24px;
+  text-align: center;
+  animation: slideUp 0.2s ease;
+}
+
+.restore-confirm-modal__message {
+  font-size: 14px;
+  color: var(--slds-g-color-neutral-base-30);
+  line-height: 1.5;
+  margin: 0 0 20px 0;
+}
+
+.restore-confirm-modal__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.restore-confirm-modal__cancel {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--slds-g-color-neutral-base-95);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--slds-g-color-neutral-base-30);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.restore-confirm-modal__cancel:hover {
+  background: var(--slds-g-color-neutral-base-90);
+}
+
+.restore-confirm-modal__ok {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--slds-g-color-brand-base-50);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.restore-confirm-modal__ok:hover {
+  background: var(--slds-g-color-brand-base-40);
+}
+
 /* Header Restore Button */
 .header__restore-btn {
   display: flex;
@@ -6312,6 +6392,7 @@ fieldset.slds-form-element legend {
 }
 
 .app.dark-mode .template-item__meta,
+.app.dark-mode .template-item__meta-added,
 .app.dark-mode .template-item__meta-time {
   color: #8c8c8c;
 }
@@ -6578,6 +6659,27 @@ fieldset.slds-form-element legend {
 }
 
 .app.dark-mode .delete-confirm-modal__cancel:hover {
+  background: #1a1a1a;
+}
+
+.app.dark-mode .restore-confirm-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.app.dark-mode .restore-confirm-modal {
+  background: #242424;
+}
+
+.app.dark-mode .restore-confirm-modal__message {
+  color: #b3b3b3;
+}
+
+.app.dark-mode .restore-confirm-modal__cancel {
+  background: #2a2a2a;
+  color: #b3b3b3;
+}
+
+.app.dark-mode .restore-confirm-modal__cancel:hover {
   background: #1a1a1a;
 }
 
@@ -6896,6 +6998,7 @@ fieldset.slds-form-element legend {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow-x: hidden;
   box-sizing: border-box;
 }
 
@@ -7450,7 +7553,8 @@ fieldset.slds-form-element legend {
   gap: 16px;
   min-height: 0;
   overflow: hidden;
-  padding: 20px 24px;
+  overflow-x: hidden;
+  padding: 20px 24px 32px;
 }
 
 .modal--data-recovery .modal__header--activity-history {
@@ -7535,17 +7639,62 @@ fieldset.slds-form-element legend {
 .version-history__simplified {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 8px 0;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  overflow-x: hidden;
+  align-items: stretch;
+  text-align: center;
+  gap: 16px;
+}
+
+.version-history__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  padding: 8px 0 16px;
+}
+
+/* Thin scrollbar for version history */
+.version-history__scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.version-history__scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.version-history__scroll::-webkit-scrollbar-thumb {
+  background: var(--slds-g-color-neutral-base-80);
+  border-radius: 3px;
+}
+.version-history__scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--slds-g-color-neutral-base-60);
+}
+
+.version-history__footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0 16px;
+  border-top: 1px solid var(--slds-g-color-neutral-base-90);
+  width: 100%;
 }
 
 .version-history__summary {
   display: flex;
+  justify-content: center;
   gap: 24px;
   padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--slds-g-color-neutral-base-98);
   border-radius: 12px;
   border: 1px solid var(--slds-g-color-neutral-base-90);
+  flex-shrink: 0;
 }
 
 .version-history__summary-row {
@@ -7553,36 +7702,92 @@ fieldset.slds-form-element legend {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  text-align: center;
 }
 
 .version-history__summary-count {
-  font-size: 24px;
+  font-size: 33px;
   font-weight: 700;
-  color: var(--slds-g-color-brand-base-50);
+  color: #000;
 }
 
 .version-history__summary-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--slds-g-color-neutral-base-50);
 }
 
 .version-history__backup-date {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--slds-g-color-neutral-base-50);
   margin: 0;
+  text-align: center;
 }
 
 .version-history__assurance {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--slds-g-color-neutral-base-60);
   line-height: 1.5;
   margin: 0;
+  text-align: center;
 }
 
 .version-history__cta {
   font-weight: 600;
   padding: 12px 24px;
+}
+
+.version-history__details {
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 0 0 16px;
+}
+
+.version-history__details-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  background: var(--slds-g-color-neutral-base-98);
+  border-radius: 8px;
+  border: 1px solid var(--slds-g-color-neutral-base-90);
+  overflow: hidden;
+}
+
+.version-history__details-table th,
+.version-history__details-table td {
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.version-history__details-table th {
+  font-weight: 600;
+  color: var(--slds-g-color-neutral-base-30);
+  background: var(--slds-g-color-neutral-base-95);
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-90);
+}
+
+.version-history__details-table td {
+  color: var(--slds-g-color-neutral-base-10);
+  border-bottom: 1px solid var(--slds-g-color-neutral-base-95);
+}
+
+.version-history__details-table tr:last-child td {
+  border-bottom: none;
+}
+
+.version-history__details-cloud {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.version-history__details-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .data-recovery__loading {
@@ -7850,15 +8055,8 @@ fieldset.slds-form-element legend {
   background: #333;
 }
 
-.app.dark-mode .activity-history__actions {
-  background: rgba(42, 42, 42, 0.35);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
-}
-
-.app.dark-mode .activity-item {
+.app.dark-mode .activity-item,
+.modal-overlay--activity-history.dark-mode .activity-item {
   background: transparent;
   border-color: #3a3a3a;
 }
@@ -7922,6 +8120,221 @@ fieldset.slds-form-element legend {
 .app.dark-mode .activity-badge--scaffold {
   background: rgba(138, 43, 226, 0.2);
   color: #b794f6;
+}
+
+/* Activity Log & Version History modals - dark mode */
+.app.dark-mode .modal-overlay--activity-history,
+.modal-overlay--activity-history.dark-mode {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.app.dark-mode .modal-overlay--activity-history .modal,
+.app.dark-mode .modal--activity-history,
+.app.dark-mode .modal--data-recovery,
+.modal-overlay--activity-history.dark-mode .modal,
+.modal-overlay--activity-history.dark-mode .modal--activity-history,
+.modal-overlay--activity-history.dark-mode .modal--data-recovery {
+  background: #1a1a1a !important;
+}
+
+.app.dark-mode .modal--activity-history .modal__header,
+.app.dark-mode .modal--data-recovery .modal__header,
+.modal-overlay--activity-history.dark-mode .modal__header {
+  background: #1a1a1a;
+  border-bottom-color: #3a3a3a;
+}
+
+.app.dark-mode .modal--activity-history .modal__title,
+.app.dark-mode .modal--data-recovery .modal__title,
+.modal-overlay--activity-history.dark-mode .modal__title {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .modal--activity-history .modal__close,
+.app.dark-mode .modal--data-recovery .modal__close,
+.modal-overlay--activity-history.dark-mode .modal__close {
+  color: #b3b3b3;
+}
+
+.app.dark-mode .modal--activity-history .modal__close:hover,
+.app.dark-mode .modal--data-recovery .modal__close:hover,
+.modal-overlay--activity-history.dark-mode .modal__close:hover {
+  background: #2a2a2a;
+  color: #e5e5e5;
+}
+
+.app.dark-mode .modal--activity-history .modal__body,
+.app.dark-mode .modal--data-recovery .modal__body,
+.modal-overlay--activity-history.dark-mode .modal__body {
+  background: #1a1a1a;
+}
+
+.app.dark-mode .activity-history__description--above-divider,
+.modal-overlay--activity-history.dark-mode .activity-history__description--above-divider {
+  color: #8c8c8c;
+}
+
+.app.dark-mode .activity-history__filter-label,
+.modal-overlay--activity-history.dark-mode .activity-history__filter-label {
+  color: #b3b3b3;
+}
+
+.app.dark-mode .activity-history__time-filter-btn,
+.modal-overlay--activity-history.dark-mode .activity-history__time-filter-btn {
+  background: #2a2a2a;
+  color: #e5e5e5;
+  border-color: #3a3a3a;
+}
+
+.app.dark-mode .activity-history__time-filter-btn:hover,
+.modal-overlay--activity-history.dark-mode .activity-history__time-filter-btn:hover {
+  background: #333;
+}
+
+.app.dark-mode .activity-history__time-filter-text,
+.modal-overlay--activity-history.dark-mode .activity-history__time-filter-text {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .activity-history__sort-btn,
+.modal-overlay--activity-history.dark-mode .activity-history__sort-btn {
+  color: #b3b3b3;
+}
+
+.app.dark-mode .activity-history__sort-btn:hover,
+.modal-overlay--activity-history.dark-mode .activity-history__sort-btn:hover {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .activity-history__actions,
+.modal-overlay--activity-history.dark-mode .activity-history__actions {
+  background: rgba(42, 42, 42, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
+}
+
+.app.dark-mode .activity-history__content,
+.app.dark-mode .activity-history__intro,
+.app.dark-mode .activity-list,
+.modal-overlay--activity-history.dark-mode .activity-history__content,
+.modal-overlay--activity-history.dark-mode .activity-history__intro,
+.modal-overlay--activity-history.dark-mode .activity-list {
+  background: #1a1a1a;
+}
+
+.app.dark-mode .activity-history__group,
+.modal-overlay--activity-history.dark-mode .activity-history__group {
+  border-color: #3a3a3a;
+}
+
+.app.dark-mode .activity-history__group-header,
+.modal-overlay--activity-history.dark-mode .activity-history__group-header {
+  background: #242424;
+  color: #8c8c8c;
+}
+
+.app.dark-mode .activity-history__empty-title,
+.modal-overlay--activity-history.dark-mode .activity-history__empty-title {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .activity-history__empty-description,
+.modal-overlay--activity-history.dark-mode .activity-history__empty-description {
+  color: #8c8c8c;
+}
+
+.app.dark-mode .activity-history__loading,
+.modal-overlay--activity-history.dark-mode .activity-history__loading {
+  color: #8c8c8c;
+}
+
+/* Version History dark mode */
+.app.dark-mode .version-history__summary,
+.modal-overlay--activity-history.dark-mode .version-history__summary {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.app.dark-mode .version-history__summary-count,
+.modal-overlay--activity-history.dark-mode .version-history__summary-count {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .version-history__summary-label,
+.modal-overlay--activity-history.dark-mode .version-history__summary-label {
+  color: #8c8c8c;
+}
+
+.app.dark-mode .version-history__footer,
+.modal-overlay--activity-history.dark-mode .version-history__footer {
+  border-top-color: #3a3a3a;
+}
+
+.app.dark-mode .version-history__backup-date,
+.app.dark-mode .version-history__assurance,
+.modal-overlay--activity-history.dark-mode .version-history__backup-date,
+.modal-overlay--activity-history.dark-mode .version-history__assurance {
+  color: #8c8c8c;
+}
+
+.app.dark-mode .version-history__details-table,
+.modal-overlay--activity-history.dark-mode .version-history__details-table {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+.app.dark-mode .version-history__details-table th,
+.modal-overlay--activity-history.dark-mode .version-history__details-table th {
+  background: #242424;
+  color: #b3b3b3;
+  border-color: #3a3a3a;
+}
+
+.app.dark-mode .version-history__details-table td,
+.modal-overlay--activity-history.dark-mode .version-history__details-table td {
+  color: #e5e5e5;
+  border-color: #3a3a3a;
+}
+
+.app.dark-mode .version-history__simplified,
+.app.dark-mode .version-history__scroll,
+.app.dark-mode .version-history__details,
+.modal-overlay--activity-history.dark-mode .version-history__simplified,
+.modal-overlay--activity-history.dark-mode .version-history__scroll,
+.modal-overlay--activity-history.dark-mode .version-history__details {
+  background: #1a1a1a;
+}
+
+.app.dark-mode .version-history__details-cloud,
+.modal-overlay--activity-history.dark-mode .version-history__details-cloud {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .data-recovery__title-icon,
+.modal-overlay--activity-history.dark-mode .data-recovery__title-icon {
+  color: var(--slds-g-color-brand-base-40);
+}
+
+.app.dark-mode .data-recovery__empty-title,
+.modal-overlay--activity-history.dark-mode .data-recovery__empty-title {
+  color: #e5e5e5;
+}
+
+.app.dark-mode .data-recovery__empty-description,
+.modal-overlay--activity-history.dark-mode .data-recovery__empty-description {
+  color: #8c8c8c;
+}
+
+.app.dark-mode .data-recovery__error p,
+.modal-overlay--activity-history.dark-mode .data-recovery__error p {
+  color: #b3b3b3;
+}
+
+.app.dark-mode .data-recovery__loading,
+.modal-overlay--activity-history.dark-mode .data-recovery__loading {
+  color: #8c8c8c;
 }
 
 /* Empty state with Data Recovery link */

@@ -609,9 +609,13 @@ async function getActivityStats(cloudId = null) {
 
 /**
  * Get "added by" metadata for templates - most recent add per asset
+ * Falls back to backup history for templates without activity_log entries (previously added assets)
  * Returns { [assetId]: { userName, createdAt } }
  */
 async function getTemplateAddMetadata(cloudId = null) {
+  const metadata = {};
+
+  // 1. Primary: activity_log (templates added through the plugin)
   let query = `
     SELECT DISTINCT ON (asset_id) asset_id, user_name, created_at
     FROM activity_log
@@ -624,13 +628,46 @@ async function getTemplateAddMetadata(cloudId = null) {
   }
   query += ` ORDER BY asset_id, created_at DESC`;
   const result = await pool.query(query, params);
-  const metadata = {};
   for (const row of result.rows) {
     metadata[row.asset_id] = {
       userName: row.user_name,
       createdAt: row.created_at
     };
   }
+
+  // 2. Fallback: backfill from data_backups for templates without metadata
+  const templates = await getTemplates();
+  const missingIds = templates.filter(t => t.id && !metadata[t.id]).map(t => t.id);
+  if (missingIds.length > 0) {
+    const backupRows = await pool.query(`
+      SELECT id, data, created_by, created_at
+      FROM data_backups
+      WHERE data_key = 'templates'
+      ORDER BY created_at ASC
+      LIMIT 200
+    `);
+    for (const row of backupRows.rows) {
+      if (missingIds.length === 0) break;
+      let data;
+      try {
+        data = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+      } catch {
+        continue;
+      }
+      const items = Array.isArray(data) ? data : [];
+      for (const item of items) {
+        const id = item?.id;
+        if (id && missingIds.includes(id) && !metadata[id]) {
+          metadata[id] = {
+            userName: row.created_by || null,
+            createdAt: row.created_at
+          };
+          missingIds.splice(missingIds.indexOf(id), 1);
+        }
+      }
+    }
+  }
+
   return metadata;
 }
 

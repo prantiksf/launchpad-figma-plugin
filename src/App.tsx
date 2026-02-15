@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
 // Import Design System Components
@@ -35,6 +35,7 @@ import {
   // Backup functions
   getBackups,
   getBackupKeys,
+  getBackupById,
   restoreFromBackup,
   createManualBackup,
   BackupInfo,
@@ -102,6 +103,14 @@ function formatTime(date: Date): string {
   const ampm = h >= 12 ? 'PM' : 'AM';
   const hour = h % 12 || 12;
   return `${hour}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
+// Helper to format date only (no time) - e.g. "Jan 15, 2025"
+function formatDateOnly(date: Date): string {
+  const d = date.getDate();
+  const m = date.toLocaleString('en', { month: 'short' });
+  const y = date.getFullYear();
+  return `${m} ${d}, ${y}`;
 }
 
 // Helper function to format activity timestamp: Just Now, Today at time, Yesterday at time, dd/mm/yyyy at time
@@ -207,7 +216,12 @@ export function App() {
                     customCloudsLoading || editableCloudsLoading || categoriesLoading || 
                     statusSymbolsLoading || pocsLoading || defaultCloudLoading || 
                     onboardingLoading || hiddenCloudsLoading;
-  
+
+  // Define early so message handlers and callbacks can use them (before any early returns)
+  const editableArr = Array.isArray(editableClouds) ? editableClouds : clouds;
+  const allClouds = [...editableArr, ...(customClouds ?? [])];
+  const safeHiddenClouds = hiddenClouds ?? [];
+  const safeCloudCategories = cloudCategories ?? {};
   // Core UI state
   const setIsLoading = (loading: boolean) => {
     // This is now handled by hooks, but keeping for compatibility
@@ -233,11 +247,13 @@ export function App() {
   const [selectedCoverVariant, setSelectedCoverVariant] = useState<{templateId: string; variantKey?: string; name: string} | null>(null);
   const [showCoverSelector, setShowCoverSelector] = useState(false);
   
-  // Variant grid hover popover - show larger preview after delay, click outside to dismiss
+  // Asset hover popover - show larger preview after 2s delay for all asset types (variants + single templates)
   const [variantPopover, setVariantPopover] = useState<{
     templateId: string;
     templateName: string;
-    variant: VariantInfo;
+    variant?: VariantInfo;
+    preview: string;
+    displayName: string;
   } | null>(null);
   const [variantPopoverVisible, setVariantPopoverVisible] = useState(false);
   const variantPopoverShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -263,7 +279,7 @@ export function App() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [variantPopoverVisible, variantPopover]);
 
-  // Request high-res preview when popover becomes visible (runs in Figma plugin)
+  // Request high-res preview when popover becomes visible (only for variants; runs in Figma plugin)
   useEffect(() => {
     if (!variantPopoverVisible || !variantPopover) {
       setVariantPopoverHighResPreview(null);
@@ -271,7 +287,7 @@ export function App() {
     }
     setVariantPopoverHighResPreview(null);
     const isInFigma = typeof window !== 'undefined' && window.parent !== window && typeof (window.parent as any).postMessage === 'function';
-    if (isInFigma) {
+    if (isInFigma && variantPopover.variant) {
       (window.parent as any).postMessage({
         pluginMessage: {
           type: 'REQUEST_VARIANT_PREVIEW',
@@ -279,7 +295,7 @@ export function App() {
         },
       }, '*');
     }
-  }, [variantPopoverVisible, variantPopover?.variant.key]);
+  }, [variantPopoverVisible, variantPopover?.variant?.key]);
 
   // Cleanup variant popover timers on unmount
   useEffect(() => {
@@ -481,7 +497,7 @@ export function App() {
     }
     setHistory(newHistory);
   }, [scaffoldSections]);
-  
+
   // Figma Links feature (per cloud) - now from useCloudFigmaLinks hook
   const [showLinksDropdown, setShowLinksDropdown] = useState(false);
   const [isAddingLink, setIsAddingLink] = useState(false);
@@ -552,15 +568,16 @@ export function App() {
   const [latestBackupSummary, setLatestBackupSummary] = useState<{
     clouds: number;
     assets: number;
-    structures: number;
+    sections: number;
     backupDate: string;
     backupsToRestore: { dataKey: string; backupId: number }[];
+    details?: Array<{ cloudId: string; cloudName: string; icon: string; components: number; sections: number }>;
   } | null>(null);
   const [dataRecoveryLoading, setDataRecoveryLoading] = useState(false);
   const [dataRecoveryError, setDataRecoveryError] = useState<string | null>(null);
   const [dataRecoveryRestoring, setDataRecoveryRestoring] = useState(false);
-  
-  // Activity History state
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  // Activity Log state
   const [showActivityHistoryModal, setShowActivityHistoryModal] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -984,7 +1001,7 @@ export function App() {
       { id: 'slides', label: 'Slides' },
       { id: 'resources', label: 'Resources' },
     ];
-    const cloudCats = cloudCategories[formCloud] || defaultCats;
+    const cloudCats = (cloudCategories ?? {})[formCloud] || defaultCats;
     // Filter out non-selectable categories (team-housekeeping, all, saved)
     return cloudCats
       .filter(cat => !['team-housekeeping', 'all', 'saved'].includes(cat.id))
@@ -1063,7 +1080,11 @@ export function App() {
           const count = msg.count ?? 1;
           const templateName = msg.templateName || 'Component';
           const cloudId = msg.cloudId || selectedClouds[0] || undefined;
-          const cloudName = msg.cloudName || allClouds.find(c => c.id === cloudId)?.name;
+          const cloudName = msg.cloudName || (() => {
+            const arr = Array.isArray(editableClouds) ? editableClouds : clouds;
+            const all = [...arr, ...(customClouds ?? [])];
+            return all.find((c: any) => c.id === cloudId)?.name;
+          })();
           const template = templatesRef.current.find((t: Template) => t.id === msg.templateId);
           const preview = template?.preview ?? (template?.variants?.[0] as { preview?: string } | undefined)?.preview;
           const assetData: { preview?: string; nodeId?: string } = {};
@@ -1859,7 +1880,7 @@ export function App() {
     const newCategoryId = newSectionName.trim().toLowerCase().replace(/\s+/g, '-');
     
     // Get current categories for this cloud
-    const currentCategories = cloudCategories[cloudId] || baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved');
+    const currentCategories = (cloudCategories ?? {})[cloudId] || baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved');
     
     // Check if category already exists
     if (currentCategories.some(c => c.id === newCategoryId)) {
@@ -2007,24 +2028,19 @@ export function App() {
     setShowAddCloudModal(false);
   }
 
-  // Editable default clouds and custom clouds now come from hooks above
-  // editableClouds and customClouds are already defined from useEditableClouds and useCustomClouds hooks
+  // editableArr, allClouds, safeHiddenClouds, safeCloudCategories defined early above (before early returns)
 
-  // Combined clouds list (default + custom) - guard against null/malformed data from restore
-  const editableArr = Array.isArray(editableClouds) ? editableClouds : clouds;
-  const allClouds = [...editableArr, ...(customClouds ?? [])];
-  
   // Visible clouds (excluding hidden ones)
-  const visibleClouds = allClouds.filter(cloud => !hiddenClouds.includes(cloud.id));
+  const visibleClouds = allClouds.filter(cloud => !safeHiddenClouds.includes(cloud.id));
   
   // Get categories for current selected cloud
-  const baseCategories = selectedClouds[0] && cloudCategories[selectedClouds[0]] 
-    ? cloudCategories[selectedClouds[0]] 
+  const baseCategories = selectedClouds[0] && safeCloudCategories[selectedClouds[0]] 
+    ? safeCloudCategories[selectedClouds[0]] 
     : defaultCategories;
   
-  // Add "Saved" icon pill at the end only when there are saved items
+  // Add "Saved" icon + label pill at the end only when there are saved items
   const currentCategories = savedCount > 0 
-    ? [...baseCategories, { id: 'saved', label: 'Saved', iconOnly: true }]
+    ? [...baseCategories, { id: 'saved', label: 'Saved', iconAndLabel: true }]
     : baseCategories;
 
   // Category pills overflow: when 2nd row fills, show +x and expand as accordion
@@ -2078,7 +2094,7 @@ export function App() {
     }
   }, [activeCategory]);
 
-  // Scroll to template when navigating from Activity History
+  // Scroll to template when navigating from Activity Log
   useEffect(() => {
     if (!scrollToTemplateId || view !== 'home') return;
     const tryScroll = (attempt = 0) => {
@@ -2098,27 +2114,24 @@ export function App() {
     
   // Helper functions for settings
   function toggleCloudVisibility(cloudId: string) {
-    const newHiddenClouds = hiddenClouds.includes(cloudId)
-      ? hiddenClouds.filter(id => id !== cloudId)
-      : [...hiddenClouds, cloudId];
-    setHiddenClouds(newHiddenClouds);
+    const current = hiddenClouds ?? [];
+    const newHiddenClouds = current.includes(cloudId)
+      ? current.filter(id => id !== cloudId)
+      : [...current, cloudId];
     setHiddenClouds(newHiddenClouds);
   }
   
   function updateCloudCategories(cloudId: string, newCategories: Array<{id: string; label: string}>) {
-    const updated = { ...cloudCategories, [cloudId]: newCategories };
-    setCloudCategories(updated);
+    const updated = { ...(cloudCategories ?? {}), [cloudId]: newCategories };
     setCloudCategories(updated);
   }
   
   function updateStatusSymbols(newSymbols: typeof statusSymbols) {
     setStatusSymbols(newSymbols);
-    setStatusSymbols(newSymbols);
   }
   
   function updateCloudPOCs(cloudId: string, pocs: CloudPOC[]) {
-    const newPOCs = { ...cloudPOCs, [cloudId]: pocs };
-    setCloudPOCs(newPOCs);
+    const newPOCs = { ...(cloudPOCs ?? {}), [cloudId]: pocs };
     setCloudPOCs(newPOCs);
   }
   
@@ -2129,9 +2142,9 @@ export function App() {
     
     // Gather all associated data
     const cloudTemplates = templates.filter(t => t.cloudId === cloudId);
-    const cloudCats = cloudCategories[cloudId] || [];
+    const cloudCats = (cloudCategories ?? {})[cloudId] || [];
     const cloudLinks = cloudFigmaLinks[cloudId] || [];
-    const cloudPocsList = cloudPOCs[cloudId] || [];
+    const cloudPocsList = (cloudPOCs ?? {})[cloudId] || [];
     
     // Add to trash
     setDeletedClouds(prev => [...prev, {
@@ -2145,10 +2158,10 @@ export function App() {
     
     // Remove from active data
     if (cloud.isCustom) {
-      setCustomClouds(customClouds.filter(c => c.id !== cloudId));
+      setCustomClouds((customClouds ?? []).filter(c => c.id !== cloudId));
     } else {
       // For default clouds, just hide them
-      setHiddenClouds([...hiddenClouds, cloudId]);
+      setHiddenClouds([...(hiddenClouds ?? []), cloudId]);
     }
     
     // Soft delete templates (mark as deleted)
@@ -2158,21 +2171,21 @@ export function App() {
     setTemplates(updatedTemplates);
     
     // Clear associated data
-    const newCategories = { ...cloudCategories };
+    const newCategories = { ...(cloudCategories ?? {}) };
     delete newCategories[cloudId];
     setCloudCategories(newCategories);
     
-    const newLinks = { ...cloudFigmaLinks };
+    const newLinks = { ...(cloudFigmaLinks ?? {}) };
     delete newLinks[cloudId];
     setCloudFigmaLinks(newLinks);
     
-    const newPOCs = { ...cloudPOCs };
+    const newPOCs = { ...(cloudPOCs ?? {}) };
     delete newPOCs[cloudId];
     setCloudPOCs(newPOCs);
     
     // If deleted cloud was default, switch to first available
     if (defaultCloud === cloudId) {
-      const firstAvailable = allClouds.find(c => c.id !== cloudId && !hiddenClouds.includes(c.id));
+      const firstAvailable = allClouds.find(c => c.id !== cloudId && !(hiddenClouds ?? []).includes(c.id));
       if (firstAvailable) {
         setDefaultCloud(firstAvailable.id);
         setSelectedClouds([firstAvailable.id]);
@@ -2189,9 +2202,9 @@ export function App() {
     
     // Restore cloud
     if (cloud.isCustom) {
-      setCustomClouds([...customClouds, cloud]);
+      setCustomClouds([...(customClouds ?? []), cloud]);
     } else {
-      setHiddenClouds(hiddenClouds.filter(id => id !== cloud.id));
+      setHiddenClouds((hiddenClouds ?? []).filter(id => id !== cloud.id));
     }
     
     // Restore templates
@@ -2208,12 +2221,12 @@ export function App() {
     
     // Restore links
     if (links.length > 0) {
-      setCloudFigmaLinks({ ...cloudFigmaLinks, [cloud.id]: links });
+      setCloudFigmaLinks({ ...(cloudFigmaLinks ?? {}), [cloud.id]: links });
     }
     
     // Restore POCs
     if (pocs.length > 0) {
-      setCloudPOCs({ ...cloudPOCs, [cloud.id]: pocs });
+      setCloudPOCs({ ...(cloudPOCs ?? {}), [cloud.id]: pocs });
     }
     
     // Remove from trash
@@ -2313,10 +2326,11 @@ export function App() {
     setDataRecoveryError(null);
     try {
       const keys = await getBackupKeys();
-      const SAFE_RESTORE_TYPES = ['custom_clouds', 'templates', 'editable_clouds'];
-      let clouds = 0, assets = 0, structures = 0;
+      const SAFE_RESTORE_TYPES = ['custom_clouds', 'templates', 'editable_clouds', 'cloud_categories'];
+      let cloudCount = 0, assets = 0, sections = 0;
       let latestDate: Date | null = null;
       const backupsToRestore: { dataKey: string; backupId: number }[] = [];
+      const backupIds: Record<string, number> = {};
 
       for (const keyInfo of keys) {
         const dataKey = keyInfo.data_key;
@@ -2331,22 +2345,87 @@ export function App() {
 
         if (dataKey === 'templates' && itemCount === 0) continue;
         backupsToRestore.push({ dataKey, backupId: latest.id });
+        backupIds[dataKey] = latest.id;
 
-        if (dataKey === 'custom_clouds') clouds = itemCount;
+        if (dataKey === 'custom_clouds') cloudCount = itemCount;
         else if (dataKey === 'templates') assets = itemCount;
-        else if (dataKey === 'editable_clouds') structures = itemCount;
       }
 
       const backupDate = latestDate && !isNaN(latestDate.getTime())
         ? formatActivityTime(latestDate)
         : 'Unknown';
 
+      // Fetch backup data to build per-cloud details table (source of truth for summary)
+      const details: Array<{ cloudId: string; cloudName: string; icon: string; components: number; sections: number }> = [];
+      const componentCountByCloud: Record<string, number> = {};
+      const sectionCountByCloud: Record<string, number> = {};
+      const cloudMap: Record<string, { name: string; icon: string }> = {};
+
+      // Default clouds for icons/names
+      clouds.forEach((c: { id: string; name: string; icon: string }) => {
+        cloudMap[c.id] = { name: c.name, icon: c.icon };
+      });
+
+      try {
+        if (backupIds.templates) {
+          const tBackup = await getBackupById('templates', backupIds.templates);
+          const tData = Array.isArray(tBackup.data) ? tBackup.data : [];
+          tData.forEach((t: { cloudId?: string; isComponentSet?: boolean; variants?: unknown[]; variantCount?: number }) => {
+            const cid = t.cloudId || 'sales';
+            const count = t.isComponentSet && Array.isArray(t.variants) && t.variants.length > 0
+              ? t.variants.length
+              : (t.variantCount && t.variantCount > 0 ? t.variantCount : 1);
+            componentCountByCloud[cid] = (componentCountByCloud[cid] || 0) + count;
+          });
+        }
+        if (backupIds.custom_clouds) {
+          const cBackup = await getBackupById('custom_clouds', backupIds.custom_clouds);
+          const cData = Array.isArray(cBackup.data) ? cBackup.data : [];
+          cData.forEach((c: { id: string; name: string; icon?: string }) => {
+            cloudMap[c.id] = { name: c.name, icon: c.icon || SalesCloudIcon };
+          });
+        }
+        // Section count = cloud categories (Team Housekeeping, Covers, Components, Slides, Resources, etc.)
+        if (backupIds.cloud_categories) {
+          const ccBackup = await getBackupById('cloud_categories', backupIds.cloud_categories);
+          const ccData = ccBackup.data;
+          if (ccData && typeof ccData === 'object' && !Array.isArray(ccData)) {
+            for (const [cloudId, cats] of Object.entries(ccData)) {
+              const arr = Array.isArray(cats) ? cats : [];
+              sectionCountByCloud[cloudId] = arr.length;
+            }
+          }
+        }
+
+        // Include all clouds we know about (from components, sections, or cloud map)
+        const allCloudIds = new Set([
+          ...Object.keys(componentCountByCloud),
+          ...Object.keys(sectionCountByCloud),
+          ...Object.keys(cloudMap),
+        ]);
+        allCloudIds.forEach(cid => {
+          const comp = componentCountByCloud[cid] || 0;
+          const secs = sectionCountByCloud[cid] ?? 0;
+          const info = cloudMap[cid] || { name: cid, icon: SalesCloudIcon };
+          details.push({ cloudId: cid, cloudName: info.name, icon: info.icon, components: comp, sections: secs });
+        });
+        details.sort((a, b) => a.cloudName.localeCompare(b.cloudName));
+
+        // Use details as source of truth for summary so table and summary always match
+        cloudCount = details.length;
+        assets = details.reduce((s, d) => s + d.components, 0);
+        sections = details.reduce((s, d) => s + d.sections, 0);
+      } catch (_) {
+        // Details are optional; summary uses backup item_counts
+      }
+
       setLatestBackupSummary({
-        clouds,
+        clouds: cloudCount,
         assets,
-        structures,
+        sections,
         backupDate,
         backupsToRestore,
+        details: details.length > 0 ? details : undefined,
       });
     } catch (error) {
       console.error('Failed to load backup summary:', error);
@@ -2365,8 +2444,12 @@ export function App() {
 
   async function handleDataRecoveryRestore() {
     if (!latestBackupSummary || latestBackupSummary.backupsToRestore.length === 0) return;
-    if (!confirm('Restore from your most recent backup? Your current data will be backed up first.')) return;
+    setShowRestoreConfirm(true);
+  }
 
+  async function confirmDataRecoveryRestore() {
+    if (!latestBackupSummary || latestBackupSummary.backupsToRestore.length === 0) return;
+    setShowRestoreConfirm(false);
     setDataRecoveryRestoring(true);
     try {
       const errors: string[] = [];
@@ -2825,8 +2908,8 @@ async function loadActivityLog(cloudId?: string) {
   // This check ensures cloudSelectionReady is true AND selectedClouds has a value
   if (showSplash && hasCompletedOnboarding === true && cloudSelectionReady && selectedClouds.length > 0 && 
       !customCloudsLoading && !hiddenCloudsLoading && !defaultCloudLoading) {
-    const displayedClouds = clouds.filter(c => !hiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
-    const visibleCustomClouds = (customClouds ?? []).filter(c => !hiddenClouds.includes(c.id));
+    const displayedClouds = clouds.filter(c => !safeHiddenClouds.includes(c.id)).slice(0, 6); // First 6 visible default clouds
+    const visibleCustomClouds = (customClouds ?? []).filter(c => !safeHiddenClouds.includes(c.id));
     const hasMoreClouds = visibleCustomClouds.length > 0;
     
     return (
@@ -3045,15 +3128,6 @@ async function loadActivityLog(cloudId?: string) {
               </div>
             )}
             </div>
-            {celebrationStats && (celebrationStats.componentsAdded > 0 || celebrationStats.componentsReused > 0 || celebrationStats.designersEngaged > 0) && (
-              <div className="header__celebration-stats">
-                <span>{celebrationStats.componentsAdded} components added</span>
-                <span className="header__celebration-sep">:</span>
-                <span>{celebrationStats.componentsReused} components reused</span>
-                <span className="header__celebration-sep">:</span>
-                <span>{celebrationStats.designersEngaged} designers engaged</span>
-              </div>
-            )}
             
             <div className="header__actions">
               {view === 'home' ? (
@@ -3161,14 +3235,14 @@ async function loadActivityLog(cloudId?: string) {
                             <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
                             <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
                           </svg>
-                          Activity History
+                          Activity Log
                         </button>
                         <button 
                           className="header__dropdown-menu-item"
                           onClick={() => { openDataRecoveryModal(); setShowMoreMenu(false); }}
                         >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 1a7 7 0 0 0-7 7v2a1 1 0 0 0 .5.87l7 4a1 1 0 0 0 1 0l7-4a1 1 0 0 0 .5-.87V8a7 7 0 0 0-7-7z"/>
+                          <svg width="14" height="14" viewBox="-2 -2 28 28" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <path d="M12 2L3 7v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V7l-9-5z"/>
                           </svg>
                           Version History
                         </button>
@@ -3180,219 +3254,121 @@ async function loadActivityLog(cloudId?: string) {
             </div>
           </div>
           
-          {/* Subtitle (only on home) */}
+          {/* Subtitle and POC row - below cloud selector, only on home */}
           {view === 'home' && (
-            <p className="header__subtitle">
-              Get set, go with team-ready kits—fast and consistent.
-            </p>
-          )}
-          
-          {/* POC Row (only on home) - Always visible */}
-          {view === 'home' && selectedClouds.length > 0 && (() => {
-            const currentCloudId = selectedClouds[0];
-            const currentCloud = allClouds.find(c => c.id === currentCloudId);
-            const pocs = cloudPOCs[currentCloudId] || [];
-            const currentCloudLinks = cloudFigmaLinks[currentCloudId] || [];
-            return (
+            <>
+              <p className="header__subtitle">Get set, go with team-ready kits—fast and consistent.</p>
               <div className="header__poc-row">
                 <div className="header__poc-left">
-                  <span className="header__poc-label">{currentCloud?.name || 'Cloud'} POC:</span>
-                  {pocs.length > 0 ? (
-                    <div className="header__poc-list">
-                      {pocs.map((poc, index) => {
-                      return (
-                        <React.Fragment key={index}>
-                          <button
-                            className="header__poc-link"
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              if (poc.email) {
-                                const isInFigma = window.parent !== window;
-                                
-                                // Copy email to clipboard using multiple methods for reliability
-                                let copySuccess = false;
-                                
-                                // Method 1: Modern Clipboard API
-                                try {
-                                  if (navigator.clipboard && navigator.clipboard.writeText) {
-                                    await navigator.clipboard.writeText(poc.email);
-                                    copySuccess = true;
-                                  }
-                                } catch (err) {
-                                  console.log('Clipboard API failed, trying fallback:', err);
-                                }
-                                
-                                // Method 2: Fallback using temporary textarea
-                                if (!copySuccess) {
-                                  try {
-                                    const textarea = document.createElement('textarea');
-                                    textarea.value = poc.email;
-                                    textarea.style.position = 'fixed';
-                                    textarea.style.left = '-9999px';
-                                    textarea.style.top = '-9999px';
-                                    document.body.appendChild(textarea);
-                                    textarea.select();
-                                    textarea.setSelectionRange(0, poc.email.length);
-                                    copySuccess = document.execCommand('copy');
-                                    document.body.removeChild(textarea);
-                                  } catch (err) {
-                                    console.error('Fallback copy failed:', err);
-                                  }
-                                }
-                                
-                                // Always show toast notification
-                                if (isInFigma && parent && parent.postMessage) {
-                                  const message = copySuccess 
-                                    ? `Email copied: ${poc.email}` 
-                                    : `Email: ${poc.email}`;
-                                  parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message } }, '*');
-                                }
-                                
-                                // Try to open Slack DM
-                                const slackUrl = `slack://user?email=${encodeURIComponent(poc.email)}`;
-                                if (isInFigma && parent && parent.postMessage) {
-                                  parent.postMessage({ pluginMessage: { type: 'OPEN_EXTERNAL_URL', url: slackUrl } }, '*');
-                                } else {
-                                  // Browser preview - try window.open as fallback
-                                  window.open(slackUrl, '_blank');
-                                }
-                              }
-                            }}
-                          >
-                            {poc.name}
-                          </button>
-                          {index < pocs.length - 1 && (
-                            <span className="header__poc-separator"> | </span>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                    </div>
-                  ) : (
-                    <button
-                      className="header__poc-add-link"
-                      onClick={() => {
-                        setView('settings');
-                        setExpandedCloudId(defaultCloud);
-                        // Scroll to POC section if needed
-                        setTimeout(() => {
-                          const pocSection = document.querySelector('.settings-cloud-row__pocs');
-                          if (pocSection) {
-                            pocSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          }
-                        }, 100);
-                      }}
-                    >
-                      Add POC
-                    </button>
-                  )}
+                  <span className="header__poc-label">
+                    {selectedClouds.length > 0 && allClouds.find(c => c.id === selectedClouds[0])
+                      ? `${allClouds.find(c => c.id === selectedClouds[0])!.name} POC: `
+                      : 'POC: '}
+                  </span>
+                  <span className="header__poc-list">
+                    <button type="button" className="header__poc-link">Justin Carter</button>
+                    <span className="header__poc-separator">|</span>
+                    <button type="button" className="header__poc-link">Prantik Banerjee</button>
+                  </span>
                 </div>
-                <div className="header__dropdown-container" ref={linksDropdownRef}>
-                  <button 
-                    className="header__icon-btn header__icon-btn--figma"
-                    onClick={() => setShowLinksDropdown(!showLinksDropdown)}
-                    title="important team figma links"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 38 57" fill="currentColor">
-                      <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
-                    </svg>
-                  </button>
-                  
-                  {showLinksDropdown && (
-                    <div className="header__dropdown">
-                      <div className="header__dropdown-header">
-                        <span className="header__dropdown-title">Important Figma links</span>
-                        <button 
-                          className="header__dropdown-add"
-                          onClick={() => setIsAddingLink(!isAddingLink)}
-                        >
-                          {isAddingLink ? '×' : '+'}
-                        </button>
-                      </div>
-                      
-                      {isAddingLink && (
-                        <div className="header__dropdown-form">
-                          <input
-                            type="text"
-                            placeholder="Link name"
-                            value={newLinkName}
-                            onChange={(e) => setNewLinkName(e.target.value)}
-                            className="header__dropdown-input"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Figma URL"
-                            value={newLinkUrl}
-                            onChange={(e) => setNewLinkUrl(e.target.value)}
-                            className="header__dropdown-input"
-                          />
+                {selectedClouds.length > 0 && (
+                  <div className="header__dropdown-container" ref={linksDropdownRef}>
+                    <button 
+                      className="header__icon-btn header__icon-btn--figma"
+                      onClick={() => setShowLinksDropdown(!showLinksDropdown)}
+                      title="important team figma links"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 38 57" fill="currentColor">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M19 28.5C19 23.2533 23.2533 19 28.5 19C33.7467 19 38 23.2533 38 28.5C38 33.7467 33.7467 38 28.5 38C23.2533 38 19 33.7467 19 28.5Z" fill="#1ABCFE"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M0 47.5C0 42.2533 4.25329 38 9.5 38H19V47.5C19 52.7467 14.7467 57 9.5 57C4.25329 57 0 52.7467 0 47.5Z" fill="#0ACF83"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M19 0V19H28.5C33.7467 19 38 14.7467 38 9.5C38 4.25329 33.7467 0 28.5 0H19Z" fill="#FF7262"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M0 9.5C0 14.7467 4.25329 19 9.5 19H19V0H9.5C4.25329 0 0 4.25329 0 9.5Z" fill="#F24E1E"/>
+                        <path fillRule="evenodd" clipRule="evenodd" d="M0 28.5C0 33.7467 4.25329 38 9.5 38H19V19H9.5C4.25329 19 0 23.2533 0 28.5Z" fill="#A259FF"/>
+                      </svg>
+                    </button>
+                    {showLinksDropdown && (
+                      <div className="header__dropdown">
+                        <div className="header__dropdown-header">
+                          <span className="header__dropdown-title">Important Figma links</span>
                           <button 
-                            className="header__dropdown-save"
-                            onClick={() => {
-                              const currentCloudId = selectedClouds[0];
-                              if (!newLinkName.trim() || !newLinkUrl.trim()) return;
-                              
-                              const newLink = {
-                                id: Date.now().toString(),
-                                name: newLinkName.trim(),
-                                url: newLinkUrl.trim()
-                              };
-                              
-                              const currentLinks = cloudFigmaLinks[currentCloudId] || [];
-                              const updatedLinks = [...currentLinks, newLink];
-                              const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
-                              setCloudFigmaLinks(updatedCloudLinks);
-                              parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
-                              
-                              setNewLinkName('');
-                              setNewLinkUrl('');
-                              setIsAddingLink(false);
-                            }}
+                            className="header__dropdown-add"
+                            onClick={() => setIsAddingLink(!isAddingLink)}
                           >
-                            Save
+                            {isAddingLink ? '×' : '+'}
                           </button>
                         </div>
-                      )}
-                      
-                      <div className="header__dropdown-links">
-                        {currentCloudLinks.length === 0 && !isAddingLink ? (
-                          <p className="header__dropdown-empty">No links added yet</p>
-                        ) : (
-                          currentCloudLinks.map(link => (
-                            <div key={link.id} className="header__dropdown-link">
-                              <button 
-                                className="header__dropdown-link-btn"
-                                onClick={() => openFigmaLink(link.url)}
-                              >
-                                {link.name}
-                              </button>
-                              <button 
-                                className="header__dropdown-link-delete"
-                                onClick={() => {
-                                  const currentCloudId = selectedClouds[0];
-                                  const currentLinks = cloudFigmaLinks[currentCloudId] || [];
-                                  const updatedLinks = currentLinks.filter(l => l.id !== link.id);
-                                  const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
-                                  setCloudFigmaLinks(updatedCloudLinks);
-                                  parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
-                                }}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))
+                        {isAddingLink && (
+                          <div className="header__dropdown-form">
+                            <input
+                              type="text"
+                              placeholder="Link name"
+                              value={newLinkName}
+                              onChange={(e) => setNewLinkName(e.target.value)}
+                              className="header__dropdown-input"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Figma URL"
+                              value={newLinkUrl}
+                              onChange={(e) => setNewLinkUrl(e.target.value)}
+                              className="header__dropdown-input"
+                            />
+                            <button 
+                              className="header__dropdown-save"
+                              onClick={() => {
+                                const currentCloudId = selectedClouds[0];
+                                if (!newLinkName.trim() || !newLinkUrl.trim()) return;
+                                const newLink = { id: Date.now().toString(), name: newLinkName.trim(), url: newLinkUrl.trim() };
+                                const currentLinks = cloudFigmaLinks[currentCloudId] || [];
+                                const updatedLinks = [...currentLinks, newLink];
+                                const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
+                                setCloudFigmaLinks(updatedCloudLinks);
+                                parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
+                                setNewLinkName('');
+                                setNewLinkUrl('');
+                                setIsAddingLink(false);
+                              }}
+                            >
+                              Save
+                            </button>
+                          </div>
                         )}
+                        <div className="header__dropdown-links">
+                          {(cloudFigmaLinks[selectedClouds[0]] || []).length === 0 && !isAddingLink ? (
+                            <p className="header__dropdown-empty">No links added yet</p>
+                          ) : (
+                            (cloudFigmaLinks[selectedClouds[0]] || []).map(link => (
+                              <div key={link.id} className="header__dropdown-link">
+                                <button 
+                                  className="header__dropdown-link-btn"
+                                  onClick={() => openFigmaLink(link.url)}
+                                >
+                                  {link.name}
+                                </button>
+                                <button 
+                                  className="header__dropdown-link-delete"
+                                  onClick={() => {
+                                    const currentCloudId = selectedClouds[0];
+                                    const currentLinks = cloudFigmaLinks[currentCloudId] || [];
+                                    const updatedLinks = currentLinks.filter(l => l.id !== link.id);
+                                    const updatedCloudLinks = { ...cloudFigmaLinks, [currentCloudId]: updatedLinks };
+                                    setCloudFigmaLinks(updatedCloudLinks);
+                                    parent.postMessage({ pluginMessage: { type: 'SAVE_CLOUD_FIGMA_LINKS', links: updatedCloudLinks } }, '*');
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
-            );
-          })()}
+            </>
+          )}
         </header>
 
         {/* Search Bar (only on home) */}
@@ -3488,7 +3464,7 @@ async function loadActivityLog(cloudId?: string) {
             {visibleCategories.map(cat => (
               <button
                 key={cat.id}
-                className={`category-pill ${cat.iconOnly ? 'category-pill--icon' : ''} ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
+                className={`category-pill ${cat.iconAndLabel ? 'category-pill--icon-label' : ''} ${activeCategory === cat.id ? 'category-pill--selected' : ''}`}
                 data-category={cat.id}
                 onClick={() => {
                   setActiveCategory(cat.id);
@@ -3498,12 +3474,15 @@ async function loadActivityLog(cloudId?: string) {
                     setShowWelcomeScreen(true);
                   }
                 }}
-                title={cat.iconOnly ? 'Saved' : cat.label}
+                title={cat.label}
               >
-                {cat.iconOnly ? (
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
-                  </svg>
+                {cat.iconAndLabel ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                    </svg>
+                    <span>{cat.label}</span>
+                  </>
                 ) : (
                   cat.label
                 )}
@@ -3796,7 +3775,7 @@ async function loadActivityLog(cloudId?: string) {
                           <button
                             className="scaffold-preview__status-btn"
                             onClick={() => {
-                              const symbols = [...statusSymbols.map(s => s.symbol), null];
+                              const symbols = [...(statusSymbols ?? []).map(s => s.symbol), null];
                               const currentIdx = page.status ? symbols.indexOf(page.status) : symbols.length - 1;
                               const nextIdx = (currentIdx + 1) % symbols.length;
                               const newSections = [...scaffoldSections];
@@ -3970,7 +3949,7 @@ async function loadActivityLog(cloudId?: string) {
                 <strong>Status:</strong>
                 {!isEditingStatusBadges && (
                   <span className="scaffold-hint__badges">
-                    {statusSymbols.map((s, i) => (
+                    {(statusSymbols ?? []).map((s, i) => (
                       <span key={s.id}>
                         {i > 0 && <span className="scaffold-hint__separator"> • </span>}
                         <span className="scaffold-hint__status">{s.symbol}&nbsp;{s.label}</span>
@@ -3988,14 +3967,14 @@ async function loadActivityLog(cloudId?: string) {
 
               {isEditingStatusBadges && (
                 <div className="scaffold-hint__editor">
-                  {statusSymbols.map((status, index) => (
+                  {(statusSymbols ?? []).map((status, index) => (
                     <div key={status.id} className="scaffold-hint__editor-row">
                       <input
                         type="text"
                         className="scaffold-hint__emoji-input"
                         value={status.symbol}
                         onChange={(e) => {
-                          const newSymbols = [...statusSymbols];
+                          const newSymbols = [...(statusSymbols ?? [])];
                           newSymbols[index] = { ...status, symbol: e.target.value };
                           updateStatusSymbols(newSymbols);
                         }}
@@ -4006,7 +3985,7 @@ async function loadActivityLog(cloudId?: string) {
                         className="scaffold-hint__label-input"
                         value={status.label}
                         onChange={(e) => {
-                          const newSymbols = [...statusSymbols];
+                          const newSymbols = [...(statusSymbols ?? [])];
                           newSymbols[index] = { ...status, label: e.target.value };
                           updateStatusSymbols(newSymbols);
                         }}
@@ -4015,11 +3994,11 @@ async function loadActivityLog(cloudId?: string) {
                       <button
                         className="scaffold-hint__delete-btn"
                         onClick={() => {
-                          if (statusSymbols.length > 1) {
-                            updateStatusSymbols(statusSymbols.filter((_, i) => i !== index));
+                          if ((statusSymbols ?? []).length > 1) {
+                            updateStatusSymbols((statusSymbols ?? []).filter((_, i) => i !== index));
                           }
                         }}
-                        disabled={statusSymbols.length <= 1}
+                        disabled={(statusSymbols ?? []).length <= 1}
                       >×</button>
                     </div>
                   ))}
@@ -4071,7 +4050,7 @@ async function loadActivityLog(cloudId?: string) {
                     <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
                     <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
                   </svg>
-                  Activity History
+                  Activity Log
                 </button>
                 {deletedClouds.length > 0 && (
                   <button className="settings-header__trash" onClick={() => setShowCloudTrashModal(true)}>
@@ -4089,7 +4068,7 @@ async function loadActivityLog(cloudId?: string) {
                         {allClouds.map(cloud => {
                           const isExpanded = expandedCloudId === cloud.id;
                           return (
-                          <div key={cloud.id} className={`settings-cloud-row ${hiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${isExpanded ? 'is-expanded' : ''}`}>
+                          <div key={cloud.id} className={`settings-cloud-row ${safeHiddenClouds.includes(cloud.id) ? 'is-hidden' : ''} ${isExpanded ? 'is-expanded' : ''}`}>
                             <div 
                               className="settings-cloud-row__header"
                               onClick={() => {
@@ -4146,7 +4125,7 @@ async function loadActivityLog(cloudId?: string) {
                                   value={cloud.name}
                                   onChange={(e) => {
                                     if (cloud.isCustom) {
-                                      const updatedCustom = customClouds.map(c => 
+                                      const updatedCustom = (customClouds ?? []).map(c => 
                                         c.id === cloud.id ? { ...c, name: e.target.value } : c
                                       );
                                       setCustomClouds(updatedCustom);
@@ -4165,14 +4144,14 @@ async function loadActivityLog(cloudId?: string) {
                                   className={`settings-cloud-row__set-default ${defaultCloud === cloud.id ? 'is-default' : ''}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!hiddenClouds.includes(cloud.id)) {
+                                    if (!safeHiddenClouds.includes(cloud.id)) {
                                       setDefaultCloud(cloud.id);
                                       setSelectedClouds([cloud.id]);
                                       const cloudName = allClouds.find(c => c.id === cloud.id)?.name || cloud.id;
                                       parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `${cloudName} set as default` } }, '*');
                                     }
                                   }}
-                                  disabled={hiddenClouds.includes(cloud.id)}
+                                  disabled={safeHiddenClouds.includes(cloud.id)}
                                 >
                                   {defaultCloud === cloud.id ? (
                                     <span className="settings-cloud-row__badge">Default</span>
@@ -4183,17 +4162,17 @@ async function loadActivityLog(cloudId?: string) {
                               </div>
                               {/* Visibility toggle - always visible */}
                               <button
-                                className={`settings-cloud-row__toggle ${hiddenClouds.includes(cloud.id) ? 'is-off' : 'is-on'}`}
+                                className={`settings-cloud-row__toggle ${safeHiddenClouds.includes(cloud.id) ? 'is-off' : 'is-on'}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   toggleCloudVisibility(cloud.id);
                                 }}
-                                title={hiddenClouds.includes(cloud.id) ? 'Show cloud' : 'Hide cloud'}
+                                title={safeHiddenClouds.includes(cloud.id) ? 'Show cloud' : 'Hide cloud'}
                               >
                                 <svg viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                                   <circle cx="12" cy="12" r="3"/>
-                                  {hiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
+                                  {safeHiddenClouds.includes(cloud.id) && <path d="M1 1l22 22"/>}
                                 </svg>
                               </button>
                               {/* Delete cloud button - only for custom clouds or if not default */}
@@ -4218,7 +4197,7 @@ async function loadActivityLog(cloudId?: string) {
                             {isExpanded && (
                               <div className="settings-cloud-row__categories">
                                 <div className="settings-categories-list settings-categories-list--nested">
-                                  {(cloudCategories[cloud.id] || defaultCategories).map((cat, index) => (
+                                  {(safeCloudCategories[cloud.id] || defaultCategories).map((cat, index) => (
                                     <div 
                                       key={cat.id} 
                                       className={`settings-category-item ${draggedItem?.type === 'category' && draggedItem.index === index ? 'is-dragging' : ''} ${dragOverIndex === index && draggedItem?.type === 'category' ? 'is-drag-over' : ''}`}
@@ -4230,7 +4209,7 @@ async function loadActivityLog(cloudId?: string) {
                                       onDrop={(e) => {
                                         e.preventDefault();
                                         if (draggedItem?.type === 'category' && draggedItem.index !== index) {
-                                          const cats = [...(cloudCategories[cloud.id] || defaultCategories)];
+                                          const cats = [...(safeCloudCategories[cloud.id] || defaultCategories)];
                                           const [removed] = cats.splice(draggedItem.index, 1);
                                           cats.splice(index, 0, removed);
                                           updateCloudCategories(cloud.id, cats);
@@ -4250,7 +4229,7 @@ async function loadActivityLog(cloudId?: string) {
                                         className="settings-category-item__input"
                                         value={cat.label}
                                         onChange={(e) => {
-                                          const cats = [...(cloudCategories[cloud.id] || defaultCategories)];
+                                          const cats = [...(safeCloudCategories[cloud.id] || defaultCategories)];
                                           cats[index] = { ...cat, label: e.target.value };
                                           updateCloudCategories(cloud.id, cats);
                                         }}
@@ -4263,7 +4242,7 @@ async function loadActivityLog(cloudId?: string) {
                                       {cat.id !== 'all' && (
                                         <button className="settings-category-item__delete" onClick={() => {
                                           logActivityFromClient({ action: 'section_delete', assetId: cat.id, assetName: cat.label, cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
-                                          const cats = (cloudCategories[cloud.id] || defaultCategories).filter((_, i) => i !== index);
+                                          const cats = (safeCloudCategories[cloud.id] || defaultCategories).filter((_, i) => i !== index);
                                           updateCloudCategories(cloud.id, cats);
                                         }}>×</button>
                                       )}
@@ -4273,7 +4252,7 @@ async function loadActivityLog(cloudId?: string) {
                                     className="settings-add-category-btn settings-add-category-btn--small"
                                     onClick={() => {
                                       const newId = `custom-${Date.now()}`;
-                                      const cats = [...(cloudCategories[cloud.id] || defaultCategories)];
+                                      const cats = [...(safeCloudCategories[cloud.id] || defaultCategories)];
                                       cats.push({ id: newId, label: 'New Category' });
                                       updateCloudCategories(cloud.id, cats);
                                       logActivityFromClient({ action: 'section_create', assetId: newId, assetName: 'New Category', cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
@@ -5251,15 +5230,19 @@ async function loadActivityLog(cloudId?: string) {
           </div>
           {(() => {
             const meta = templateAddMetadata[template.id];
-            if (!meta || (!meta.userName && !meta.createdAt)) return null;
+            const hasUser = meta?.userName?.trim();
+            const hasDate = meta?.createdAt;
+            if (!hasUser && !hasDate) return null;
             return (
               <div className="template-item__meta">
-                <span className="template-item__meta-added">
-                  {meta.userName ? `Added by ${meta.userName}` : ''}
-                </span>
-                <span className="template-item__meta-time">
-                  {meta.createdAt ? formatActivityTime(new Date(meta.createdAt)) : ''}
-                </span>
+                {hasUser && (
+                  <span className="template-item__meta-added">Added by {meta.userName}</span>
+                )}
+                {hasDate && (
+                  <span className="template-item__meta-time">
+                    {formatDateOnly(new Date(meta.createdAt))}
+                  </span>
+                )}
               </div>
             );
           })()}
@@ -5275,7 +5258,37 @@ async function loadActivityLog(cloudId?: string) {
                   if (activeCategory === 'saved' && displayVariants.length === 1 && displayVariants[0].preview) {
                     const savedVariant = displayVariants[0];
                     return (
-                      <div className="template-item__preview">
+                      <div
+                        className="template-item__preview"
+                        onMouseEnter={() => {
+                          if (variantPopoverHideTimerRef.current) {
+                            clearTimeout(variantPopoverHideTimerRef.current);
+                            variantPopoverHideTimerRef.current = null;
+                          }
+                          setVariantPopover({
+                            templateId: template.id,
+                            templateName: template.name,
+                            variant: savedVariant,
+                            preview: savedVariant.preview || '',
+                            displayName: savedVariant.displayName,
+                          });
+                          if (!variantPopoverVisibleRef.current) {
+                            if (variantPopoverShowTimerRef.current) clearTimeout(variantPopoverShowTimerRef.current);
+                            variantPopoverShowTimerRef.current = setTimeout(() => {
+                              setVariantPopoverVisible(true);
+                              variantPopoverShowTimerRef.current = null;
+                            }, 2000);
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (variantPopoverHideTimerRef.current) clearTimeout(variantPopoverHideTimerRef.current);
+                          variantPopoverHideTimerRef.current = setTimeout(() => {
+                            setVariantPopoverVisible(false);
+                            setVariantPopover(null);
+                            variantPopoverHideTimerRef.current = null;
+                          }, 200);
+                        }}
+                      >
                         <img src={savedVariant.preview} alt={savedVariant.displayName} />
                         <button 
                           className="template-item__preview-saved"
@@ -5343,6 +5356,8 @@ async function loadActivityLog(cloudId?: string) {
                                   templateId: template.id,
                                   templateName: template.name,
                                   variant,
+                                  preview: variant.preview || '',
+                                  displayName: variant.displayName,
                                 });
                                 if (variantPopoverVisibleRef.current) {
                                   // Already visible - just update content, no delay (prevents jumping)
@@ -5351,7 +5366,7 @@ async function loadActivityLog(cloudId?: string) {
                                   variantPopoverShowTimerRef.current = setTimeout(() => {
                                     setVariantPopoverVisible(true);
                                     variantPopoverShowTimerRef.current = null;
-                                  }, 1500);
+                                  }, 2000);
                                 }
                               }}
                             >
@@ -5399,7 +5414,36 @@ async function loadActivityLog(cloudId?: string) {
 
                 {/* Only show main preview for single components, not component sets */}
                 {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
-                  <div className={`template-item__preview ${refreshingId === template.id ? 'template-item__preview--refreshing' : ''}`}>
+                  <div
+                    className={`template-item__preview ${refreshingId === template.id ? 'template-item__preview--refreshing' : ''}`}
+                    onMouseEnter={() => {
+                      if (variantPopoverHideTimerRef.current) {
+                        clearTimeout(variantPopoverHideTimerRef.current);
+                        variantPopoverHideTimerRef.current = null;
+                      }
+                      setVariantPopover({
+                        templateId: template.id,
+                        templateName: template.name,
+                        preview: template.preview,
+                        displayName: template.name,
+                      });
+                      if (!variantPopoverVisibleRef.current) {
+                        if (variantPopoverShowTimerRef.current) clearTimeout(variantPopoverShowTimerRef.current);
+                        variantPopoverShowTimerRef.current = setTimeout(() => {
+                          setVariantPopoverVisible(true);
+                          variantPopoverShowTimerRef.current = null;
+                        }, 2000);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (variantPopoverHideTimerRef.current) clearTimeout(variantPopoverHideTimerRef.current);
+                      variantPopoverHideTimerRef.current = setTimeout(() => {
+                        setVariantPopoverVisible(false);
+                        setVariantPopover(null);
+                        variantPopoverHideTimerRef.current = null;
+                      }, 200);
+                    }}
+                  >
                     <img src={template.preview} alt={template.name} />
                     {refreshingId === template.id && (
                       <div className="template-item__refresh-overlay">
@@ -5638,7 +5682,7 @@ async function loadActivityLog(cloudId?: string) {
         </div>
       </div>
 
-      {/* Variant grid hover popover - larger preview after 1.5s delay, fixed at top of plugin */}
+      {/* Variant grid hover popover - larger preview after 2s delay, fixed at top of plugin */}
       {variantPopoverVisible && variantPopover && typeof document !== 'undefined' && document.body && createPortal(
         <div
           ref={variantPopoverRef}
@@ -5646,7 +5690,7 @@ async function loadActivityLog(cloudId?: string) {
           style={{
             position: 'fixed',
             left: '50%',
-            top: 72,
+            top: 12,
             transform: 'translateX(-50%)',
             zIndex: 1000,
           }}
@@ -5666,8 +5710,8 @@ async function loadActivityLog(cloudId?: string) {
         >
           <div className="variant-grid-popover__content">
             <div className="variant-grid-popover__preview">
-              {(variantPopoverHighResPreview || variantPopover.variant.preview) ? (
-                <img src={variantPopoverHighResPreview || variantPopover.variant.preview || ''} alt={variantPopover.variant.displayName} />
+              {(variantPopover.variant ? variantPopoverHighResPreview : null) || variantPopover.preview ? (
+                <img src={(variantPopover.variant ? variantPopoverHighResPreview : null) || variantPopover.preview || ''} alt={variantPopover.displayName} />
               ) : (
                 <div className="variant-grid-popover__empty">
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
@@ -5677,7 +5721,7 @@ async function loadActivityLog(cloudId?: string) {
               )}
             </div>
             <div className="variant-grid-popover__meta">
-              <span className="variant-grid-popover__name">{variantPopover.variant.displayName}</span>
+              <span className="variant-grid-popover__name">{variantPopover.displayName}</span>
               <span className="variant-grid-popover__template">{variantPopover.templateName}</span>
             </div>
           </div>
@@ -5898,13 +5942,13 @@ async function loadActivityLog(cloudId?: string) {
         </div>
       )}
       
-      {/* Activity History Modal */}
+      {/* Activity Log Modal */}
       {showActivityHistoryModal && (
-        <div className="modal-overlay modal-overlay--activity-history" onClick={() => setShowActivityHistoryModal(false)}>
+        <div className={`modal-overlay modal-overlay--activity-history ${isDarkMode ? 'dark-mode' : ''}`} onClick={() => setShowActivityHistoryModal(false)}>
           <div className="modal modal--activity-history" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header modal__header--activity-history">
               <div className="modal__header-top">
-                <h3 className="modal__title">Activity History</h3>
+                <h3 className="modal__title">Activity Log</h3>
                 <button className="modal__close" onClick={() => setShowActivityHistoryModal(false)}>×</button>
               </div>
               <p className="activity-history__description activity-history__description--above-divider">
@@ -6036,7 +6080,7 @@ async function loadActivityLog(cloudId?: string) {
                   <span className="activity-history__kpi-sep">:</span>
                   <span>{(activityHistoryStats ?? celebrationStats)?.componentsReused ?? 0} reused</span>
                   <span className="activity-history__kpi-sep">:</span>
-                  <span>{(activityHistoryStats ?? celebrationStats)?.designersEngaged ?? 0} designers engaged</span>
+                  <span>{(activityHistoryStats ?? celebrationStats)?.designersEngaged ?? 0} {(activityHistoryStats ?? celebrationStats)?.designersEngaged === 1 ? 'designer' : 'designers'} engaged</span>
                 </div>
               </div>
               
@@ -6103,7 +6147,7 @@ async function loadActivityLog(cloudId?: string) {
                     } else if (canFocusTemplate) {
                       const template = templates.find(t => t.id === activity.assetId);
                       const templateCategory = template?.category ?? activity.category ?? 'all';
-                      const categoriesForCloud = cloudCategories[activity.cloudId!] || defaultCategories;
+                      const categoriesForCloud = (cloudCategories ?? {})[activity.cloudId!] || defaultCategories;
                       const validCategory = categoriesForCloud.some(c => c.id === templateCategory) ? templateCategory : 'all';
                       setSelectedClouds([activity.cloudId!]);
                       setView('home');
@@ -6207,7 +6251,7 @@ async function loadActivityLog(cloudId?: string) {
       
       {/* Version History Modal */}
       {showDataRecoveryModal && (
-        <div className="modal-overlay modal-overlay--activity-history" onClick={() => setShowDataRecoveryModal(false)}>
+        <div className={`modal-overlay modal-overlay--activity-history ${isDarkMode ? 'dark-mode' : ''}`} onClick={() => setShowDataRecoveryModal(false)}>
           <div className="modal modal--activity-history modal--data-recovery" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header modal__header--activity-history">
               <div className="modal__header-top">
@@ -6260,23 +6304,67 @@ async function loadActivityLog(cloudId?: string) {
                       <span className="version-history__summary-label">assets</span>
                     </div>
                     <div className="version-history__summary-row">
-                      <span className="version-history__summary-count">{latestBackupSummary.structures}</span>
-                      <span className="version-history__summary-label">structures</span>
+                      <span className="version-history__summary-count">{latestBackupSummary.sections}</span>
+                      <span className="version-history__summary-label">sections</span>
                     </div>
                   </div>
-                  <p className="version-history__backup-date">Backup: {latestBackupSummary.backupDate}</p>
-                  <p className="version-history__assurance">Don&apos;t worry — your data is safe with us. We&apos;ll back up your current state before restoring.</p>
-                  <Button
-                    variant="brand"
-                    size="medium"
-                    className="version-history__cta"
-                    onClick={handleDataRecoveryRestore}
-                    disabled={dataRecoveryRestoring}
-                  >
-                    {dataRecoveryRestoring ? 'Restoring...' : 'Backup and Restore'}
-                  </Button>
+                  <div className="version-history__scroll">
+                    {latestBackupSummary.details && latestBackupSummary.details.length > 0 && (
+                      <div className="version-history__details">
+                        <table className="version-history__details-table">
+                          <thead>
+                            <tr>
+                              <th>Cloud</th>
+                              <th>Components</th>
+                              <th>Sections</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {latestBackupSummary.details.map(row => (
+                              <tr key={row.cloudId}>
+                                <td>
+                                  <span className="version-history__details-cloud">
+                                    <img src={row.icon || SalesCloudIcon} alt="" className="version-history__details-icon" />
+                                    {row.cloudName}
+                                  </span>
+                                </td>
+                                <td>{row.components}</td>
+                                <td>{row.sections}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                  <div className="version-history__footer">
+                    <p className="version-history__backup-date">Backup: {latestBackupSummary.backupDate}</p>
+                    <p className="version-history__assurance">Don&apos;t worry — your data is safe with us. We&apos;ll back up your current state before restoring.</p>
+                    <Button
+                      variant="brand"
+                      size="medium"
+                      className="version-history__cta"
+                      onClick={() => setShowRestoreConfirm(true)}
+                      disabled={dataRecoveryRestoring}
+                    >
+                      {dataRecoveryRestoring ? 'Restoring...' : 'Backup and Restore'}
+                    </Button>
+                  </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restore Confirmation Modal - on top of Version History */}
+      {showRestoreConfirm && (
+        <div className="restore-confirm-overlay" onClick={() => setShowRestoreConfirm(false)}>
+          <div className="restore-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <p className="restore-confirm-modal__message">Restore from your most recent backup? Your current data will be backed up first.</p>
+            <div className="restore-confirm-modal__actions">
+              <button className="restore-confirm-modal__cancel" onClick={() => setShowRestoreConfirm(false)}>Cancel</button>
+              <button className="restore-confirm-modal__ok" onClick={confirmDataRecoveryRestore}>OK</button>
             </div>
           </div>
         </div>
