@@ -64,9 +64,9 @@
 8. Submit for review
 
 ### 2. Git Repository
-- [ ] Push all commits to remote repository
-- [ ] Create release tag: `git tag v1.18.0`
-- [ ] Push tag: `git push origin v1.18.0`
+- [x] Push all commits to remote repository
+- [x] Create release tag: `git tag v1.18.0-docs` (notes/docs alignment tag)
+- [x] Push tag: `git push origin v1.18.0-docs`
 
 ### 3. Post-Publication
 - [ ] Monitor plugin usage and feedback
