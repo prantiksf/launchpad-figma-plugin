@@ -1975,6 +1975,41 @@ export function App() {
     setShowLinksDropdown(false);
   }
 
+  function showToast(message: string) {
+    try {
+      parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message } }, '*');
+    } catch {
+      // no-op
+    }
+  }
+
+  async function copyToClipboard(text: string): Promise<boolean> {
+    if (!text) return false;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // fall through
+    }
+    try {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.style.position = 'fixed';
+      el.style.left = '-9999px';
+      el.style.top = '-9999px';
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(el);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
   // Cloud selector functions
   function selectCloud(cloudId: string) {
     setSelectedClouds([cloudId]);
@@ -3274,16 +3309,52 @@ async function loadActivityLog(cloudId?: string) {
               <p className="header__subtitle">Get set, go with team-ready kits—fast and consistent.</p>
               <div className="header__poc-row">
                 <div className="header__poc-left">
-                  <span className="header__poc-label">
-                    {selectedClouds.length > 0 && allClouds.find(c => c.id === selectedClouds[0])
-                      ? `${allClouds.find(c => c.id === selectedClouds[0])!.name} POC: `
-                      : 'POC: '}
-                  </span>
-                  <span className="header__poc-list">
-                    <button type="button" className="header__poc-link">Justin Carter</button>
-                    <span className="header__poc-separator">|</span>
-                    <button type="button" className="header__poc-link">Prantik Banerjee</button>
-                  </span>
+                  {(() => {
+                    const cloudId = selectedClouds[0] || defaultCloud || 'sales';
+                    const cloudName = allClouds.find(c => c.id === cloudId)?.name;
+                    const raw = (cloudPOCs ?? {})[cloudId];
+                    const pocs = (Array.isArray(raw) ? raw : [])
+                      .filter((p: any) => (p?.name && String(p.name).trim()) || (p?.email && String(p.email).trim()));
+                    const onAdd = () => {
+                      setView('settings');
+                      setExpandedCloudId(cloudId);
+                      showToast('Add/update POCs in Settings');
+                    };
+                    const onPocClick = async (poc: any) => {
+                      const email = (poc?.email && String(poc.email).trim()) || '';
+                      if (!email) return;
+                      const ok = await copyToClipboard(email);
+                      showToast(ok ? `Copied: ${email}` : `Email: ${email}`);
+                    };
+                    return (
+                      <>
+                        <span className="header__poc-label">
+                          {cloudName ? `${cloudName} POC: ` : 'POC: '}
+                        </span>
+                        <span className="header__poc-list">
+                          {pocs.length > 0 ? (
+                            pocs.map((poc: any, idx: number) => (
+                              <React.Fragment key={`${poc?.email || poc?.name || idx}`}>
+                                {idx > 0 && <span className="header__poc-separator">|</span>}
+                                <button
+                                  type="button"
+                                  className="header__poc-link"
+                                  onClick={() => onPocClick(poc)}
+                                  title={poc?.email ? 'Click to copy email' : undefined}
+                                >
+                                  {String(poc?.name || poc?.email || '').trim()}
+                                </button>
+                              </React.Fragment>
+                            ))
+                          ) : (
+                            <button type="button" className="header__poc-add-link" onClick={onAdd}>
+                              + Add POC
+                            </button>
+                          )}
+                        </span>
+                      </>
+                    );
+                  })()}
                 </div>
                 {selectedClouds.length > 0 && (
                   <div className="header__dropdown-container" ref={linksDropdownRef}>
@@ -4276,8 +4347,8 @@ async function loadActivityLog(cloudId?: string) {
                               </div>
                             )}
                             
-                            {/* POC Management - only show for default cloud */}
-                            {defaultCloud === cloud.id && (
+                            {/* POC Management - show for each cloud when expanded */}
+                            {isExpanded && (
                               <div className="settings-cloud-row__pocs">
                                 <div className="settings-pocs-list">
                                   {(cloudPOCs[cloud.id] || []).map((poc, index) => (
@@ -4304,8 +4375,8 @@ async function loadActivityLog(cloudId?: string) {
                                           updateCloudPOCs(cloud.id, pocs);
                                         }}
                                       />
-                                      <button 
-                                        className="settings-poc-item__delete" 
+                                      <button
+                                        className="settings-poc-item__delete"
                                         onClick={() => {
                                           logActivityFromClient({ action: 'poc_delete', assetId: `poc-${index}`, assetName: poc.name || poc.email || 'POC', cloudId: cloud.id, cloudName: cloud.name, userName: figmaUserName || undefined });
                                           const pocs = (cloudPOCs[cloud.id] || []).filter((_, i) => i !== index);
