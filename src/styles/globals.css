@@ -1200,6 +1200,14 @@ fieldset.slds-form-element legend {
   cursor: pointer;
   transition: all 0.15s;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.template-item__preview:hover .template-item__preview-saved,
+.template-item__preview-saved.is-saved {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .template-item__preview-saved:hover {
@@ -1492,6 +1500,15 @@ fieldset.slds-form-element legend {
   transition: all 0.15s;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.variant-grid__item:hover .variant-grid__saved,
+.variant-grid__item.is-selected .variant-grid__saved,
+.variant-grid__saved.is-saved {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .variant-grid__saved:hover {

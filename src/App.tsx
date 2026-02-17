@@ -195,7 +195,7 @@ export function App() {
   
   // Backend data hooks (shared team-wide)
   const { templates, setTemplates, loading: templatesLoading, refetch: refetchTemplates } = useTemplates(figmaUserName);
-  const { savedItems, setSavedItems, loading: savedItemsLoading } = useSavedItems();
+  const { savedItems, setSavedItems, loading: savedItemsLoading, refetch: refetchSavedItems } = useSavedItems(figmaUserId);
   const { links: figmaLinks, setLinks: setFigmaLinks, loading: figmaLinksLoading } = useFigmaLinks();
   const { cloudLinks: cloudFigmaLinks, setCloudLinks: setCloudFigmaLinks, loading: cloudLinksLoading } = useCloudFigmaLinks();
   const { clouds: customClouds, setClouds: setCustomClouds, loading: customCloudsLoading } = useCustomClouds();
@@ -1816,14 +1816,39 @@ export function App() {
   
   // Save/Unsave template or variant
   function toggleSaveTemplate(templateId: string, variantKey?: string) {
-    const item = { templateId, variantKey };
-    const isSaved = savedItems.some(s => 
-      s.templateId === templateId && s.variantKey === variantKey
+    setSavedItems((prev: any[]) => {
+      const item = { templateId, variantKey };
+      const isSaved = prev.some(s =>
+        s.templateId === templateId && s.variantKey === variantKey
+      );
+      return isSaved
+        ? prev.filter(s => !(s.templateId === templateId && s.variantKey === variantKey))
+        : [...prev, item];
+    });
+    setMoveMenuOpen(null);
+  }
+
+  function saveTemplateVariants(templateId: string, variantKeys: string[]) {
+    const unique = Array.from(new Set(variantKeys.filter(Boolean)));
+    if (unique.length === 0) return;
+    setSavedItems((prev: any[]) => {
+      const updated = [...prev];
+      unique.forEach(variantKey => {
+        if (!updated.some(s => s.templateId === templateId && s.variantKey === variantKey)) {
+          updated.push({ templateId, variantKey });
+        }
+      });
+      return updated;
+    });
+    setMoveMenuOpen(null);
+  }
+
+  function unsaveTemplateVariants(templateId: string, variantKeys: string[]) {
+    const unique = new Set(variantKeys.filter(Boolean));
+    if (unique.size === 0) return;
+    setSavedItems((prev: any[]) =>
+      prev.filter(s => !(s.templateId === templateId && s.variantKey && unique.has(s.variantKey)))
     );
-    const updated = isSaved 
-      ? savedItems.filter(s => !(s.templateId === templateId && s.variantKey === variantKey))
-      : [...savedItems, item];
-    setSavedItems(updated);
     setMoveMenuOpen(null);
   }
   
@@ -2400,6 +2425,23 @@ export function App() {
         else if (dataKey === 'templates') assets = itemCount;
       }
 
+      // Include per-user Saved backups (designer-specific) so "Restore" restores your Saved too.
+      // Not included in counts/table, but will be restored alongside the shared keys.
+      try {
+        if (figmaUserId) {
+          const userSavedKey = `saved_items:${String(figmaUserId)}`;
+          const userBackups = await getBackups(userSavedKey, 1, { figmaUserId });
+          if (userBackups.length > 0) {
+            backupsToRestore.push({ dataKey: userSavedKey, backupId: userBackups[0].id });
+            const createdAt = userBackups[0].createdAt ?? (userBackups[0] as any).created_at;
+            const date = createdAt ? new Date(createdAt) : new Date();
+            if (!latestDate || date.getTime() > latestDate.getTime()) latestDate = date;
+          }
+        }
+      } catch {
+        // Optional; ignore if no per-user backups yet
+      }
+
       const backupDate = latestDate && !isNaN(latestDate.getTime())
         ? formatActivityTime(latestDate)
         : 'Unknown';
@@ -2504,12 +2546,29 @@ export function App() {
       const errors: string[] = [];
       for (const { dataKey, backupId } of latestBackupSummary.backupsToRestore) {
         try {
-          await restoreFromBackup(dataKey, backupId, true);
+          const isUserSaved = typeof dataKey === 'string' && dataKey.startsWith('saved_items:');
+          await restoreFromBackup(dataKey, backupId, true, isUserSaved ? { figmaUserId } : {});
         } catch (err) {
           console.error(`Failed to restore ${dataKey}:`, err);
           errors.push(`${dataKey}: ${(err as Error).message}`);
         }
       }
+
+      // Also restore *this user's* saved items (per-user backups), if available.
+      // This keeps the "Restore" button intuitive: team data + your personal Saved restore together.
+      if (figmaUserId) {
+        const userKey = `saved_items:${String(figmaUserId)}`;
+        try {
+          const backups = await getBackups(userKey, 1, { figmaUserId });
+          if (Array.isArray(backups) && backups.length > 0) {
+            await restoreFromBackup(userKey, backups[0].id, true, { figmaUserId });
+          }
+        } catch (err) {
+          console.error('Failed to restore per-user saved items:', err);
+          errors.push(`saved_items: ${(err as Error).message}`);
+        }
+      }
+
       if (errors.length > 0) {
         parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: `Restore had errors: ${errors.join('; ')}` } }, '*');
         setDataRecoveryError(`Some restores failed. You may need to refresh. ${errors.join('; ')}`);
@@ -2527,6 +2586,7 @@ export function App() {
         setCustomClouds(customData);
         setEditableClouds(editableData);
         await refetchTemplates();
+        await refetchSavedItems();
       } catch (refreshErr) {
         console.error('Refresh after restore:', refreshErr);
         parent.postMessage({ pluginMessage: { type: 'SHOW_TOAST', message: 'Data refreshed. If something looks wrong, close and reopen the plugin.' } }, '*');
@@ -5342,6 +5402,7 @@ async function loadActivityLog(cloudId?: string) {
                   // If only one variant saved in saved category, show as full preview
                   if (activeCategory === 'saved' && displayVariants.length === 1 && displayVariants[0].preview) {
                     const savedVariant = displayVariants[0];
+                    const isSaved = isTemplateSaved(template.id, savedVariant.key);
                     return (
                       <div
                         className="template-item__preview"
@@ -5376,12 +5437,17 @@ async function loadActivityLog(cloudId?: string) {
                       >
                         <img src={savedVariant.preview} alt={savedVariant.displayName} />
                         <button 
-                          className="template-item__preview-saved"
+                          type="button"
+                          className={`template-item__preview-saved ${isSaved ? 'is-saved' : ''}`}
                           onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id, savedVariant.key); }}
-                          title="Unsave"
+                          title={isSaved ? 'Unsave' : 'Save'}
                         >
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                            {isSaved ? (
+                              <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+                            ) : (
+                              <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                            )}
                           </svg>
                         </button>
                       </div>
@@ -5427,6 +5493,7 @@ async function loadActivityLog(cloudId?: string) {
                       >
                         {displayVariants.map(variant => {
                           const isSelected = selected.includes(variant.key);
+                          const isSaved = isTemplateSaved(template.id, variant.key);
                           return (
                             <div 
                               key={variant.key}
@@ -5469,17 +5536,20 @@ async function loadActivityLog(cloudId?: string) {
                                     </svg>
                                   </div>
                                 )}
-                                {isTemplateSaved(template.id, variant.key) && (
-                                  <button 
-                                    className="variant-grid__saved"
-                                    onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id, variant.key); }}
-                                    title="Unsave"
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <button 
+                                  type="button"
+                                  className={`variant-grid__saved ${isSaved ? 'is-saved' : ''}`}
+                                  onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id, variant.key); }}
+                                  title={isSaved ? 'Unsave' : 'Save'}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    {isSaved ? (
                                       <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
-                                    </svg>
-                                  </button>
-                                )}
+                                    ) : (
+                                      <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                                    )}
+                                  </svg>
+                                </button>
                               </div>
                               <span className="variant-grid__name">{variant.displayName}</span>
                               {isSelected && (
@@ -5499,6 +5569,9 @@ async function loadActivityLog(cloudId?: string) {
 
                 {/* Only show main preview for single components, not component sets */}
                 {template.preview && !(template.isComponentSet && template.variants && template.variants.length > 1) && (
+                  (() => {
+                    const isSaved = isTemplateSaved(template.id);
+                    return (
                   <div
                     className={`template-item__preview ${refreshingId === template.id ? 'template-item__preview--refreshing' : ''}`}
                     onMouseEnter={() => {
@@ -5538,18 +5611,23 @@ async function loadActivityLog(cloudId?: string) {
                         </svg>
                       </div>
                     )}
-                    {isTemplateSaved(template.id) && (
-                      <button 
-                        className="template-item__preview-saved"
-                        onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id); }}
-                        title="Unsave"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <button 
+                      type="button"
+                      className={`template-item__preview-saved ${isSaved ? 'is-saved' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); toggleSaveTemplate(template.id); }}
+                      title={isSaved ? 'Unsave' : 'Save'}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        {isSaved ? (
                           <path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
-                        </svg>
-                      </button>
-                    )}
+                        ) : (
+                          <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                        )}
+                      </svg>
+                    </button>
           </div>
+                    );
+                  })()
                 )}
 
                 <div className="template-item__footer">
@@ -5573,63 +5651,40 @@ async function loadActivityLog(cloudId?: string) {
                     </button>
                     {moveMenuOpen === template.id && (
                       <div className="template-item__more-dropdown">
-                        {activeCategory === 'saved' ? (
-                          /* When viewing Saved category - only Unsave option */
-                          <>
-                            {template.isComponentSet && template.variants && template.variants.length > 1 ? (
-                              /* Component set - show unsave for each saved variant */
-                              template.variants
-                                .filter(v => isTemplateSaved(template.id, v.key))
-                                .map(variant => (
-                                  <button
-                                    key={variant.key}
-                                    className="template-item__more-option"
-                                    onClick={() => toggleSaveTemplate(template.id, variant.key)}
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                      <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
-                                    </svg>
-                                    Unsave {variant.displayName}
-                                  </button>
-                                ))
-                            ) : (
-                              /* Single component */
-                              <button
-                                className="template-item__more-option"
-                                onClick={() => toggleSaveTemplate(template.id)}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
-                                </svg>
-                                Unsave
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          /* Normal view - all options */
+                        {activeCategory !== 'saved' && (
                           <>
                             {/* Save/Unsave */}
                             {template.isComponentSet && template.variants && template.variants.length > 1 ? (
-                              /* Component set - show Save variant with submenu */
                               <>
+                                {(() => {
+                                  const selected = selectedSlides[template.id] || [];
+                                  const toSave = selected.filter(k => !isTemplateSaved(template.id, k));
+                                  if (selected.length === 0) return null;
+                                  return (
+                                    <button
+                                      className="template-item__more-option"
+                                      disabled={toSave.length === 0}
+                                      onClick={() => saveTemplateVariants(template.id, toSave)}
+                                      title={toSave.length === 0 ? 'Already saved' : undefined}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
+                                      </svg>
+                                      Save selected ({selected.length})
+                                    </button>
+                                  );
+                                })()}
+
                                 <button
                                   className={`template-item__more-option ${isAnyVariantSaved(template.id) ? 'is-saved' : ''}`}
                                   onClick={() => {
-                                    // If any variant is saved, unsave all; otherwise save all
-                                    const allSaved = template.variants.every(v => isTemplateSaved(template.id, v.key));
-                                    template.variants.forEach(variant => {
-                                      if (allSaved) {
-                                        // Unsave all
-                                        if (isTemplateSaved(template.id, variant.key)) {
-                                          toggleSaveTemplate(template.id, variant.key);
-                                        }
-                                      } else {
-                                        // Save all unsaved variants
-                                        if (!isTemplateSaved(template.id, variant.key)) {
-                                          toggleSaveTemplate(template.id, variant.key);
-                                        }
-                                      }
-                                    });
+                                    const keys = template.variants!.map(v => v.key);
+                                    const allSaved = keys.every(k => isTemplateSaved(template.id, k));
+                                    if (allSaved) {
+                                      unsaveTemplateVariants(template.id, keys);
+                                    } else {
+                                      saveTemplateVariants(template.id, keys.filter(k => !isTemplateSaved(template.id, k)));
+                                    }
                                   }}
                                 >
                                   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -5642,31 +5697,9 @@ async function loadActivityLog(cloudId?: string) {
                                   {isAnyVariantSaved(template.id) ? 'Unsave all' : 'Save all'}
                                 </button>
                                 <div className="template-item__more-divider"></div>
-                                <div className="template-item__more-option template-item__more-option--header">
-                                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v13.5a.5.5 0 0 1-.777.416L8 13.101l-5.223 2.815A.5.5 0 0 1 2 15.5V2zm2-1a1 1 0 0 0-1 1v12.566l4.723-2.482a.5.5 0 0 1 .554 0L13 14.566V2a1 1 0 0 0-1-1H4z"/>
-                                  </svg>
-                                  <span>Save variant</span>
-                                </div>
-                                <div className="template-item__more-submenu">
-                                  {template.variants.map(variant => (
-                                    <button
-                                      key={variant.key}
-                                      className={`template-item__more-option ${isTemplateSaved(template.id, variant.key) ? 'is-saved' : ''}`}
-                                      onClick={() => toggleSaveTemplate(template.id, variant.key)}
-                                    >
-                                      {isTemplateSaved(template.id, variant.key) && (
-                                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                                          <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-                                        </svg>
-                                      )}
-                                      {variant.displayName}
-                                    </button>
-                                  ))}
-                                </div>
+                                {/* Per-variant save is handled via the hover bookmark icon on each variant tile */}
                               </>
                             ) : (
-                              /* Single component - simple Save/Unsave */
                               <button
                                 className={`template-item__more-option ${isTemplateSaved(template.id) ? 'is-saved' : ''}`}
                                 onClick={() => toggleSaveTemplate(template.id)}
@@ -5681,81 +5714,81 @@ async function loadActivityLog(cloudId?: string) {
                                 {isTemplateSaved(template.id) ? 'Unsave' : 'Save'}
                               </button>
                             )}
-                            
+
                             <div className="template-item__more-divider"></div>
-                            
-                            {/* Move to Category */}
-                            <div className="template-item__more-option template-item__more-option--header">
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path fillRule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
-                              </svg>
-                              <span>Move to</span>
-                              <svg className="template-item__more-chevron" width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                                <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
-                              </svg>
-                            </div>
-                            <div className="template-item__more-submenu">
-                              {(() => {
-                                const moveToCats = baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved' && c.id !== template.category);
-                                if (!moveToCats.some(c => c.id === 'resources')) {
-                                  moveToCats.push({ id: 'resources', label: 'Resources' });
-                                }
-                                return moveToCats.map(cat => (
-                                  <button
-                                    key={cat.id}
-                                    className="template-item__more-option"
-                                    onClick={() => moveTemplateToCategory(template.id, cat.id)}
-                                  >
-                                    {cat.label}
-                                  </button>
-                                ));
-                              })()}
-                            </div>
-                            
-                            {/* Create New Section - same hierarchy as Refresh/Delete */}
-                            <button
-                              className="template-item__more-option template-item__more-option--create"
-                              onClick={() => {
-                                setCreateSectionForTemplate(template.id);
-                                setMoveMenuOpen(null);
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-                              </svg>
-                              Create New Section
-                            </button>
-                            
-                            <div className="template-item__more-divider"></div>
-                            
-                            {/* Refresh Preview */}
-                            <button
-                              className="template-item__more-option"
-                              onClick={() => refreshTemplate(template)}
-                              disabled={refreshingId === template.id}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
-                              </svg>
-                              {refreshingId === template.id ? 'Refreshing...' : 'Refresh Preview'}
-                            </button>
-                            
-                            <div className="template-item__more-divider"></div>
-                            
-                            {/* Delete */}
-                            <button
-                              className="template-item__more-option template-item__more-option--danger"
-                              onClick={() => confirmDeleteTemplate(template.id)}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                                <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                              </svg>
-                              Delete
-                            </button>
                           </>
                         )}
+
+                        {/* Move to Category */}
+                        <div className="template-item__more-option template-item__more-option--header">
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path fillRule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
+                          </svg>
+                          <span>Move to</span>
+                          <svg className="template-item__more-chevron" width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                          </svg>
+                        </div>
+                        <div className="template-item__more-submenu">
+                          {(() => {
+                            const moveToCats = baseCategories.filter(c => c.id !== 'all' && c.id !== 'saved' && c.id !== template.category);
+                            if (!moveToCats.some(c => c.id === 'resources')) {
+                              moveToCats.push({ id: 'resources', label: 'Resources' });
+                            }
+                            return moveToCats.map(cat => (
+                              <button
+                                key={cat.id}
+                                className="template-item__more-option"
+                                onClick={() => moveTemplateToCategory(template.id, cat.id)}
+                              >
+                                {cat.label}
+                              </button>
+                            ));
+                          })()}
+                        </div>
+
+                        {/* Create New Section - same hierarchy as Refresh/Delete */}
+                        <button
+                          className="template-item__more-option template-item__more-option--create"
+                          onClick={() => {
+                            setCreateSectionForTemplate(template.id);
+                            setMoveMenuOpen(null);
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                          </svg>
+                          Create New Section
+                        </button>
+
+                        <div className="template-item__more-divider"></div>
+
+                        {/* Refresh Preview */}
+                        <button
+                          className="template-item__more-option"
+                          onClick={() => refreshTemplate(template)}
+                          disabled={refreshingId === template.id}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                          </svg>
+                          {refreshingId === template.id ? 'Refreshing...' : 'Refresh Preview'}
+                        </button>
+
+                        <div className="template-item__more-divider"></div>
+
+                        {/* Delete */}
+                        <button
+                          className="template-item__more-option template-item__more-option--danger"
+                          onClick={() => confirmDeleteTemplate(template.id)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                            <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                          </svg>
+                          Delete
+                        </button>
                       </div>
                     )}
                   </div>

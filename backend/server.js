@@ -19,7 +19,9 @@ const app = express();
  * Returns { error, status } if blocked, null if allowed.
  */
 function validateArrayBulkDelete(currentCount, newCount, dataType) {
-  if (currentCount > 0 && newCount === 0) {
+  // Allow 1->0 and 2->0 (intentional "unsave last" / small cleanup),
+  // but block large clear-all operations.
+  if (currentCount >= 3 && newCount === 0) {
     return { status: 400, error: 'Data protection triggered', message: `Cannot delete all ${dataType} at once. Delete them one at a time.`, currentCount };
   }
   if (currentCount >= 3 && newCount < currentCount - 2) {
@@ -35,7 +37,7 @@ function validateArrayBulkDelete(currentCount, newCount, dataType) {
  * Validate object-based data (keyed by cloudId) for bulk-delete protection.
  */
 function validateObjectBulkDelete(currentCount, newCount, dataType) {
-  if (currentCount > 0 && newCount === 0) {
+  if (currentCount >= 3 && newCount === 0) {
     return { status: 400, error: 'Data protection triggered', message: `Cannot delete all ${dataType} at once. Delete them one at a time.`, currentCount };
   }
   if (currentCount >= 3 && newCount < currentCount - 2) {
@@ -51,7 +53,29 @@ function validateObjectBulkDelete(currentCount, newCount, dataType) {
 const ALLOWED_BACKUP_KEYS = ['templates', 'saved_items', 'figma_links', 'cloud_figma_links', 'custom_clouds', 'editable_clouds', 'cloud_categories', 'status_symbols', 'cloud_pocs', 'housekeeping_rules'];
 
 function isAllowedBackupKey(dataKey) {
-  return typeof dataKey === 'string' && ALLOWED_BACKUP_KEYS.includes(dataKey);
+  if (typeof dataKey !== 'string') return false;
+  if (ALLOWED_BACKUP_KEYS.includes(dataKey)) return true;
+  // Allow per-user saved items backups: saved_items:<figmaUserId>
+  if (/^saved_items:[^/]+$/.test(dataKey)) return true;
+  return false;
+}
+
+function getUserIdFromSavedItemsKey(dataKey) {
+  if (typeof dataKey !== 'string') return null;
+  const m = dataKey.match(/^saved_items:(.+)$/);
+  return m ? m[1] : null;
+}
+
+function requireMatchingUserForUserKey(req, res, dataKey) {
+  const userIdInKey = getUserIdFromSavedItemsKey(dataKey);
+  if (!userIdInKey) return true;
+  const raw = req.headers['x-figma-user-id'] || null;
+  const headerUserId = Array.isArray(raw) ? raw[0] : raw;
+  if (!headerUserId || String(headerUserId) !== String(userIdInKey)) {
+    res.status(403).json({ error: 'Forbidden', message: 'User-scoped backup key requires matching X-Figma-User-Id' });
+    return false;
+  }
+  return true;
 }
 
 const PORT = process.env.PORT || 3000;
@@ -320,8 +344,10 @@ app.post('/api/templates-last-refreshed', async (req, res) => {
 // ---------- Saved Items ----------
 app.get('/api/saved-items', async (req, res) => {
   try {
-    const items = await db.getSavedItems();
-    res.json(items);
+    const figmaUserIdRaw = req.headers['x-figma-user-id'] || null;
+    const figmaUserId = Array.isArray(figmaUserIdRaw) ? figmaUserIdRaw[0] : figmaUserIdRaw;
+    const items = figmaUserId ? await db.getUserSavedItems(String(figmaUserId)) : await db.getSavedItems();
+    res.json(Array.isArray(items) ? items : []);
   } catch (error) {
     console.error('Error fetching saved items:', error);
     res.status(500).json({ error: 'Failed to fetch saved items' });
@@ -330,6 +356,8 @@ app.get('/api/saved-items', async (req, res) => {
 
 app.post('/api/saved-items', async (req, res) => {
   try {
+    const figmaUserIdRaw = req.headers['x-figma-user-id'] || null;
+    const figmaUserId = Array.isArray(figmaUserIdRaw) ? figmaUserIdRaw[0] : figmaUserIdRaw;
     const newItems = req.body.savedItems || [];
     if (!Array.isArray(newItems)) {
       return res.status(400).json({ error: 'Invalid data format', message: 'Saved items must be an array' });
@@ -338,8 +366,8 @@ app.post('/api/saved-items', async (req, res) => {
     if (validItems.length !== newItems.length) {
       return res.status(400).json({ error: 'Invalid data', message: 'All saved items must have templateId' });
     }
-    const currentItems = await db.getSavedItems();
-    const currentCount = currentItems.length;
+    const currentItems = figmaUserId ? await db.getUserSavedItems(String(figmaUserId)) : await db.getSavedItems();
+    const currentCount = Array.isArray(currentItems) ? currentItems.length : 0;
     const newCount = newItems.length;
     const block = validateArrayBulkDelete(currentCount, newCount, 'saved items');
     if (block) {
@@ -347,11 +375,16 @@ app.post('/api/saved-items', async (req, res) => {
       return res.status(block.status).json(block);
     }
     // Auto-backup before saving
-    if (currentItems.length > 0) {
-      await db.createBackup('saved_items', currentItems, 'save', null);
-      await db.cleanupOldBackups('saved_items', 50);
+    if (Array.isArray(currentItems) && currentItems.length > 0) {
+      const backupKey = figmaUserId ? `saved_items:${String(figmaUserId)}` : 'saved_items';
+      await db.createBackup(backupKey, currentItems, 'save', null);
+      await db.cleanupOldBackups(backupKey, 50);
     }
-    await db.saveSavedItems(newItems);
+    if (figmaUserId) {
+      await db.saveUserSavedItems(String(figmaUserId), newItems);
+    } else {
+      await db.saveSavedItems(newItems);
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving items:', error);
@@ -774,7 +807,17 @@ app.post('/api/user/:figmaUserId/hidden-clouds', async (req, res) => {
 app.get('/api/backups', async (req, res) => {
   try {
     const keys = await db.getBackupKeys();
-    res.json({ backupTypes: keys });
+    const raw = req.headers['x-figma-user-id'] || null;
+    const headerUserId = Array.isArray(raw) ? raw[0] : raw;
+    const filtered = (Array.isArray(keys) ? keys : []).filter((k) => {
+      const key = k?.data_key;
+      if (typeof key !== 'string') return false;
+      const userIdInKey = getUserIdFromSavedItemsKey(key);
+      // Only return per-user keys to the matching user.
+      if (userIdInKey) return headerUserId && String(headerUserId) === String(userIdInKey);
+      return true;
+    });
+    res.json({ backupTypes: filtered });
   } catch (error) {
     console.error('Error fetching backup keys:', error);
     res.status(500).json({ error: 'Failed to fetch backup keys' });
@@ -788,6 +831,7 @@ app.get('/api/backups/:dataKey', async (req, res) => {
     if (!isAllowedBackupKey(dataKey)) {
       return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
     }
+    if (!requireMatchingUserForUserKey(req, res, dataKey)) return;
     const limit = parseInt(req.query.limit) || 20;
     const backups = await db.getBackups(dataKey, limit);
     res.json({ 
@@ -813,6 +857,7 @@ app.get('/api/backups/:dataKey/:backupId', async (req, res) => {
     if (!isAllowedBackupKey(dataKey)) {
       return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
     }
+    if (!requireMatchingUserForUserKey(req, res, dataKey)) return;
     const backup = await db.getBackupById(parseInt(backupId));
     if (!backup) {
       return res.status(404).json({ error: 'Backup not found' });
@@ -838,6 +883,7 @@ app.post('/api/backups/:dataKey/:backupId/restore', async (req, res) => {
     if (!isAllowedBackupKey(dataKey)) {
       return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
     }
+    if (!requireMatchingUserForUserKey(req, res, dataKey)) return;
     const merge = req.query.merge === 'true' || req.body?.merge === true;
     const backup = await db.restoreFromBackup(parseInt(backupId), merge);
     res.json({ 
@@ -859,11 +905,15 @@ app.post('/api/backups/:dataKey/create', async (req, res) => {
     if (!isAllowedBackupKey(dataKey)) {
       return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
     }
+    if (!requireMatchingUserForUserKey(req, res, dataKey)) return;
     const userId = req.body.userId || null;
     
     // Get current data for this key
     let currentData;
-    switch (dataKey) {
+    const userIdFromKey = getUserIdFromSavedItemsKey(dataKey);
+    if (userIdFromKey) {
+      currentData = await db.getUserSavedItems(String(userIdFromKey));
+    } else switch (dataKey) {
       case 'templates':
         currentData = await db.getTemplates();
         break;

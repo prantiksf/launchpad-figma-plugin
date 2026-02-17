@@ -40,6 +40,13 @@ async function initialize() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // Per-user saved assets (bookmark list)
+    // Safe to run on every startup; no-op if column already exists.
+    await client.query(`
+      ALTER TABLE user_preferences
+      ADD COLUMN IF NOT EXISTS saved_items JSONB DEFAULT '[]'
+    `);
     
     // Data backups table - stores automatic backups on every change
     await client.query(`
@@ -254,18 +261,37 @@ async function updateUserPreference(figmaUserId, field, value) {
   // Ensure user exists first
   await getUserPreferences(figmaUserId);
   
-  const allowedFields = ['default_cloud', 'onboarding_completed', 'skip_splash', 'hidden_clouds'];
+  const allowedFields = ['default_cloud', 'onboarding_completed', 'skip_splash', 'hidden_clouds', 'saved_items'];
   if (!allowedFields.includes(field)) {
     throw new Error(`Invalid field: ${field}`);
   }
   
-  const jsonValue = field === 'hidden_clouds' ? JSON.stringify(value) : value;
+  const jsonValue = (field === 'hidden_clouds' || field === 'saved_items') ? JSON.stringify(value) : value;
   
   await pool.query(`
     UPDATE user_preferences 
     SET ${field} = $1, updated_at = NOW()
     WHERE figma_user_id = $2
   `, [jsonValue, figmaUserId]);
+}
+
+// ============================================================================
+// PER-USER SAVED ITEMS (bookmarks)
+// ============================================================================
+
+async function getUserSavedItems(figmaUserId) {
+  if (!figmaUserId) return [];
+  await getUserPreferences(figmaUserId);
+  const result = await pool.query(
+    'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
+    [figmaUserId]
+  );
+  return result.rows[0]?.saved_items || [];
+}
+
+async function saveUserSavedItems(figmaUserId, items) {
+  if (!figmaUserId) throw new Error('Missing figmaUserId');
+  await updateUserPreference(figmaUserId, 'saved_items', items || []);
 }
 
 // ============================================================================
@@ -335,8 +361,13 @@ async function restoreFromBackup(backupId, merge = false) {
     throw new Error('Backup has no data');
   }
 
+  const userSavedItemsMatch = typeof backup.data_key === 'string' ? backup.data_key.match(/^saved_items:(.+)$/) : null;
+  const userIdForSavedItems = userSavedItemsMatch ? userSavedItemsMatch[1] : null;
+
   // Create a backup of current state before restoring (so user can undo)
-  const currentData = await getSharedData(backup.data_key);
+  const currentData = userIdForSavedItems
+    ? await getUserSavedItems(userIdForSavedItems)
+    : await getSharedData(backup.data_key);
   if (currentData) {
     await createBackup(backup.data_key, currentData, 'pre-restore', null);
   }
@@ -356,7 +387,11 @@ async function restoreFromBackup(backupId, merge = false) {
     }
   }
 
-  await saveSharedData(backup.data_key, dataToSave);
+  if (userIdForSavedItems) {
+    await saveUserSavedItems(userIdForSavedItems, Array.isArray(dataToSave) ? dataToSave : []);
+  } else {
+    await saveSharedData(backup.data_key, dataToSave);
+  }
   console.log(`✓ Restored ${backup.data_key} from backup #${backupId} (merge: ${merge})`);
   
   return backup;
@@ -683,6 +718,9 @@ module.exports = {
   saveTemplates,
   getSavedItems,
   saveSavedItems,
+  // Saved items (per-user)
+  getUserSavedItems,
+  saveUserSavedItems,
   getFigmaLinks,
   saveFigmaLinks,
   getCloudFigmaLinks,

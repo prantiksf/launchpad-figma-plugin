@@ -38,6 +38,8 @@ export interface BackupKeyInfo {
   latest_backup: string;
 }
 
+type BackupRequestOptions = { figmaUserId?: string | null };
+
 /**
  * Get all backup keys (data types that have backups) with latest backup info
  */
@@ -49,24 +51,37 @@ export async function getBackupKeys(): Promise<BackupKeyInfo[]> {
 /**
  * Get list of backups for a data type
  */
-export async function getBackups(dataKey: string, limit: number = 20): Promise<BackupInfo[]> {
-  const result = await apiRequest<{ backups: BackupInfo[] }>(`/api/backups/${dataKey}?limit=${limit}`);
+export async function getBackups(dataKey: string, limit: number = 20, options: BackupRequestOptions = {}): Promise<BackupInfo[]> {
+  const headers: Record<string, string> = {};
+  if (options.figmaUserId) headers['X-Figma-User-Id'] = String(options.figmaUserId);
+  const result = await apiRequest<{ backups: BackupInfo[] }>(`/api/backups/${dataKey}?limit=${limit}`, {
+    headers,
+  });
   return result.backups;
 }
 
 /**
  * Get a specific backup with its data
  */
-export async function getBackupById(dataKey: string, backupId: number): Promise<BackupData> {
-  return apiRequest<BackupData>(`/api/backups/${dataKey}/${backupId}`);
+export async function getBackupById(dataKey: string, backupId: number, options: BackupRequestOptions = {}): Promise<BackupData> {
+  const headers: Record<string, string> = {};
+  if (options.figmaUserId) headers['X-Figma-User-Id'] = String(options.figmaUserId);
+  return apiRequest<BackupData>(`/api/backups/${dataKey}/${backupId}`, { headers });
 }
 
 /**
  * Restore from a backup
  * @param merge - If true, merge backup with current data (never erase). If false, full replace.
  */
-export async function restoreFromBackup(dataKey: string, backupId: number, merge: boolean = false): Promise<{ success: boolean; itemCount: number }> {
-  return apiRequest(`/api/backups/${dataKey}/${backupId}/restore?merge=${merge}`, { method: 'POST' });
+export async function restoreFromBackup(
+  dataKey: string,
+  backupId: number,
+  merge: boolean = false,
+  options: BackupRequestOptions = {}
+): Promise<{ success: boolean; itemCount: number }> {
+  const headers: Record<string, string> = {};
+  if (options.figmaUserId) headers['X-Figma-User-Id'] = String(options.figmaUserId);
+  return apiRequest(`/api/backups/${dataKey}/${backupId}/restore?merge=${merge}`, { method: 'POST', headers });
 }
 
 /**
@@ -195,6 +210,7 @@ async function apiRequestWithRetry<T>(endpoint: string, options: RequestInit = {
 }
 
 const LAST_KNOWN_GOOD_KEY = 'starter-kit-last-known-good';
+const LAST_KNOWN_GOOD_SAVED_ITEMS_PREFIX = 'starter-kit-last-known-good-saved-items:';
 
 /** Save to Figma clientStorage (backup + fallback when API fails) */
 function saveToClientStorage(type: string, data: any, isFallback = false): void {
@@ -302,6 +318,32 @@ function loadLastKnownGood(): { templatesCount: number; savedItemsCount: number 
       if (raw) {
         const parsed = JSON.parse(raw);
         return { templatesCount: parsed.templatesCount ?? 0, savedItemsCount: parsed.savedItemsCount ?? 0 };
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function getSavedItemsLastKnownGoodKey(figmaUserId: string): string {
+  return `${LAST_KNOWN_GOOD_SAVED_ITEMS_PREFIX}${figmaUserId}`;
+}
+
+function saveLastKnownGoodSavedItems(figmaUserId: string, count: number): void {
+  try {
+    if (typeof localStorage !== 'undefined' && figmaUserId) {
+      const key = getSavedItemsLastKnownGoodKey(figmaUserId);
+      localStorage.setItem(key, JSON.stringify({ savedItemsCount: count ?? 0, timestamp: Date.now() }));
+    }
+  } catch {}
+}
+
+function loadLastKnownGoodSavedItems(figmaUserId: string): { savedItemsCount: number } | null {
+  try {
+    if (typeof localStorage !== 'undefined' && figmaUserId) {
+      const raw = localStorage.getItem(getSavedItemsLastKnownGoodKey(figmaUserId));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return { savedItemsCount: parsed.savedItemsCount ?? 0 };
       }
     }
   } catch {}
@@ -562,7 +604,7 @@ export function useTemplates(figmaUserName?: string | null) {
  * Hook for saved items (shared team-wide)
  * Robust: clientStorage fallback, optimistic save, background retry
  */
-export function useSavedItems() {
+export function useSavedItems(figmaUserId?: string | null) {
   const [savedItems, setSavedItemsState] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -570,14 +612,116 @@ export function useSavedItems() {
   const retryRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const localDataRef = useRef<any[]>([]);
   const lastKnownCountRef = useRef(0);
+  const migratedRef = useRef(false);
+  const refetch = useCallback(async () => {
+    try {
+      if (!figmaUserId) {
+        const cached = await loadFromClientStorage<any[]>('saved-items');
+        const safeCached = Array.isArray(cached) ? cached : [];
+        setSavedItemsState(safeCached);
+        localDataRef.current = safeCached;
+        lastKnownCountRef.current = safeCached.length;
+        setHasLoaded(true);
+        saveToClientStorage('saved-items', safeCached);
+        saveLastKnownGood({ savedItemsCount: safeCached.length });
+        return;
+      }
+      const data = await apiRequest<any[]>('/api/saved-items', {
+        headers: { 'X-Figma-User-Id': String(figmaUserId) }
+      });
+      const safe = Array.isArray(data) ? data : [];
+      setSavedItemsState(safe);
+      localDataRef.current = safe;
+      lastKnownCountRef.current = safe.length;
+      setHasLoaded(true);
+      saveToClientStorage('saved-items', safe);
+      saveLastKnownGood({ savedItemsCount: safe.length });
+    } catch (e) {
+      console.error('Failed to refetch saved items:', e);
+    }
+  }, [figmaUserId]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const data = await apiRequest<any[]>('/api/saved-items');
+        // If we don't have the user id yet, load locally so UI can work,
+        // and we'll sync to backend once figmaUserId is available.
+        if (!figmaUserId) {
+          const cached = await loadFromClientStorage<any[]>('saved-items');
+          if (cancelled) return;
+          const safeCached = Array.isArray(cached) ? cached : [];
+          setSavedItemsState(safeCached);
+          localDataRef.current = safeCached;
+          lastKnownCountRef.current = safeCached.length;
+          setHasLoaded(true);
+          saveToClientStorage('saved-items', safeCached);
+          saveLastKnownGood({ savedItemsCount: safeCached.length });
+          return;
+        }
+
+        const data = await apiRequest<any[]>('/api/saved-items', {
+          headers: { 'X-Figma-User-Id': String(figmaUserId) }
+        });
         if (cancelled) return;
         const safe = Array.isArray(data) ? data : [];
+
+        // One-time migration: if this user's personal list is empty, seed it from the legacy shared list.
+        // Important: we store a local flag so if the user later clears Saved intentionally, we don't
+        // repopulate it from shared again.
+        if (safe.length === 0) {
+          const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
+          let alreadyMigrated = false;
+          try {
+            alreadyMigrated = migratedRef.current || localStorage.getItem(migrateKey) === 'true';
+          } catch {
+            alreadyMigrated = migratedRef.current;
+          }
+
+          if (!alreadyMigrated) {
+            const cached = await loadFromClientStorage<any[]>('saved-items');
+            const safeCached = Array.isArray(cached) ? cached : [];
+            let shared: any[] = [];
+            try {
+              const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
+              shared = Array.isArray(sharedData) ? sharedData : [];
+            } catch {}
+
+            // Merge shared + local cache (avoid duplicates)
+            const merged: any[] = [];
+            const seen = new Set<string>();
+            const add = (item: any) => {
+              if (!item || typeof item !== 'object' || !item.templateId) return;
+              const key = `${String(item.templateId)}::${item.variantKey ? String(item.variantKey) : ''}`;
+              if (seen.has(key)) return;
+              seen.add(key);
+              merged.push({ templateId: item.templateId, ...(item.variantKey ? { variantKey: item.variantKey } : {}) });
+            };
+            shared.forEach(add);
+            safeCached.forEach(add);
+
+            migratedRef.current = true;
+            try { localStorage.setItem(migrateKey, 'true'); } catch {}
+
+            if (merged.length > 0) {
+              setSavedItemsState(merged);
+              localDataRef.current = merged;
+              lastKnownCountRef.current = merged.length;
+              setHasLoaded(true);
+              saveToClientStorage('saved-items', merged);
+              saveLastKnownGood({ savedItemsCount: merged.length });
+              try {
+                await apiRequest('/api/saved-items', {
+                  method: 'POST',
+                  headers: { 'X-Figma-User-Id': String(figmaUserId) },
+                  body: JSON.stringify({ savedItems: merged })
+                });
+              } catch {}
+              return;
+            }
+          }
+        }
+
         const lastGood = loadLastKnownGood();
         if (safe.length === 0 && lastGood && lastGood.savedItemsCount > 0) {
           const cached = await loadFromClientStorage<any[]>('saved-items');
@@ -591,7 +735,11 @@ export function useSavedItems() {
             lastKnownCountRef.current = cached.length;
             saveLastKnownGood({ savedItemsCount: cached.length });
             try {
-              await apiRequest('/api/saved-items', { method: 'POST', body: JSON.stringify({ savedItems: cached }) });
+              await apiRequest('/api/saved-items', {
+                method: 'POST',
+                headers: { 'X-Figma-User-Id': String(figmaUserId) },
+                body: JSON.stringify({ savedItems: cached })
+              });
               setUsingFallback(false);
             } catch {}
             return;
@@ -624,20 +772,26 @@ export function useSavedItems() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [figmaUserId]);
 
   useEffect(() => {
     if (!usingFallback) return;
+    if (!figmaUserId) return;
     const id = setInterval(async () => {
       try {
-        const data = await apiRequest<any[]>('/api/saved-items');
+        const data = await apiRequest<any[]>('/api/saved-items', {
+          headers: { 'X-Figma-User-Id': String(figmaUserId) }
+        });
         const safe = Array.isArray(data) ? data : [];
         if (safe.length === 0 && localDataRef.current.length > 0) {
           await apiRequest('/api/saved-items', {
             method: 'POST',
+            headers: { 'X-Figma-User-Id': String(figmaUserId) },
             body: JSON.stringify({ savedItems: localDataRef.current }),
           });
-          const refetched = await apiRequest<any[]>('/api/saved-items');
+          const refetched = await apiRequest<any[]>('/api/saved-items', {
+            headers: { 'X-Figma-User-Id': String(figmaUserId) }
+          });
           const refetchedSafe = Array.isArray(refetched) ? refetched : [];
           setSavedItemsState(refetchedSafe);
           localDataRef.current = refetchedSafe;
@@ -676,65 +830,93 @@ export function useSavedItems() {
     return () => {
       if (retryRef.current) clearInterval(retryRef.current);
     };
-  }, [usingFallback]);
+  }, [usingFallback, figmaUserId]);
 
-  const save = useCallback(async (newItems: any[]) => {
-    if (!newItems || !Array.isArray(newItems)) {
-      console.error('🛑 BLOCKED: Invalid saved items data');
-      return;
-    }
+  const save = useCallback(async (newItems: any[] | ((prev: any[]) => any[])) => {
     if (!hasLoaded) {
       console.warn('⚠️ BLOCKED: Cannot save saved items before initial load');
       return;
     }
-    const currentCount = lastKnownCountRef.current;
-    const newCount = newItems.length;
-    if (currentCount > 0 && newCount === 0) {
-      console.error(`🛑 BLOCKED: Attempted to clear all ${currentCount} saved items`);
-      return;
-    }
-    if (currentCount >= 3 && newCount < currentCount - 2) {
-      console.error(`🛑 BLOCKED: Suspicious bulk deletion of saved items (${currentCount} -> ${newCount})`);
-      return;
-    }
-    setSavedItemsState(newItems);
-    lastKnownCountRef.current = newCount;
-    if (usingFallback) localDataRef.current = newItems;
-    saveToClientStorage('saved-items', newItems);
-    try {
-      await apiRequest('/api/saved-items', {
-        method: 'POST',
-        body: JSON.stringify({ savedItems: newItems }),
-      });
-      saveLastKnownGood({ savedItemsCount: newItems.length });
-    } catch (error: any) {
-      console.error('✗ Failed to save saved items:', error);
-      if (error?.message?.includes('400')) {
-        apiRequest<any[]>('/api/saved-items')
-          .then(data => {
-            const safe = Array.isArray(data) ? data : [];
-            if (safe.length === 0 && lastKnownCountRef.current > 0) {
-              const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
-              if (cached && cached.length > 0) {
-                setSavedItemsState(cached);
-                lastKnownCountRef.current = cached.length;
-                saveToClientStorage('saved-items', cached);
-                showToast('Server rejected change - kept your data.');
-                return;
-              }
-            }
-            setSavedItemsState(safe);
-            localDataRef.current = safe;
-            lastKnownCountRef.current = safe.length;
-            saveToClientStorage('saved-items', safe);
-            saveLastKnownGood({ savedItemsCount: safe.length });
-          })
-          .catch(console.error);
-      }
-    }
-  }, [hasLoaded, usingFallback]);
 
-  return { savedItems, setSavedItems: save, loading, usingFallback };
+    const validateAndMaybePersist = (next: any[], prev: any[]) => {
+      if (!Array.isArray(next)) {
+        console.error('🛑 BLOCKED: Invalid saved items data');
+        return prev;
+      }
+      const validItems = next.filter(item => item && typeof item === 'object' && item.templateId);
+      if (validItems.length !== next.length) {
+        console.error(`🛑 BLOCKED: ${next.length - validItems.length} saved items missing templateId`);
+        return prev;
+      }
+
+      const currentCount = lastKnownCountRef.current;
+      const newCount = next.length;
+      // Allow 1->0 and 2->0 (user intentionally unsaving the last items),
+      // but block large wipes that look accidental.
+      if (currentCount >= 3 && newCount === 0) {
+        console.error(`🛑 BLOCKED: Attempted to clear all ${currentCount} saved items`);
+        return prev;
+      }
+      if (currentCount >= 3 && newCount < currentCount - 2) {
+        console.error(`🛑 BLOCKED: Suspicious bulk deletion of saved items (${currentCount} -> ${newCount})`);
+        return prev;
+      }
+
+      lastKnownCountRef.current = newCount;
+      if (usingFallback) localDataRef.current = next;
+      saveToClientStorage('saved-items', next);
+      saveLastKnownGood({ savedItemsCount: newCount });
+
+      // Persist in background (only when we have user id).
+      // Without user id we still store locally (clientStorage), and will sync on next load.
+      if (!figmaUserId) return next;
+
+      apiRequest('/api/saved-items', {
+        method: 'POST',
+        headers: { 'X-Figma-User-Id': String(figmaUserId) },
+        body: JSON.stringify({ savedItems: next }),
+      }).catch((error: any) => {
+        console.error('✗ Failed to save saved items:', error);
+        if (error?.message?.includes('400')) {
+          apiRequest<any[]>('/api/saved-items', {
+            headers: { 'X-Figma-User-Id': String(figmaUserId) }
+          })
+            .then(data => {
+              const safe = Array.isArray(data) ? data : [];
+              if (safe.length === 0 && lastKnownCountRef.current > 0) {
+                const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
+                if (cached && cached.length > 0) {
+                  setSavedItemsState(cached);
+                  lastKnownCountRef.current = cached.length;
+                  saveToClientStorage('saved-items', cached);
+                  showToast('Server rejected change - kept your data.');
+                  return;
+                }
+              }
+              setSavedItemsState(safe);
+              localDataRef.current = safe;
+              lastKnownCountRef.current = safe.length;
+              saveToClientStorage('saved-items', safe);
+              saveLastKnownGood({ savedItemsCount: safe.length });
+            })
+            .catch(console.error);
+        }
+      });
+
+      return next;
+    };
+
+    // Support React-style updater: setSavedItems(prev => next)
+    if (typeof newItems === 'function') {
+      setSavedItemsState(prev => validateAndMaybePersist(newItems(prev), prev));
+      return;
+    }
+
+    // Direct array
+    setSavedItemsState(prev => validateAndMaybePersist(newItems, prev));
+  }, [hasLoaded, usingFallback, figmaUserId]);
+
+  return { savedItems, setSavedItems: save, loading, usingFallback, refetch };
 }
 
 /**
@@ -1157,7 +1339,7 @@ export function useHiddenClouds(figmaUserId: string | null) {
  */
 export function useBackendData(figmaUserId: string | null) {
   const templates = useTemplates();
-  const savedItems = useSavedItems();
+  const savedItems = useSavedItems(figmaUserId);
   const figmaLinks = useFigmaLinks();
   const cloudFigmaLinks = useCloudFigmaLinks();
   const customClouds = useCustomClouds();
