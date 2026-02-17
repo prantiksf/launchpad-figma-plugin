@@ -4119,8 +4119,9 @@ fieldset.slds-form-element legend {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32px 24px 40px;
-  min-height: 100%;
+  justify-content: flex-start;
+  padding: 24px;
+  height: 100vh;
   background: white;
   overflow-y: auto;
   box-sizing: border-box;
@@ -4135,8 +4136,8 @@ fieldset.slds-form-element legend {
 }
 
 .onboarding__icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   margin-bottom: 8px;
 }
@@ -4165,14 +4166,16 @@ fieldset.slds-form-element legend {
 
 .onboarding__tagline {
   font-size: 12px;
-  color: black;
+  color: var(--slds-g-color-neutral-base-50);
   margin: 4px 0 0 0;
   letter-spacing: -0.3px;
 }
 
 .onboarding__illustration {
-  width: 100%;
-  margin: 24px 0;
+  width: 260px;
+  max-width: 260px;
+  height: auto;
+  margin: 16px auto;
 }
 
 .onboarding__illustration img {
@@ -4186,14 +4189,14 @@ fieldset.slds-form-element legend {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  margin-top: auto;
-  padding-bottom: 20px;
+  margin-top: 20px;
+  padding-bottom: 0;
 }
 
 .onboarding__label {
-  font-size: 14px;
-  color: black;
-  margin: 0 0 16px 0;
+  font-size: 12px;
+  color: var(--slds-g-color-neutral-base-50);
+  margin: 0 0 12px 0;
   letter-spacing: -0.3px;
 }
 
@@ -4201,7 +4204,7 @@ fieldset.slds-form-element legend {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -4258,10 +4261,10 @@ fieldset.slds-form-element legend {
 }
 
 .onboarding__cta {
-  margin-top: 24px;
-  margin-bottom: 20px;
-  padding: 12px 32px;
-  font-size: 14px;
+  margin-top: 20px;
+  margin-bottom: 16px;
+  padding: 10px 28px;
+  font-size: 13px;
   font-weight: 500;
   color: white;
   background: var(--slds-g-color-brand-base-50);

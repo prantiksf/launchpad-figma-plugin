@@ -60,11 +60,13 @@ const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   'https://www.figma.com',
   'https://figma.com',
+  // Some embedded/Electron contexts send Origin: "null"
+  'null',
   /^https:\/\/.*\.herokuapp\.com$/
 ];
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.some(o => typeof o === 'string' ? o === origin : o.test(origin))) {
+    if (!origin || origin === 'null' || allowedOrigins.some(o => typeof o === 'string' ? o === origin : o.test(origin))) {
       cb(null, true);
     } else {
       cb(null, false);
