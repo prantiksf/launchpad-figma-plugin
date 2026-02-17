@@ -5,9 +5,11 @@
 const { Pool } = require('pg');
 
 // Create connection pool
+// Heroku Postgres uses valid certs; rejectUnauthorized: true for production security.
+// If connection fails, set PGSSLREJECTUNAUTHORIZED=0 as fallback (not recommended).
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: process.env.PGSSLREJECTUNAUTHORIZED !== '0' } : false
 });
 
 /**

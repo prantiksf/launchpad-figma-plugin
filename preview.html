@@ -47,11 +47,14 @@
   
   <script>
     // Error handling for preview mode
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
     window.addEventListener('error', function(e) {
       console.error('Preview error:', e.error, e.filename, e.lineno);
       const root = document.getElementById('root');
       if (root && root.innerHTML.includes('Loading...')) {
-        root.innerHTML = '<div style="padding: 20px; color: red; font-family: monospace;">Error: ' + (e.message || 'Unknown error') + '<br>File: ' + (e.filename || 'unknown') + '<br>Line: ' + (e.lineno || 'unknown') + '</div>';
+        root.innerHTML = '<div style="padding: 20px; color: red; font-family: monospace;">Error: ' + escapeHtml(e.message || 'Unknown error') + '<br>File: ' + escapeHtml(e.filename || 'unknown') + '<br>Line: ' + escapeHtml(e.lineno || 'unknown') + '</div>';
       }
     });
     

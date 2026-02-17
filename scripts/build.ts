@@ -44,6 +44,7 @@ async function buildAll(mode: Mode): Promise<void> {
     define: {
       'process.env.NODE_ENV': JSON.stringify(mode),
       'process.env.STARTER_KIT_API_URL': JSON.stringify(process.env.STARTER_KIT_API_URL || ''),
+      'process.env.STARTER_KIT_API_KEY': JSON.stringify(process.env.STARTER_KIT_API_KEY || ''),
     },
   });
 
@@ -84,8 +85,9 @@ async function buildAll(mode: Mode): Promise<void> {
   const uiB64 = Buffer.from(uiJsWithBuildId, 'utf8').toString('base64');
   const loader = [
     '<script>(function(){',
+    'function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/\'/g,"&#39;");}',
     'window.onerror=function(m,u,l,c,e){',
-    'var r=document.getElementById("root");if(r){r.innerHTML=\'<div style="padding:20px;color:red;font:13px monospace">Error: \'+m+\'</div>\';}',
+    'var r=document.getElementById("root");if(r){r.innerHTML=\'<div style="padding:20px;color:red;font:13px monospace">Error: \'+esc(m||"")+\'</div>\';}',
     'return true;};',
     'try{',
     'if(typeof atob==="undefined"){',
@@ -163,6 +165,8 @@ async function watchAll(): Promise<void> {
     loader: { '.png': 'dataurl', '.svg': 'dataurl' },
     define: {
       'process.env.NODE_ENV': JSON.stringify('development'),
+      'process.env.STARTER_KIT_API_URL': JSON.stringify(process.env.STARTER_KIT_API_URL || ''),
+      'process.env.STARTER_KIT_API_KEY': JSON.stringify(process.env.STARTER_KIT_API_KEY || ''),
     },
   });
 

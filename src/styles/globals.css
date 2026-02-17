@@ -6110,19 +6110,30 @@ fieldset.slds-form-element legend {
 .restore-confirm-modal__actions {
   display: flex;
   gap: 12px;
+  justify-content: center;
+}
+
+.restore-confirm-modal__cancel,
+.restore-confirm-modal__ok {
+  /* Capsule / pill shape - fully rounded */
+  min-width: 100px;
+  min-height: 40px;
+  padding: 10px 28px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
 }
 
 .restore-confirm-modal__cancel {
-  flex: 1;
-  padding: 10px 16px;
   background: var(--slds-g-color-neutral-base-95);
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
+  border-color: var(--slds-g-color-neutral-base-80);
   color: var(--slds-g-color-neutral-base-30);
-  cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .restore-confirm-modal__cancel:hover {
@@ -6130,20 +6141,14 @@ fieldset.slds-form-element legend {
 }
 
 .restore-confirm-modal__ok {
-  flex: 1;
-  padding: 10px 16px;
   background: var(--slds-g-color-brand-base-50);
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
+  border-color: var(--slds-g-color-brand-base-50);
   color: white;
-  cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .restore-confirm-modal__ok:hover {
   background: var(--slds-g-color-brand-base-40);
+  border-color: var(--slds-g-color-brand-base-40);
 }
 
 /* Header Restore Button */
@@ -6676,11 +6681,23 @@ fieldset.slds-form-element legend {
 
 .app.dark-mode .restore-confirm-modal__cancel {
   background: #2a2a2a;
+  border-color: #404040;
   color: #b3b3b3;
 }
 
 .app.dark-mode .restore-confirm-modal__cancel:hover {
-  background: #1a1a1a;
+  background: #3a3a3a;
+}
+
+.app.dark-mode .restore-confirm-modal__ok {
+  background: var(--slds-g-color-brand-base-50);
+  border-color: var(--slds-g-color-brand-base-50);
+  color: white;
+}
+
+.app.dark-mode .restore-confirm-modal__ok:hover {
+  background: var(--slds-g-color-brand-base-40);
+  border-color: var(--slds-g-color-brand-base-40);
 }
 
 /* Dark Mode Housekeeping Admin */

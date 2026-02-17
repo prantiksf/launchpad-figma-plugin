@@ -675,13 +675,18 @@ export function App() {
             // Backend data takes precedence over local clientStorage
             
             // Migrate templates when backend is empty (sync local/published plugin to database)
-            if (msg.templates && msg.templates.length > 0 && templates.length === 0) {
-              setTemplates(msg.templates);
-              console.log(`✓ Migrated ${msg.templates.length} templates from local to database`);
+            // Never migrate empty; require at least one valid template (id+name) to avoid data loss
+            if (msg.templates && Array.isArray(msg.templates) && templates.length === 0) {
+              const valid = msg.templates.filter((t: any) => t?.id && t?.name);
+              if (valid.length > 0) {
+                setTemplates(valid);
+                console.log(`✓ Migrated ${valid.length} templates from local to database`);
+              }
             }
 
             // Migrate saved items when backend is empty
-            if (msg.savedItems && msg.savedItems.length > 0 && savedItems.length === 0) {
+            // Never migrate empty; require at least one item to avoid data loss
+            if (msg.savedItems && Array.isArray(msg.savedItems) && msg.savedItems.length > 0 && savedItems.length === 0) {
               setSavedItems(msg.savedItems);
               console.log(`✓ Migrated ${msg.savedItems.length} saved items from local to database`);
             }
@@ -1110,9 +1115,13 @@ export function App() {
         case 'TEMPLATE_REFRESHED':
           // Update template with new preview and data
           setRefreshingId(null);
+          if (!msg.templateId) {
+            console.warn('Ignored TEMPLATE_REFRESHED without templateId');
+            break;
+          }
           // Use functional update to get latest templates (avoid stale closure)
           setTemplates(prevTemplates => {
-            // Safety check - don't update if templates is empty
+            // Bulletproof: never update when we have no templates
             if (!prevTemplates || prevTemplates.length === 0) {
               console.warn('Skipping refresh update - templates is empty');
               return prevTemplates;
@@ -1149,6 +1158,11 @@ export function App() {
         case 'ALL_TEMPLATES_REFRESHED':
           // Update all refreshed templates
           setIsBackgroundSyncing(false);
+          // Bulletproof: never accept empty payload when we have data - prevents data loss
+          if (Array.isArray(msg.templates) && msg.templates.length === 0) {
+            console.warn('Ignored ALL_TEMPLATES_REFRESHED with empty templates');
+            break;
+          }
           if (msg.templates && msg.templates.length > 0) {
             const refreshedMap = new Map(msg.templates.map((t: any) => [t.id, t]));
             // Use functional update to get latest templates (avoid stale closure)
@@ -2829,7 +2843,7 @@ async function loadActivityLog(cloudId?: string) {
     }
   }
 
-  const VERSION = '1.15.1';
+  const VERSION = '1.18.0';
 
   // Safety: after 10s, force show UI even if loading (prevents stuck blank screen)
   useEffect(() => {

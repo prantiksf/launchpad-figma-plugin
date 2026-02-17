@@ -9,11 +9,80 @@ const cors = require('cors');
 const db = require('./db');
 
 const app = express();
+
+// ============================================================================
+// BULK-DELETE PROTECTION HELPERS
+// ============================================================================
+
+/**
+ * Validate array-based data for bulk-delete protection.
+ * Returns { error, status } if blocked, null if allowed.
+ */
+function validateArrayBulkDelete(currentCount, newCount, dataType) {
+  if (currentCount > 0 && newCount === 0) {
+    return { status: 400, error: 'Data protection triggered', message: `Cannot delete all ${dataType} at once. Delete them one at a time.`, currentCount };
+  }
+  if (currentCount >= 3 && newCount < currentCount - 2) {
+    return { status: 400, error: 'Data protection triggered', message: `Cannot reduce ${dataType} from ${currentCount} to ${newCount}. Max 2 deletions at a time.`, currentCount, attemptedCount: newCount };
+  }
+  if (currentCount > 5 && newCount < currentCount * 0.5) {
+    return { status: 400, error: 'Data protection triggered', message: `Cannot reduce ${dataType} from ${currentCount} to ${newCount}. This looks like accidental data loss.`, currentCount, attemptedCount: newCount };
+  }
+  return null;
+}
+
+/**
+ * Validate object-based data (keyed by cloudId) for bulk-delete protection.
+ */
+function validateObjectBulkDelete(currentCount, newCount, dataType) {
+  if (currentCount > 0 && newCount === 0) {
+    return { status: 400, error: 'Data protection triggered', message: `Cannot delete all ${dataType} at once. Delete them one at a time.`, currentCount };
+  }
+  if (currentCount >= 3 && newCount < currentCount - 2) {
+    return { status: 400, error: 'Data protection triggered', message: `Cannot reduce ${dataType} from ${currentCount} to ${newCount}. Max 2 deletions at a time.`, currentCount, attemptedCount: newCount };
+  }
+  if (currentCount > 5 && newCount < currentCount * 0.5) {
+    return { status: 400, error: 'Data protection triggered', message: `Cannot reduce ${dataType} from ${currentCount} to ${newCount}. This looks like accidental data loss.`, currentCount, attemptedCount: newCount };
+  }
+  return null;
+}
+
+// Whitelist of allowed backup data keys
+const ALLOWED_BACKUP_KEYS = ['templates', 'saved_items', 'figma_links', 'cloud_figma_links', 'custom_clouds', 'editable_clouds', 'cloud_categories', 'status_symbols', 'cloud_pocs', 'housekeeping_rules'];
+
+function isAllowedBackupKey(dataKey) {
+  return typeof dataKey === 'string' && ALLOWED_BACKUP_KEYS.includes(dataKey);
+}
+
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+// CORS - restrict to known origins (Figma plugin UIs may use different origins; add more if needed)
+const allowedOrigins = [
+  'https://www.figma.com',
+  'https://figma.com',
+  /^https:\/\/.*\.herokuapp\.com$/
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.some(o => typeof o === 'string' ? o === origin : o.test(origin))) {
+      cb(null, true);
+    } else {
+      cb(null, false);
+    }
+  }
+}));
 app.use(express.json({ limit: '50mb' })); // Large limit for base64 previews
+
+// API key middleware - if API_KEY env is set, require it on /api/* and /admin/*
+const apiKeyAuth = (req, res, next) => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return next();
+  const key = req.headers['x-api-key'] || (req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+  if (key === apiKey) return next();
+  res.status(401).json({ error: 'Unauthorized', message: 'Invalid or missing API key' });
+};
+app.use('/api', apiKeyAuth);
+app.use('/admin', apiKeyAuth);
 
 // Health check
 app.get('/', (req, res) => {
@@ -174,7 +243,7 @@ app.post('/api/templates', async (req, res) => {
     if (currentCount > 0) {
       const action = newCount > currentCount ? 'add' : (newCount < currentCount ? 'delete' : 'update');
       await db.createBackup('templates', currentTemplates, action, userName);
-      await db.cleanupOldBackups('templates', 50);
+      await db.cleanupOldBackups('templates', 100);
     }
     
     // ========== ACTIVITY LOGGING ==========
@@ -260,14 +329,26 @@ app.get('/api/saved-items', async (req, res) => {
 app.post('/api/saved-items', async (req, res) => {
   try {
     const newItems = req.body.savedItems || [];
+    if (!Array.isArray(newItems)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Saved items must be an array' });
+    }
+    const validItems = newItems.filter(item => item && typeof item === 'object' && item.templateId);
+    if (validItems.length !== newItems.length) {
+      return res.status(400).json({ error: 'Invalid data', message: 'All saved items must have templateId' });
+    }
     const currentItems = await db.getSavedItems();
-    
+    const currentCount = currentItems.length;
+    const newCount = newItems.length;
+    const block = validateArrayBulkDelete(currentCount, newCount, 'saved items');
+    if (block) {
+      console.error('🛑 BLOCKED: saved-items', block);
+      return res.status(block.status).json(block);
+    }
     // Auto-backup before saving
     if (currentItems.length > 0) {
       await db.createBackup('saved_items', currentItems, 'save', null);
-      await db.cleanupOldBackups('saved_items', 30);
+      await db.cleanupOldBackups('saved_items', 50);
     }
-    
     await db.saveSavedItems(newItems);
     res.json({ success: true });
   } catch (error) {
@@ -289,10 +370,21 @@ app.get('/api/figma-links', async (req, res) => {
 
 app.post('/api/figma-links', async (req, res) => {
   try {
+    const newLinks = req.body.links || [];
+    if (!Array.isArray(newLinks)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Figma links must be an array' });
+    }
     const currentLinks = await db.getFigmaLinks();
+    const currentCount = Array.isArray(currentLinks) ? currentLinks.length : 0;
+    const newCount = newLinks.length;
+    const block = validateArrayBulkDelete(currentCount, newCount, 'figma links');
+    if (block) {
+      console.error('🛑 BLOCKED: figma-links', block);
+      return res.status(block.status).json(block);
+    }
     if (currentLinks && currentLinks.length > 0) {
       await db.createBackup('figma_links', currentLinks, 'save', null);
-      await db.cleanupOldBackups('figma_links', 30);
+      await db.cleanupOldBackups('figma_links', 50);
     }
     await db.saveFigmaLinks(req.body.links);
     res.json({ success: true });
@@ -315,10 +407,21 @@ app.get('/api/cloud-figma-links', async (req, res) => {
 
 app.post('/api/cloud-figma-links', async (req, res) => {
   try {
+    const newLinks = req.body.links || {};
+    if (typeof newLinks !== 'object' || newLinks === null || Array.isArray(newLinks)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Cloud figma links must be an object' });
+    }
     const currentLinks = await db.getCloudFigmaLinks();
+    const currentCount = currentLinks && typeof currentLinks === 'object' ? Object.keys(currentLinks).length : 0;
+    const newCount = Object.keys(newLinks).length;
+    const block = validateObjectBulkDelete(currentCount, newCount, 'cloud figma links');
+    if (block) {
+      console.error('🛑 BLOCKED: cloud-figma-links', block);
+      return res.status(block.status).json(block);
+    }
     if (currentLinks && Object.keys(currentLinks).length > 0) {
       await db.createBackup('cloud_figma_links', currentLinks, 'save', null);
-      await db.cleanupOldBackups('cloud_figma_links', 30);
+      await db.cleanupOldBackups('cloud_figma_links', 50);
     }
     await db.saveCloudFigmaLinks(req.body.links);
     res.json({ success: true });
@@ -342,14 +445,25 @@ app.get('/api/custom-clouds', async (req, res) => {
 app.post('/api/custom-clouds', async (req, res) => {
   try {
     const newClouds = req.body.clouds || [];
+    if (!Array.isArray(newClouds)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Custom clouds must be an array' });
+    }
+    const validClouds = newClouds.filter(c => c && typeof c === 'object' && c.id && c.name);
+    if (validClouds.length !== newClouds.length) {
+      return res.status(400).json({ error: 'Invalid data', message: 'All custom clouds must have id and name' });
+    }
     const currentClouds = await db.getCustomClouds();
-    
-    // Auto-backup before saving
+    const currentCount = currentClouds.length;
+    const newCount = newClouds.length;
+    const block = validateArrayBulkDelete(currentCount, newCount, 'custom clouds');
+    if (block) {
+      console.error('🛑 BLOCKED: custom-clouds', block);
+      return res.status(block.status).json(block);
+    }
     if (currentClouds.length > 0) {
       await db.createBackup('custom_clouds', currentClouds, 'save', null);
-      await db.cleanupOldBackups('custom_clouds', 30);
+      await db.cleanupOldBackups('custom_clouds', 50);
     }
-    
     await db.saveCustomClouds(newClouds);
     res.json({ success: true });
   } catch (error) {
@@ -371,10 +485,21 @@ app.get('/api/editable-clouds', async (req, res) => {
 
 app.post('/api/editable-clouds', async (req, res) => {
   try {
+    const newClouds = req.body.clouds;
+    if (newClouds !== null && (typeof newClouds !== 'object' || Array.isArray(newClouds))) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Editable clouds must be null or an object' });
+    }
     const currentClouds = await db.getEditableClouds();
+    const currentCount = currentClouds && typeof currentClouds === 'object' ? Object.keys(currentClouds).length : 0;
+    const newCount = newClouds && typeof newClouds === 'object' ? Object.keys(newClouds).length : 0;
+    const block = validateObjectBulkDelete(currentCount, newCount, 'editable clouds');
+    if (block) {
+      console.error('🛑 BLOCKED: editable-clouds', block);
+      return res.status(block.status).json(block);
+    }
     if (currentClouds) {
       await db.createBackup('editable_clouds', currentClouds, 'save', null);
-      await db.cleanupOldBackups('editable_clouds', 30);
+      await db.cleanupOldBackups('editable_clouds', 50);
     }
     await db.saveEditableClouds(req.body.clouds);
     res.json({ success: true });
@@ -397,10 +522,21 @@ app.get('/api/cloud-categories', async (req, res) => {
 
 app.post('/api/cloud-categories', async (req, res) => {
   try {
+    const newCategories = req.body.categories || {};
+    if (typeof newCategories !== 'object' || newCategories === null || Array.isArray(newCategories)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Cloud categories must be an object' });
+    }
     const currentCategories = await db.getCloudCategories();
+    const currentCount = currentCategories && typeof currentCategories === 'object' ? Object.keys(currentCategories).length : 0;
+    const newCount = Object.keys(newCategories).length;
+    const block = validateObjectBulkDelete(currentCount, newCount, 'cloud categories');
+    if (block) {
+      console.error('🛑 BLOCKED: cloud-categories', block);
+      return res.status(block.status).json(block);
+    }
     if (currentCategories && Object.keys(currentCategories).length > 0) {
       await db.createBackup('cloud_categories', currentCategories, 'save', null);
-      await db.cleanupOldBackups('cloud_categories', 30);
+      await db.cleanupOldBackups('cloud_categories', 50);
     }
     await db.saveCloudCategories(req.body.categories);
     res.json({ success: true });
@@ -423,10 +559,21 @@ app.get('/api/status-symbols', async (req, res) => {
 
 app.post('/api/status-symbols', async (req, res) => {
   try {
+    const newSymbols = req.body.symbols || [];
+    if (!Array.isArray(newSymbols)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Status symbols must be an array' });
+    }
     const currentSymbols = await db.getStatusSymbols();
-    if (currentSymbols && currentSymbols.length > 0) {
+    const currentCount = currentSymbols.length;
+    const newCount = newSymbols.length;
+    const block = validateArrayBulkDelete(currentCount, newCount, 'status symbols');
+    if (block) {
+      console.error('🛑 BLOCKED: status-symbols', block);
+      return res.status(block.status).json(block);
+    }
+    if (currentSymbols.length > 0) {
       await db.createBackup('status_symbols', currentSymbols, 'save', null);
-      await db.cleanupOldBackups('status_symbols', 30);
+      await db.cleanupOldBackups('status_symbols', 50);
     }
     await db.saveStatusSymbols(req.body.symbols);
     res.json({ success: true });
@@ -449,10 +596,21 @@ app.get('/api/cloud-pocs', async (req, res) => {
 
 app.post('/api/cloud-pocs', async (req, res) => {
   try {
+    const newPocs = req.body.pocs || {};
+    if (typeof newPocs !== 'object' || newPocs === null || Array.isArray(newPocs)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Cloud POCs must be an object' });
+    }
     const currentPocs = await db.getCloudPocs();
+    const currentCount = currentPocs && typeof currentPocs === 'object' ? Object.keys(currentPocs).length : 0;
+    const newCount = Object.keys(newPocs).length;
+    const block = validateObjectBulkDelete(currentCount, newCount, 'cloud POCs');
+    if (block) {
+      console.error('🛑 BLOCKED: cloud-pocs', block);
+      return res.status(block.status).json(block);
+    }
     if (currentPocs && Object.keys(currentPocs).length > 0) {
       await db.createBackup('cloud_pocs', currentPocs, 'save', null);
-      await db.cleanupOldBackups('cloud_pocs', 30);
+      await db.cleanupOldBackups('cloud_pocs', 50);
     }
     await db.saveCloudPocs(req.body.pocs);
     res.json({ success: true });
@@ -475,10 +633,21 @@ app.get('/api/housekeeping-rules', async (req, res) => {
 
 app.post('/api/housekeeping-rules', async (req, res) => {
   try {
+    const newRules = req.body.rules || [];
+    if (!Array.isArray(newRules)) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Housekeeping rules must be an array' });
+    }
     const currentRules = await db.getSharedData('housekeeping-rules') || [];
+    const currentCount = Array.isArray(currentRules) ? currentRules.length : 0;
+    const newCount = newRules.length;
+    const block = validateArrayBulkDelete(currentCount, newCount, 'housekeeping rules');
+    if (block) {
+      console.error('🛑 BLOCKED: housekeeping-rules', block);
+      return res.status(block.status).json(block);
+    }
     if (Array.isArray(currentRules) && currentRules.length > 0) {
       await db.createBackup('housekeeping_rules', currentRules, 'save', null);
-      await db.cleanupOldBackups('housekeeping_rules', 30);
+      await db.cleanupOldBackups('housekeeping_rules', 50);
     }
     await db.saveSharedData('housekeeping-rules', req.body.rules);
     res.json({ success: true });
@@ -614,6 +783,9 @@ app.get('/api/backups', async (req, res) => {
 app.get('/api/backups/:dataKey', async (req, res) => {
   try {
     const { dataKey } = req.params;
+    if (!isAllowedBackupKey(dataKey)) {
+      return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
+    }
     const limit = parseInt(req.query.limit) || 20;
     const backups = await db.getBackups(dataKey, limit);
     res.json({ 
@@ -635,7 +807,10 @@ app.get('/api/backups/:dataKey', async (req, res) => {
 // Get a specific backup's data (for preview before restore)
 app.get('/api/backups/:dataKey/:backupId', async (req, res) => {
   try {
-    const { backupId } = req.params;
+    const { dataKey, backupId } = req.params;
+    if (!isAllowedBackupKey(dataKey)) {
+      return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
+    }
     const backup = await db.getBackupById(parseInt(backupId));
     if (!backup) {
       return res.status(404).json({ error: 'Backup not found' });
@@ -657,7 +832,10 @@ app.get('/api/backups/:dataKey/:backupId', async (req, res) => {
 // Restore from a specific backup
 app.post('/api/backups/:dataKey/:backupId/restore', async (req, res) => {
   try {
-    const { backupId } = req.params;
+    const { dataKey, backupId } = req.params;
+    if (!isAllowedBackupKey(dataKey)) {
+      return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
+    }
     const merge = req.query.merge === 'true' || req.body?.merge === true;
     const backup = await db.restoreFromBackup(parseInt(backupId), merge);
     res.json({ 
@@ -676,6 +854,9 @@ app.post('/api/backups/:dataKey/:backupId/restore', async (req, res) => {
 app.post('/api/backups/:dataKey/create', async (req, res) => {
   try {
     const { dataKey } = req.params;
+    if (!isAllowedBackupKey(dataKey)) {
+      return res.status(400).json({ error: 'Invalid dataKey', message: `dataKey must be one of: ${ALLOWED_BACKUP_KEYS.join(', ')}` });
+    }
     const userId = req.body.userId || null;
     
     // Get current data for this key

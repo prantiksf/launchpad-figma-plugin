@@ -1,10 +1,11 @@
-# Publication Checklist - Starter Kit Plugin v1.10.0
+# Publication Checklist - Starter Kit Plugin v1.18.0
 
 ## ✅ Pre-Publication Checklist
 
 ### Version & Documentation
-- [x] Version updated to 1.10.0 in `src/App.tsx`
-- [x] Version updated to 1.10.0 in `package.json`
+- [x] Version updated to 1.18.0 in `src/App.tsx`
+- [x] Version updated to 1.18.0 in `src/code.ts`
+- [x] Version updated to 1.18.0 in `package.json`
 - [x] Version history created (`VERSION_HISTORY.md`)
 - [x] All changes committed to git
 
@@ -14,15 +15,15 @@
 - [x] All features tested and working
 
 ### Key Features Verified
-- [x] Save feature restored and working in template menu
+- [x] Data loss prevention (bulk-delete blocked, empty API handled)
+- [x] Restore confirmation modal with capsule buttons
+- [x] Save feature working in template menu
 - [x] Clipboard copy for POC emails working with fallback
 - [x] Toast notifications displaying correctly
 - [x] Cloud management (hide/show, edit names, upload icons)
 - [x] Template management (move, delete, save to collection)
 - [x] Page structure configuration
-- [x] Header layout and UI improvements
-- [x] Filter pills with horizontal scrolling
-- [x] Fixed header/footer with scrollable content
+- [x] Version History & Activity Log
 
 ### Plugin Configuration
 - [x] Plugin name: "Starter Kit"
@@ -57,44 +58,42 @@
 6. Fill in plugin details:
    - Name: Starter Kit
    - Description: Design fast. Stay consistent. Use your team's kits—no resource hunting.
-   - Version: 1.10.0
+   - Version: 1.18.0
    - Category: Design Systems / Productivity
 7. Upload plugin icon (if available)
 8. Submit for review
 
 ### 2. Git Repository
 - [ ] Push all commits to remote repository
-- [ ] Create release tag: `git tag v1.10.0`
-- [ ] Push tag: `git push origin v1.10.0`
+- [ ] Create release tag: `git tag v1.18.0`
+- [ ] Push tag: `git push origin v1.18.0`
 
 ### 3. Post-Publication
 - [ ] Monitor plugin usage and feedback
 - [ ] Address any reported issues
 - [ ] Plan next version features
 
-## 📝 Release Notes for v1.10.0
+## 📝 Release Notes for v1.18.0
 
 ### What's New
-- **Restored Save Feature**: Save option is now prominently displayed at the top of the template menu
-- **Enhanced Clipboard Copy**: Improved email copying with reliable fallback methods
-- **Better User Feedback**: Toast notifications now always appear for user actions
+- **Bulletproof Data Loss Prevention**: Multi-layer protection against accidental template/saved-item loss. Backend and client reject clear-all and bulk deletes. Empty API responses keep cached data and push back. 400 refetch won't overwrite with empty.
+- **Restore Modal Capsule Buttons**: Cancel and OK buttons now use consistent capsule (pill) styling in light and dark mode.
 
 ### Bug Fixes
-- Fixed Save feature visibility in template ellipsis menu
-- Fixed clipboard copy not working in Figma plugin context
-- Fixed toast notification not appearing when clicking POC names
+- Prevented "all components disappear" scenario from ever occurring
 
 ### Technical Improvements
-- Enhanced clipboard copy with multiple fallback methods
-- Improved error handling for clipboard operations
-- Better user feedback for all actions
+- Migration hardening: only migrates valid data
+- Message guards for ALL_TEMPLATES_REFRESHED
+- Updater validation for setTemplates(prev => next)
+- See DATA_LOSS_PREVENTION.md for full rules
 
 ## 🔗 Important Links
-- Plugin ID: `000000000000000000` (Update with actual ID after publication)
+- Plugin ID: `1595457818027167058`
 - Repository: (Add repository URL)
 - Documentation: (Add documentation URL if available)
 
 ## 📞 Support
 - Contact: prantik.banerjee@salesforce.com
-- Version: 1.10.0
-- Last Updated: 2024-12-19
+- Version: 1.18.0
+- Last Updated: 2025-02-04

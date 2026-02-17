@@ -167,13 +167,17 @@ export async function getTemplateAddMetadata(cloudId?: string | null): Promise<R
 
 const isInFigma = typeof window !== 'undefined' && window.parent !== window && typeof (window.parent as any).postMessage === 'function';
 
+const API_KEY = typeof process !== 'undefined' && process.env && process.env.STARTER_KIT_API_KEY ? process.env.STARTER_KIT_API_KEY : '';
+
 /** API request with retry (3 attempts, exponential backoff) */
 async function apiRequestWithRetry<T>(endpoint: string, options: RequestInit = {}, attempt = 1): Promise<T> {
   const maxAttempts = 3;
   const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
+  if (API_KEY) headers['X-API-Key'] = API_KEY;
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers,
       ...options,
     });
     if (!response.ok) {
@@ -334,6 +338,7 @@ export function useTemplates(figmaUserName?: string | null) {
   const [usingFallback, setUsingFallback] = useState(false);
   const lastKnownCount = useRef<number>(0);
   const retryRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const localDataRef = useRef<any[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -342,8 +347,28 @@ export function useTemplates(figmaUserName?: string | null) {
         const data = await apiRequest<any[]>('/api/templates');
         if (cancelled) return;
         const safe = Array.isArray(data) ? data : [];
+        const lastGood = loadLastKnownGood();
+        if (safe.length === 0 && lastGood && lastGood.templatesCount > 0) {
+          const cached = await loadFromClientStorage<any[]>('templates');
+          if (Array.isArray(cached) && cached.length > 0) {
+            setTemplatesState(cached);
+            lastKnownCount.current = cached.length;
+            localDataRef.current = cached;
+            setHasLoaded(true);
+            setUsingFallback(true);
+            showToast('Server returned empty - using your saved data. Syncing when connection is back.');
+            saveToClientStorage('templates', cached);
+            saveLastKnownGood({ templatesCount: cached.length });
+            try {
+              await apiRequest('/api/templates', { method: 'POST', body: JSON.stringify({ templates: cached }) });
+              setUsingFallback(false);
+            } catch {}
+            return;
+          }
+        }
         setTemplatesState(safe);
         lastKnownCount.current = safe.length;
+        localDataRef.current = safe;
         setHasLoaded(true);
         saveToClientStorage('templates', data);
         saveLastKnownGood({ templatesCount: data.length });
@@ -353,11 +378,13 @@ export function useTemplates(figmaUserName?: string | null) {
         if (Array.isArray(cached) && cached.length > 0) {
           setTemplatesState(cached);
           lastKnownCount.current = cached.length;
+          localDataRef.current = cached;
           setHasLoaded(true);
           setUsingFallback(true);
           showToast('Using cached data. Syncing when connection is back.');
         } else {
           setTemplatesState([]);
+          localDataRef.current = [];
           setHasLoaded(true);
         }
       } finally {
@@ -373,10 +400,25 @@ export function useTemplates(figmaUserName?: string | null) {
       try {
         const data = await apiRequest<any[]>('/api/templates');
         const safe = Array.isArray(data) ? data : [];
-        setTemplatesState(safe);
-        lastKnownCount.current = safe.length;
-        saveToClientStorage('templates', data);
-        saveLastKnownGood({ templatesCount: data.length });
+        if (safe.length === 0 && localDataRef.current.length > 0) {
+          await apiRequest('/api/templates', {
+            method: 'POST',
+            body: JSON.stringify({ templates: localDataRef.current }),
+          });
+          const refetched = await apiRequest<any[]>('/api/templates');
+          const refetchedSafe = Array.isArray(refetched) ? refetched : [];
+          setTemplatesState(refetchedSafe);
+          lastKnownCount.current = refetchedSafe.length;
+          localDataRef.current = refetchedSafe;
+          saveToClientStorage('templates', refetchedSafe);
+          saveLastKnownGood({ templatesCount: refetchedSafe.length });
+        } else {
+          setTemplatesState(safe);
+          lastKnownCount.current = safe.length;
+          localDataRef.current = safe;
+          saveToClientStorage('templates', data);
+          saveLastKnownGood({ templatesCount: data.length });
+        }
         setUsingFallback(false);
         if (retryRef.current) {
           clearInterval(retryRef.current);
@@ -395,7 +437,38 @@ export function useTemplates(figmaUserName?: string | null) {
     };
   }, [usingFallback]);
 
-  const save = useCallback(async (newTemplates: any[]) => {
+  const save = useCallback(async (newTemplates: any[] | ((prev: any[]) => any[])) => {
+    // Support React-style updater: setTemplates(prev => next)
+    if (typeof newTemplates === 'function') {
+      setTemplatesState(prev => {
+        const raw = newTemplates(prev);
+        if (!Array.isArray(raw)) return prev;
+        const next = raw.filter(t => t?.id && t?.name);
+        if (next.length !== raw.length) {
+          console.warn('🛑 BLOCKED: Updater produced invalid templates');
+          return prev;
+        }
+        const currentCount = lastKnownCount.current;
+        if (currentCount > 0 && next.length === 0) {
+          console.warn('🛑 BLOCKED: Updater would clear all templates');
+          return prev;
+        }
+        if (currentCount >= 3 && next.length < currentCount - 2) {
+          console.warn('🛑 BLOCKED: Updater suspicious bulk delete');
+          return prev;
+        }
+        lastKnownCount.current = next.length;
+        localDataRef.current = next;
+        saveToClientStorage('templates', next);
+        saveLastKnownGood({ templatesCount: next.length });
+        apiRequest('/api/templates', {
+          method: 'POST',
+          body: JSON.stringify({ templates: next, userName: figmaUserName }),
+        }).catch(console.error);
+        return next;
+      });
+      return;
+    }
     if (!newTemplates || !Array.isArray(newTemplates)) {
       console.error('🛑 BLOCKED: Invalid templates data (not an array)');
       return;
@@ -421,6 +494,7 @@ export function useTemplates(figmaUserName?: string | null) {
     }
     setTemplatesState(newTemplates);
     lastKnownCount.current = newCount;
+    if (usingFallback) localDataRef.current = newTemplates;
     saveToClientStorage('templates', newTemplates);
     try {
       await apiRequest('/api/templates', {
@@ -434,23 +508,47 @@ export function useTemplates(figmaUserName?: string | null) {
       if (error?.message?.includes('400')) {
         apiRequest<any[]>('/api/templates')
           .then(data => {
-            setTemplatesState(data);
-            lastKnownCount.current = data.length;
-            saveToClientStorage('templates', data);
+            const safe = Array.isArray(data) ? data : [];
+            if (safe.length === 0 && lastKnownCount.current > 0) {
+              const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
+              if (cached && cached.length > 0) {
+                setTemplatesState(cached);
+                lastKnownCount.current = cached.length;
+                saveToClientStorage('templates', cached);
+                showToast('Server rejected change - kept your data.');
+                return;
+              }
+            }
+            setTemplatesState(safe);
+            lastKnownCount.current = safe.length;
+            localDataRef.current = safe;
+            saveToClientStorage('templates', safe);
           })
           .catch(console.error);
       }
     }
-  }, [hasLoaded, figmaUserName]);
+  }, [hasLoaded, figmaUserName, usingFallback]);
 
   const refetch = useCallback(async () => {
     try {
       const data = await apiRequest<any[]>('/api/templates');
       const safe = Array.isArray(data) ? data : [];
+      if (safe.length === 0 && lastKnownCount.current > 0) {
+        const cached = await loadFromClientStorage<any[]>('templates');
+        if (Array.isArray(cached) && cached.length > 0) {
+          setTemplatesState(cached);
+          lastKnownCount.current = cached.length;
+          localDataRef.current = cached;
+          saveToClientStorage('templates', cached);
+          showToast('Server returned empty - kept your data. Try again later.');
+          return;
+        }
+      }
       setTemplatesState(safe);
       lastKnownCount.current = safe.length;
-      saveToClientStorage('templates', data);
-      saveLastKnownGood({ templatesCount: data.length });
+      localDataRef.current = safe;
+      saveToClientStorage('templates', safe);
+      saveLastKnownGood({ templatesCount: safe.length });
       setUsingFallback(false);
     } catch (e) {
       console.error('Failed to refetch templates:', e);
@@ -470,6 +568,8 @@ export function useSavedItems() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [usingFallback, setUsingFallback] = useState(false);
   const retryRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const localDataRef = useRef<any[]>([]);
+  const lastKnownCountRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -477,20 +577,46 @@ export function useSavedItems() {
       try {
         const data = await apiRequest<any[]>('/api/saved-items');
         if (cancelled) return;
-        setSavedItemsState(data);
+        const safe = Array.isArray(data) ? data : [];
+        const lastGood = loadLastKnownGood();
+        if (safe.length === 0 && lastGood && lastGood.savedItemsCount > 0) {
+          const cached = await loadFromClientStorage<any[]>('saved-items');
+          if (Array.isArray(cached) && cached.length > 0) {
+            setSavedItemsState(cached);
+            localDataRef.current = cached;
+            setHasLoaded(true);
+            setUsingFallback(true);
+            showToast('Server returned empty - using your saved data. Syncing when connection is back.');
+            saveToClientStorage('saved-items', cached);
+            lastKnownCountRef.current = cached.length;
+            saveLastKnownGood({ savedItemsCount: cached.length });
+            try {
+              await apiRequest('/api/saved-items', { method: 'POST', body: JSON.stringify({ savedItems: cached }) });
+              setUsingFallback(false);
+            } catch {}
+            return;
+          }
+        }
+        setSavedItemsState(safe);
+        localDataRef.current = safe;
+        lastKnownCountRef.current = safe.length;
         setHasLoaded(true);
-        saveToClientStorage('saved-items', data);
-        saveLastKnownGood({ savedItemsCount: data.length });
+        saveToClientStorage('saved-items', safe);
+        saveLastKnownGood({ savedItemsCount: safe.length });
       } catch {
         if (cancelled) return;
         const cached = await loadFromClientStorage<any[]>('saved-items');
         if (Array.isArray(cached) && cached.length > 0) {
           setSavedItemsState(cached);
+          localDataRef.current = cached;
+          lastKnownCountRef.current = cached.length;
           setHasLoaded(true);
           setUsingFallback(true);
           showToast('Using cached data. Syncing when connection is back.');
         } else {
           setSavedItemsState([]);
+          localDataRef.current = [];
+          lastKnownCountRef.current = 0;
           setHasLoaded(true);
         }
       } finally {
@@ -505,9 +631,39 @@ export function useSavedItems() {
     const id = setInterval(async () => {
       try {
         const data = await apiRequest<any[]>('/api/saved-items');
-        setSavedItemsState(data);
-        saveToClientStorage('saved-items', data);
-        saveLastKnownGood({ savedItemsCount: data.length });
+        const safe = Array.isArray(data) ? data : [];
+        if (safe.length === 0 && localDataRef.current.length > 0) {
+          await apiRequest('/api/saved-items', {
+            method: 'POST',
+            body: JSON.stringify({ savedItems: localDataRef.current }),
+          });
+          const refetched = await apiRequest<any[]>('/api/saved-items');
+          const refetchedSafe = Array.isArray(refetched) ? refetched : [];
+          setSavedItemsState(refetchedSafe);
+          localDataRef.current = refetchedSafe;
+          lastKnownCountRef.current = refetchedSafe.length;
+          saveToClientStorage('saved-items', refetchedSafe);
+          saveLastKnownGood({ savedItemsCount: refetchedSafe.length });
+        } else {
+          if (safe.length === 0 && lastKnownCountRef.current > 0) {
+            const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
+            if (cached && cached.length > 0) {
+              setSavedItemsState(cached);
+              localDataRef.current = cached;
+              lastKnownCountRef.current = cached.length;
+              saveToClientStorage('saved-items', cached);
+              saveLastKnownGood({ savedItemsCount: cached.length });
+              setUsingFallback(false);
+              showToast('Server returned empty - kept your data.');
+              return;
+            }
+          }
+          setSavedItemsState(safe);
+          localDataRef.current = safe;
+          lastKnownCountRef.current = safe.length;
+          saveToClientStorage('saved-items', safe);
+          saveLastKnownGood({ savedItemsCount: safe.length });
+        }
         setUsingFallback(false);
         if (retryRef.current) {
           clearInterval(retryRef.current);
@@ -531,7 +687,19 @@ export function useSavedItems() {
       console.warn('⚠️ BLOCKED: Cannot save saved items before initial load');
       return;
     }
+    const currentCount = lastKnownCountRef.current;
+    const newCount = newItems.length;
+    if (currentCount > 0 && newCount === 0) {
+      console.error(`🛑 BLOCKED: Attempted to clear all ${currentCount} saved items`);
+      return;
+    }
+    if (currentCount >= 3 && newCount < currentCount - 2) {
+      console.error(`🛑 BLOCKED: Suspicious bulk deletion of saved items (${currentCount} -> ${newCount})`);
+      return;
+    }
     setSavedItemsState(newItems);
+    lastKnownCountRef.current = newCount;
+    if (usingFallback) localDataRef.current = newItems;
     saveToClientStorage('saved-items', newItems);
     try {
       await apiRequest('/api/saved-items', {
@@ -539,10 +707,32 @@ export function useSavedItems() {
         body: JSON.stringify({ savedItems: newItems }),
       });
       saveLastKnownGood({ savedItemsCount: newItems.length });
-    } catch (error) {
+    } catch (error: any) {
       console.error('✗ Failed to save saved items:', error);
+      if (error?.message?.includes('400')) {
+        apiRequest<any[]>('/api/saved-items')
+          .then(data => {
+            const safe = Array.isArray(data) ? data : [];
+            if (safe.length === 0 && lastKnownCountRef.current > 0) {
+              const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
+              if (cached && cached.length > 0) {
+                setSavedItemsState(cached);
+                lastKnownCountRef.current = cached.length;
+                saveToClientStorage('saved-items', cached);
+                showToast('Server rejected change - kept your data.');
+                return;
+              }
+            }
+            setSavedItemsState(safe);
+            localDataRef.current = safe;
+            lastKnownCountRef.current = safe.length;
+            saveToClientStorage('saved-items', safe);
+            saveLastKnownGood({ savedItemsCount: safe.length });
+          })
+          .catch(console.error);
+      }
     }
-  }, [hasLoaded]);
+  }, [hasLoaded, usingFallback]);
 
   return { savedItems, setSavedItems: save, loading, usingFallback };
 }

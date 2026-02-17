@@ -123,3 +123,18 @@ Personal to each Figma user:
 | `DATABASE_URL` | PostgreSQL connection string (auto-set by Heroku) |
 | `PORT` | Server port (auto-set by Heroku) |
 | `NODE_ENV` | Environment (production/development) |
+| `API_KEY` | Optional. If set, all `/api/*` and `/admin/*` requests must include `X-API-Key` header. Leave empty for local dev without auth. |
+
+## API Key (Optional)
+
+To protect your backend, set `API_KEY` on Heroku:
+
+```bash
+heroku config:set API_KEY=your-secret-key
+```
+
+When building the plugin, set the same key so requests are authenticated:
+
+```bash
+STARTER_KIT_API_KEY=your-secret-key npm run build
+```

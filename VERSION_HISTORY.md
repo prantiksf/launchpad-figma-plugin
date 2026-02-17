@@ -1,6 +1,64 @@
 # Version History
 
-## v1.10.0 (Current)
+## v1.18.0 (Current)
+**Release Date:** 2025-02-04
+
+### Features
+- ✅ **Bulletproof Data Loss Prevention**
+  - Multi-layer protection against accidental template/saved-item loss
+  - Backend + client reject clear-all and suspicious bulk deletes
+  - Empty API response: keep cached data, push back to restore
+  - 400 refetch: templates and saved items won't overwrite with empty
+  - Migration: only migrates valid data; never overwrites with empty
+  - Message guards: `ALL_TEMPLATES_REFRESHED` with empty payload ignored
+  - Updater validation: `setTemplates(prev => next)` with same safeguards
+  - Documentation: `DATA_LOSS_PREVENTION.md`
+- ✅ **Restore Confirmation Modal – Capsule Buttons**
+  - Cancel and OK buttons use consistent capsule (pill) styling
+  - Unified look in light and dark mode
+
+### Bug Fixes
+- Prevented "all components disappear" scenario from ever occurring
+
+---
+
+## v1.17.0
+**Release Date:** 2025-02-04  
+Previous release. See v1.18.0 for current changes.
+
+### Features
+- ✅ **Version History & Activity Log Dark Mode**
+  - Both modals now respect dark mode theme
+  - Dark overlay, backgrounds, and text for consistent experience
+- ✅ **Restore Confirmation Modal**
+  - Replaced native browser confirm with in-app modal
+  - Modal appears on top with proper z-index
+  - Cancel and OK buttons with dark mode support
+- ✅ **Version History UI Improvements**
+  - Summary bar fixed at top (no overlap with table)
+  - Added bottom padding so CTA button is never chopped
+  - Thin scrollbar (6px) for cleaner look
+  - No horizontal scroll
+- ✅ **Asset Hover Preview**
+  - Magnification popover after 2s hover for all asset types (variants + single components)
+  - Popover positioned near top of plugin
+- ✅ **Saved Pill**
+  - Icon + label both visible in pill section
+  - Extra padding to prevent truncation
+
+### Bug Fixes
+- Fixed table content scrolling on top of summary (restructured layout)
+- Fixed CTA button getting chopped in Version History modal
+
+---
+
+## v1.16.0
+**Release Date:** 2025-02-04  
+Previous release. See v1.17.0 for current changes.
+
+---
+
+## v1.10.0
 **Release Date:** 2024-12-19
 
 ### Features

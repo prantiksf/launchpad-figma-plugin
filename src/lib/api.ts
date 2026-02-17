@@ -9,6 +9,7 @@
 
 // Heroku backend URL
 const API_BASE_URL = process.env.STARTER_KIT_API_URL || 'https://starterkit-da8649ad6366.herokuapp.com';
+const API_KEY = process.env.STARTER_KIT_API_KEY || '';
 
 // Helper for making API requests
 async function apiRequest<T>(
@@ -16,12 +17,10 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
+  if (API_KEY) headers['X-API-Key'] = API_KEY;
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
     ...options,
   });
   
