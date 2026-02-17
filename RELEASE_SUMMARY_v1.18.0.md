@@ -2,7 +2,7 @@
 
 ## 🛡️ Data Loss Prevention & UI Polish
 
-**Release Date:** February 4, 2025  
+**Release Date:** February 17, 2026  
 **Version:** 1.18.0
 
 ---

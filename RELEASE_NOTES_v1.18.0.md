@@ -1,59 +1,80 @@
 # Release Notes - Starter Kit Plugin v1.18.0
 
-**Release Date:** February 4, 2025  
-**Version:** 1.18.0  
-**Plugin ID:** 1595457818027167058
+**Release Date:** February 17, 2026  
+**Version:** 1.18.0
 
 ---
 
-## 🛡️ Bulletproof Data Loss Prevention
+## Summary
 
-This release adds **multi-layer protection** against accidental template and saved-item loss. The "all components disappear" scenario is now prevented at every level.
-
----
-
-## ✨ What's New
-
-### 🔒 Data Loss Prevention
-- **Backend + Client Protection**: Rejects clear-all and suspicious bulk deletes (max 2 deletions at a time, no >50% reduction)
-- **Empty API Handling**: When the server returns empty, we keep your cached data and push it back to restore
-- **400 Refetch Safety**: On save failure, refetch won't overwrite with empty (templates and saved items)
-- **Migration Hardening**: Only migrates when valid data exists; never overwrites with empty
-- **Message Guards**: `ALL_TEMPLATES_REFRESHED` with empty payload is ignored
-- **Updater Validation**: `setTemplates(prev => next)` supports functional updates with same safeguards
-- **Documentation**: `DATA_LOSS_PREVENTION.md` for developers
-
-### 🎨 UI Improvements
-- **Restore Modal Capsule Buttons**: Cancel and OK buttons now use consistent capsule (pill) styling
-- **Dark Mode**: Capsule buttons look unified in both light and dark themes
+This release focuses on **bulletproof data loss prevention** and **UI polish**. We've added multiple layers of protection so the "all components disappear" scenario can never happen again, plus improved the restore confirmation modal with consistent capsule-style buttons.
 
 ---
 
-## 🐛 Bug Fixes
+## What's New
 
-- ✅ **Prevented "all components disappear"** – Multiple safeguards ensure this scenario never occurs
-- ✅ Fixed restore confirmation buttons looking inconsistent
+### 🛡️ Bulletproof Data Loss Prevention
+
+Multi-layer protection against accidental template and saved-item loss:
+
+| Layer | What it does |
+|-------|--------------|
+| **Backend** | Rejects clear-all and suspicious bulk deletes (max 2 at a time, no >50% reduction) |
+| **Client save** | Blocks `setTemplates([])` and `setSavedItems([])` when we had data |
+| **Empty API** | When API returns `[]`, keeps cached data and pushes back to restore |
+| **400 refetch** | On save 400, refetch; if empty, keeps cached data (templates + saved items) |
+| **Migration** | Only migrates when we have valid data; never overwrites with empty |
+| **Message guards** | `ALL_TEMPLATES_REFRESHED` with empty payload is ignored |
+| **Updater validation** | `setTemplates(prev => next)` enforces same safeguards |
+
+See `DATA_LOSS_PREVENTION.md` for full rules and guidelines for future changes.
+
+### 🎨 Restore Confirmation Modal – Capsule Buttons
+
+- Cancel and OK buttons now use consistent capsule (pill) styling
+- Unified look in light and dark mode
+- Removed stretching so buttons keep a true pill shape
 
 ---
 
-## 📋 Upgrade Instructions
+## Bug Fixes
+
+- **Prevented "all components disappear"** – The scenario where deleting a component in Figma caused all components to vanish from the plugin can no longer occur.
+
+---
+
+## Technical Improvements
+
+- Migration hardening: only migrates templates with valid `id` and `name`
+- Updater function support for `setTemplates(prev => ...)` with full validation
+- 400 error handler for saved items (matches templates)
+- Bulk-delete protection for saved items (client-side)
+
+---
+
+## Upgrade Instructions
 
 **For Existing Users:**
-- No action needed. Open the plugin as usual.
-- Your data is automatically protected.
+- No action required. All protections apply automatically.
+- Your data is now better protected against accidental loss.
 
 **For New Users:**
-- No changes to onboarding flow.
+- Same setup as before. Open plugin, select cloud, click "Get Started."
 
 ---
 
-## 🔧 Technical Details
+## Publication Checklist
 
-- Backend: Bulk-delete validation for all critical data types
-- Client: `useTemplates` and `useSavedItems` hooks hardened with empty-response and 400 handling
-- Migration: Validates templates (id+name) before migrating
-- See `DATA_LOSS_PREVENTION.md` for full rules
+- [x] Version 1.18.0 in package.json, App.tsx, code.ts
+- [x] Production build successful
+- [x] VERSION_HISTORY.md updated
+- [x] DATA_LOSS_PREVENTION.md documented
+- [ ] Push to git remote
+- [ ] Publish via Figma (Plugins → Development → Publish plugin...)
 
 ---
 
-**Status:** ✅ Ready for Publication
+## Plugin Details
+
+- **Plugin ID:** 1595457818027167058
+- **Support:** prantik.banerjee@salesforce.com

@@ -1,7 +1,7 @@
 # Version History
 
 ## v1.18.0 (Current)
-**Release Date:** 2025-02-04
+**Release Date:** 2026-02-17
 
 ### Features
 - ✅ **Bulletproof Data Loss Prevention**
@@ -19,6 +19,12 @@
 
 ### Bug Fixes
 - Prevented "all components disappear" scenario from ever occurring
+
+### Technical Improvements
+- Migration hardening: only migrates templates with valid `id` and `name`
+- Updater function support for `setTemplates(prev => ...)` with full validation
+- 400 error handler for saved items (matches templates)
+- Bulk-delete protection for saved items (client-side)
 
 ---
 
