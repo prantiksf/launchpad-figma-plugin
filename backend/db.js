@@ -426,38 +426,64 @@ async function saveUserSavedItems(figmaUserId, items) {
   const itemsToSave = Array.isArray(items) ? items : [];
   
   console.log(`💾 saveUserSavedItems: Saving ${itemsToSave.length} items for user ${figmaUserId}`);
+  console.log(`💾 Items:`, JSON.stringify(itemsToSave).substring(0, 300));
   
   // Ensure user exists
   await getUserPreferences(figmaUserId);
   
-  // Ensure column exists
+  // Ensure column exists - use client to ensure it's on same connection
+  const client = await pool.connect();
   try {
-    await pool.query(`
-      ALTER TABLE user_preferences
-      ADD COLUMN IF NOT EXISTS saved_items JSONB DEFAULT '[]'::jsonb
+    // Check if column exists
+    const colCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'user_preferences' AND column_name = 'saved_items'
     `);
-  } catch (err) {
-    // Column might already exist
+    
+    if (colCheck.rows.length === 0) {
+      console.log(`⚠️ Column saved_items does NOT exist - creating it`);
+      await client.query(`
+        ALTER TABLE user_preferences
+        ADD COLUMN saved_items JSONB DEFAULT '[]'::jsonb
+      `);
+      console.log(`✓ Column created`);
+    }
+    
+    // SIMPLE DIRECT UPDATE - use JSON string and cast to jsonb
+    const jsonString = JSON.stringify(itemsToSave);
+    console.log(`🔄 Executing UPDATE with JSON string length: ${jsonString.length}`);
+    
+    const result = await client.query(
+      `UPDATE user_preferences 
+       SET saved_items = $1::jsonb, updated_at = NOW() 
+       WHERE figma_user_id = $2
+       RETURNING saved_items, figma_user_id`,
+      [jsonString, figmaUserId]
+    );
+    
+    console.log(`✓ UPDATE result: rowCount=${result.rowCount}, rows.length=${result.rows.length}`);
+    
+    if (result.rowCount === 0) {
+      throw new Error(`UPDATE affected 0 rows for user ${figmaUserId}`);
+    }
+    
+    const saved = result.rows[0].saved_items;
+    console.log(`✓ UPDATE returned saved_items: type=${typeof saved}, isArray=${Array.isArray(saved)}, length=${Array.isArray(saved) ? saved.length : 'N/A'}`);
+    console.log(`✓ UPDATE returned value:`, JSON.stringify(saved).substring(0, 300));
+    
+    // Immediately read back using same client to verify
+    const verifyResult = await client.query(
+      'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
+      [figmaUserId]
+    );
+    const verified = verifyResult.rows[0]?.saved_items;
+    console.log(`✓ Immediate readback: type=${typeof verified}, isArray=${Array.isArray(verified)}, length=${Array.isArray(verified) ? verified.length : 'N/A'}`);
+    console.log(`✓ Immediate readback value:`, JSON.stringify(verified).substring(0, 300));
+    
+    return Array.isArray(saved) ? saved : [];
+  } finally {
+    client.release();
   }
-  
-  // SIMPLE DIRECT UPDATE - use JSON string and cast to jsonb
-  const jsonString = JSON.stringify(itemsToSave);
-  const result = await pool.query(
-    `UPDATE user_preferences 
-     SET saved_items = $1::jsonb, updated_at = NOW() 
-     WHERE figma_user_id = $2
-     RETURNING saved_items`,
-    [jsonString, figmaUserId]
-  );
-  
-  if (result.rowCount === 0) {
-    throw new Error(`Failed to update saved_items for user ${figmaUserId}`);
-  }
-  
-  const saved = result.rows[0].saved_items;
-  console.log(`✓ saveUserSavedItems: Saved ${Array.isArray(saved) ? saved.length : 0} items (rowCount: ${result.rowCount})`);
-  
-  return saved;
 }
 
 // ============================================================================
