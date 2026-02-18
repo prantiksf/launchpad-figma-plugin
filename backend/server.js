@@ -521,12 +521,18 @@ app.get('/api/editable-clouds', async (req, res) => {
 app.post('/api/editable-clouds', async (req, res) => {
   try {
     const newClouds = req.body.clouds;
-    if (newClouds !== null && (typeof newClouds !== 'object' || Array.isArray(newClouds))) {
-      return res.status(400).json({ error: 'Invalid data format', message: 'Editable clouds must be null or an object' });
+    // Accept null, array, or object (array is the primary format used by frontend)
+    if (newClouds !== null && (typeof newClouds !== 'object')) {
+      return res.status(400).json({ error: 'Invalid data format', message: 'Editable clouds must be null, an array, or an object' });
     }
     const currentClouds = await db.getEditableClouds();
-    const currentCount = currentClouds && typeof currentClouds === 'object' ? Object.keys(currentClouds).length : 0;
-    const newCount = newClouds && typeof newClouds === 'object' ? Object.keys(newClouds).length : 0;
+    // Handle both array and object formats for counting
+    const currentCount = currentClouds 
+      ? (Array.isArray(currentClouds) ? currentClouds.length : (typeof currentClouds === 'object' ? Object.keys(currentClouds).length : 0))
+      : 0;
+    const newCount = newClouds 
+      ? (Array.isArray(newClouds) ? newClouds.length : (typeof newClouds === 'object' ? Object.keys(newClouds).length : 0))
+      : 0;
     const block = validateObjectBulkDelete(currentCount, newCount, 'editable clouds');
     if (block) {
       console.error('🛑 BLOCKED: editable-clouds', block);

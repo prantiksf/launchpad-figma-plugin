@@ -615,7 +615,9 @@ figma.ui.onmessage = async (msg) => {
         } else {
           figma.notify(`✓ Inserted ${instances.length} slide${instances.length !== 1 ? 's' : ''} from "${templateName}"`);
         }
-        figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, templateId, cloudId, cloudName, count: instances.length, nodeId: instances[0]?.id, userName: figma.currentUser?.name ?? null });
+        // Send all nodeIds so we can locate any of them if one is deleted
+        const nodeIds = instances.map(inst => inst.id);
+        figma.ui.postMessage({ type: 'INSERT_SUCCESS', templateName, templateId, cloudId, cloudName, count: instances.length, nodeId: instances[0]?.id, nodeIds: nodeIds.length > 1 ? nodeIds : undefined, userName: figma.currentUser?.name ?? null });
       } else {
         figma.notify('⚠️ Component not published to Team Library. Please publish first.', { error: true, timeout: 5000 });
         figma.ui.postMessage({ type: 'INSERT_ERROR', error: 'Component not in Team Library' });
@@ -630,21 +632,61 @@ figma.ui.onmessage = async (msg) => {
 
   // ============ SELECT NODE (go to component from Activity History) ============
   if (msg.type === 'SELECT_NODE') {
-    const { nodeId } = msg;
-    if (nodeId) {
+    const { nodeId, nodeIds, assetId, cloudId, category } = msg;
+    // Use nodeIds array if available, otherwise use single nodeId
+    const idsToTry = (nodeIds && nodeIds.length > 0) ? nodeIds : (nodeId ? [nodeId] : []);
+    
+    if (idsToTry.length > 0) {
       (async () => {
         try {
           await figma.loadAllPagesAsync();
-          const node = figma.getNodeById(nodeId);
-          if (node && 'visible' in node) {
-            figma.currentPage.selection = [node as SceneNode];
-            figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+          
+          let foundNode: SceneNode | null = null;
+          
+          // Try each nodeId in sequence until we find one that exists
+          for (const id of idsToTry) {
+            try {
+              const node = figma.getNodeById(id);
+              
+              if (node && 'visible' in node) {
+                const sceneNode = node as SceneNode;
+                
+                // Check if node is removed from the document
+                if (!sceneNode.removed) {
+                  foundNode = sceneNode;
+                  break; // Found a valid node, stop searching
+                }
+              }
+            } catch (error) {
+              // Invalid node ID or node doesn't exist, try next one
+              continue;
+            }
+          }
+          
+          if (foundNode) {
+            // Select and zoom to the found node
+            figma.currentPage.selection = [foundNode];
+            figma.viewport.scrollAndZoomIntoView([foundNode]);
             figma.notify('Located component');
           } else {
-            figma.notify('Component no longer exists on canvas', { error: true });
+            // Component not found - notify UI to fall back to template focus
+            // Don't show error to user, let UI handle graceful fallback
+            figma.ui.postMessage({ 
+              type: 'NODE_NOT_FOUND', 
+              assetId, 
+              cloudId, 
+              category 
+            });
           }
-        } catch {
-          figma.notify('Could not locate component', { error: true });
+        } catch (error) {
+          console.error('Error locating component:', error);
+          // Notify UI to fall back to template focus
+          figma.ui.postMessage({ 
+            type: 'NODE_NOT_FOUND', 
+            assetId, 
+            cloudId, 
+            category 
+          });
         }
       })();
     }

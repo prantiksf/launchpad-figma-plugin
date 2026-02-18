@@ -1092,9 +1092,11 @@ export function App() {
           })();
           const template = templatesRef.current.find((t: Template) => t.id === msg.templateId);
           const preview = template?.preview ?? (template?.variants?.[0] as { preview?: string } | undefined)?.preview;
-          const assetData: { preview?: string; nodeId?: string } = {};
+          const assetData: { preview?: string; nodeId?: string; nodeIds?: string[] } = {};
           if (preview) assetData.preview = preview;
           if (msg.nodeId) assetData.nodeId = msg.nodeId;
+          // Store all nodeIds if multiple components were inserted
+          if (msg.nodeIds && msg.nodeIds.length > 0) assetData.nodeIds = msg.nodeIds;
           logActivityFromClient({
             action: 'component_insert',
             assetId: msg.templateId || `insert-${Date.now()}`,
@@ -1211,12 +1213,29 @@ export function App() {
           setScaffoldExists(msg.exists);
           setIsScaffolding(false);
           break;
+
+        case 'NODE_NOT_FOUND':
+          // Component was not found on canvas - fall back to focusing template in UI
+          if (msg.assetId && msg.cloudId) {
+            const template = templates.find(t => t.id === msg.assetId);
+            const templateCategory = template?.category ?? msg.category ?? 'all';
+            const categoriesForCloud = (cloudCategories ?? {})[msg.cloudId] || defaultCategories;
+            const validCategory = categoriesForCloud.some(c => c.id === templateCategory) ? templateCategory : 'all';
+            setSelectedClouds([msg.cloudId]);
+            setView('home');
+            setShowWelcomeScreen(false);
+            setActiveCategory(validCategory);
+            setContentRefreshKey(k => k + 1);
+            setScrollToTemplateId(msg.assetId);
+            setShowActivityHistoryModal(false);
+          }
+          break;
       }
     }
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, []);
+  }, [templates, cloudCategories, defaultCategories]);
 
   // Sync selectedClouds with defaultCloud when it loads
   // If no defaultCloud exists, default to 'sales' after loading completes
@@ -6256,24 +6275,40 @@ async function loadActivityLog(cloudId?: string) {
                     : undefined;
                   const preview = storedPreview ?? templatePreview;
                   const nodeId = activity.assetData?.nodeId as string | undefined;
-                  const canGoToComponent = !isRestorable && nodeId;
-                  const canFocusTemplate = !isRestorable && !nodeId && activity.assetId && activity.cloudId && ['add', 'update', 'component_insert', 'restore'].includes(activity.action);
+                  const nodeIds = activity.assetData?.nodeIds as string[] | undefined;
+                  // Use nodeIds array if available, otherwise fall back to single nodeId
+                  const allNodeIds = nodeIds && nodeIds.length > 0 ? nodeIds : (nodeId ? [nodeId] : []);
+                  const canGoToComponent = !isRestorable && allNodeIds.length > 0;
+                  const canFocusTemplate = !isRestorable && allNodeIds.length === 0 && activity.assetId && activity.cloudId && ['add', 'update', 'component_insert', 'restore'].includes(activity.action);
+                  const focusTemplate = (assetId: string, cloudId: string, category: string | null) => {
+                    const template = templates.find(t => t.id === assetId);
+                    const templateCategory = template?.category ?? category ?? 'all';
+                    const categoriesForCloud = (cloudCategories ?? {})[cloudId] || defaultCategories;
+                    const validCategory = categoriesForCloud.some(c => c.id === templateCategory) ? templateCategory : 'all';
+                    setSelectedClouds([cloudId]);
+                    setView('home');
+                    setShowWelcomeScreen(false);
+                    setActiveCategory(validCategory);
+                    setContentRefreshKey(k => k + 1);
+                    setScrollToTemplateId(assetId);
+                    setShowActivityHistoryModal(false);
+                  };
+
                   const handleActivityClick = () => {
                     if (canGoToComponent) {
-                      parent.postMessage({ pluginMessage: { type: 'SELECT_NODE', nodeId } }, '*');
+                      parent.postMessage({ 
+                        pluginMessage: { 
+                          type: 'SELECT_NODE', 
+                          nodeId: allNodeIds[0], 
+                          nodeIds: allNodeIds.length > 1 ? allNodeIds : undefined,
+                          assetId: activity.assetId,
+                          cloudId: activity.cloudId,
+                          category: activity.category
+                        } 
+                      }, '*');
                       setShowActivityHistoryModal(false);
                     } else if (canFocusTemplate) {
-                      const template = templates.find(t => t.id === activity.assetId);
-                      const templateCategory = template?.category ?? activity.category ?? 'all';
-                      const categoriesForCloud = (cloudCategories ?? {})[activity.cloudId!] || defaultCategories;
-                      const validCategory = categoriesForCloud.some(c => c.id === templateCategory) ? templateCategory : 'all';
-                      setSelectedClouds([activity.cloudId!]);
-                      setView('home');
-                      setShowWelcomeScreen(false);
-                      setActiveCategory(validCategory);
-                      setContentRefreshKey(k => k + 1);
-                      setScrollToTemplateId(activity.assetId!);
-                      setShowActivityHistoryModal(false);
+                      focusTemplate(activity.assetId!, activity.cloudId!, activity.category);
                     }
                   };
                   return (

@@ -722,29 +722,8 @@ export function useSavedItems(figmaUserId?: string | null) {
           }
         }
 
-        const lastGood = loadLastKnownGood();
-        if (safe.length === 0 && lastGood && lastGood.savedItemsCount > 0) {
-          const cached = await loadFromClientStorage<any[]>('saved-items');
-          if (Array.isArray(cached) && cached.length > 0) {
-            setSavedItemsState(cached);
-            localDataRef.current = cached;
-            setHasLoaded(true);
-            setUsingFallback(true);
-            showToast('Server returned empty - using your saved data. Syncing when connection is back.');
-            saveToClientStorage('saved-items', cached);
-            lastKnownCountRef.current = cached.length;
-            saveLastKnownGood({ savedItemsCount: cached.length });
-            try {
-              await apiRequest('/api/saved-items', {
-                method: 'POST',
-                headers: { 'X-Figma-User-Id': String(figmaUserId) },
-                body: JSON.stringify({ savedItems: cached })
-              });
-              setUsingFallback(false);
-            } catch {}
-            return;
-          }
-        }
+        // Trust the backend response - if it returns empty, user intentionally cleared their list
+        // Don't restore from cache when API succeeds, only when it fails (handled in catch block)
         setSavedItemsState(safe);
         localDataRef.current = safe;
         lastKnownCountRef.current = safe.length;
