@@ -737,24 +737,31 @@ export function useSavedItems(figmaUserId?: string | null) {
   }, [usingFallback, figmaUserId]);
 
   const save = useCallback(async (newItems: any[] | ((prev: any[]) => any[])) => {
+    console.log(`💾 save() called: hasLoaded=${hasLoaded}, figmaUserId=${figmaUserId}, newItems type=${typeof newItems}`);
+    
     if (!hasLoaded) {
       console.warn('⚠️ BLOCKED: Cannot save saved items before initial load');
       return;
     }
 
     const validateAndMaybePersist = async (next: any[], prev: any[]): Promise<any[]> => {
+      console.log(`🔍 validateAndMaybePersist called: prev=${prev.length}, next=${next.length}`);
+      
       if (!Array.isArray(next)) {
-        console.error('🛑 BLOCKED: Invalid saved items data');
+        console.error('🛑 BLOCKED: Invalid saved items data - not an array');
         return prev;
       }
       const validItems = next.filter(item => item && typeof item === 'object' && item.templateId);
       if (validItems.length !== next.length) {
         console.error(`🛑 BLOCKED: ${next.length - validItems.length} saved items missing templateId`);
+        console.error(`Invalid items:`, next.filter(item => !item || typeof item !== 'object' || !item.templateId));
         return prev;
       }
 
       const currentCount = lastKnownCountRef.current;
       const newCount = next.length;
+      console.log(`🔍 Validation: currentCount=${currentCount}, newCount=${newCount}`);
+      
       // Allow 1->0 and 2->0 (user intentionally unsaving the last items),
       // but block large wipes that look accidental.
       if (currentCount >= 3 && newCount === 0) {
@@ -765,6 +772,8 @@ export function useSavedItems(figmaUserId?: string | null) {
         console.error(`🛑 BLOCKED: Suspicious bulk deletion of saved items (${currentCount} -> ${newCount})`);
         return prev;
       }
+      
+      console.log(`✓ Validation passed, proceeding to save...`);
 
       // CRITICAL: Every save/unsave MUST write to database FIRST
       // Database is the source of truth - no exceptions
