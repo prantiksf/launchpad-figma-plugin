@@ -327,18 +327,27 @@ async function updateUserPreference(figmaUserId, field, value) {
   }
   
   // For JSONB fields, use ::jsonb cast; for others, use direct assignment
+  // CRITICAL: Use COALESCE to ensure we're not setting to NULL, and explicitly cast to JSONB
   const updateQuery = (field === 'hidden_clouds' || field === 'saved_items')
-    ? `UPDATE user_preferences SET ${columnName} = $1::jsonb, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}`
-    : `UPDATE user_preferences SET ${columnName} = $1, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}`;
+    ? `UPDATE user_preferences SET ${columnName} = COALESCE($1::jsonb, '[]'::jsonb), updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}, figma_user_id`
+    : `UPDATE user_preferences SET ${columnName} = $1, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}, figma_user_id`;
   
+  console.log(`🔄 Executing UPDATE query for ${field}:`, updateQuery.substring(0, 150));
   const result = await pool.query(updateQuery, [paramValue, figmaUserId]);
   
   // Verify what was actually written
-  if (result.rows.length > 0 && result.rows[0][columnName] !== undefined) {
-    const writtenValue = result.rows[0][columnName];
-    console.log(`✓ UPDATE wrote value: type=${typeof writtenValue}, isArray=${Array.isArray(writtenValue)}, length=${Array.isArray(writtenValue) ? writtenValue.length : 'N/A'}`);
+  if (result.rows.length > 0) {
+    const row = result.rows[0];
+    const writtenValue = row[columnName];
+    console.log(`✓ UPDATE affected ${result.rowCount} row(s) for user ${row.figma_user_id || figmaUserId}`);
+    if (writtenValue !== undefined && writtenValue !== null) {
+      console.log(`✓ UPDATE wrote value: type=${typeof writtenValue}, isArray=${Array.isArray(writtenValue)}, length=${Array.isArray(writtenValue) ? writtenValue.length : 'N/A'}`);
+      console.log(`✓ UPDATE wrote value preview:`, JSON.stringify(writtenValue).substring(0, 300));
+    } else {
+      console.error(`✗ UPDATE wrote NULL/undefined value!`);
+    }
   } else {
-    console.warn(`⚠️ UPDATE returned no rows or missing column value`);
+    console.error(`⚠️ UPDATE returned NO ROWS - user might not exist or query failed`);
   }
   
   console.log(`✓ updateUserPreference: Updated ${result.rowCount} row(s) for user ${figmaUserId}, field ${field}`);
