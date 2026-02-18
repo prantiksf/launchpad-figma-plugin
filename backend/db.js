@@ -279,12 +279,19 @@ async function updateUserPreference(figmaUserId, field, value) {
     }
   }
   
-  // For JSONB fields, pass the value directly (pg will handle JSONB conversion)
-  // For other fields, use the value as-is
+  // For JSONB fields, ensure we're passing the correct type
+  // For saved_items, it MUST be an array
   let paramValue;
-  if (field === 'hidden_clouds' || field === 'saved_items') {
-    // Pass as JavaScript object/array - pg driver will convert to JSONB
-    paramValue = value;
+  if (field === 'saved_items') {
+    // Ensure it's an array
+    if (!Array.isArray(value)) {
+      console.error(`✗ ERROR: saved_items must be an array, got ${typeof value}`);
+      throw new Error(`saved_items must be an array, got ${typeof value}`);
+    }
+    paramValue = value; // Pass array directly - pg driver handles JSONB conversion
+  } else if (field === 'hidden_clouds') {
+    // hidden_clouds should also be an array
+    paramValue = Array.isArray(value) ? value : [];
   } else {
     paramValue = value;
   }
