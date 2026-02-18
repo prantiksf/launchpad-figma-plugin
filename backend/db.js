@@ -426,6 +426,7 @@ async function saveUserSavedItems(figmaUserId, items) {
   const itemsToSave = Array.isArray(items) ? items : [];
   
   console.log(`💾 saveUserSavedItems: Saving ${itemsToSave.length} items for user ${figmaUserId}`);
+  console.log(`💾 Items:`, JSON.stringify(itemsToSave));
   
   // Ensure user exists
   await getUserPreferences(figmaUserId);
@@ -440,18 +441,18 @@ async function saveUserSavedItems(figmaUserId, items) {
     // Column might already exist, ignore
   }
   
-  // SIMPLE DIRECT APPROACH: Use PostgreSQL's jsonb_build_array or cast properly
-  // Convert to JSON string first, then PostgreSQL will parse it
+  // CRITICAL: Use PostgreSQL's to_jsonb function to properly convert
+  // This ensures the JSON is properly parsed as JSONB
   const jsonString = JSON.stringify(itemsToSave);
   
   console.log(`🔄 Updating saved_items with ${itemsToSave.length} items`);
-  console.log(`🔄 JSON:`, jsonString);
+  console.log(`🔄 JSON string:`, jsonString);
   
-  // Use a simple UPDATE with explicit JSONB casting
-  // PostgreSQL's ::jsonb cast should handle the JSON string correctly
+  // Try using to_jsonb() function instead of ::jsonb cast
+  // This should properly parse the JSON string
   const result = await pool.query(
     `UPDATE user_preferences 
-     SET saved_items = $1::jsonb, updated_at = NOW() 
+     SET saved_items = to_jsonb($1::text), updated_at = NOW() 
      WHERE figma_user_id = $2
      RETURNING saved_items`,
     [jsonString, figmaUserId]
@@ -462,14 +463,23 @@ async function saveUserSavedItems(figmaUserId, items) {
   }
   
   const saved = result.rows[0].saved_items;
+  console.log(`✓ UPDATE returned:`, JSON.stringify(saved));
+  console.log(`✓ Type:`, typeof saved, 'isArray:', Array.isArray(saved));
   
   // Ensure it's an array
   if (!Array.isArray(saved)) {
     console.error(`✗ ERROR: saved_items is not an array:`, typeof saved, saved);
+    // Try reading back to see what's actually stored
+    const readback = await pool.query(
+      'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
+      [figmaUserId]
+    );
+    console.error(`✗ Readback shows:`, readback.rows[0]?.saved_items);
     throw new Error(`saved_items is not an array after update`);
   }
   
   console.log(`✓ Saved ${saved.length} items successfully`);
+  console.log(`✓ Returning:`, JSON.stringify(saved));
   
   // Return what was actually saved
   return saved;
