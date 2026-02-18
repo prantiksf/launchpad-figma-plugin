@@ -480,7 +480,11 @@ async function saveUserSavedItems(figmaUserId, items) {
     console.log(`✓ Immediate readback: type=${typeof verified}, isArray=${Array.isArray(verified)}, length=${Array.isArray(verified) ? verified.length : 'N/A'}`);
     console.log(`✓ Immediate readback value:`, JSON.stringify(verified).substring(0, 300));
     
-    return Array.isArray(saved) ? saved : [];
+    // CRITICAL: Ensure we return an array
+    const finalResult = Array.isArray(saved) ? saved : (Array.isArray(verified) ? verified : []);
+    console.log(`✓ Returning ${finalResult.length} items from saveUserSavedItems`);
+    
+    return finalResult;
   } finally {
     client.release();
   }

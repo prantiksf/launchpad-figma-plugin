@@ -389,12 +389,14 @@ app.post('/api/saved-items', async (req, res) => {
       await db.cleanupOldBackups(backupKey, 50);
     }
     if (figmaUserId) {
-      // SIMPLE: Just save it
-      await db.saveUserSavedItems(String(figmaUserId), newItems);
+      // SIMPLE: Just save it and return the saved data
+      const saved = await db.saveUserSavedItems(String(figmaUserId), newItems);
+      console.log(`✓ POST /api/saved-items: Saved ${saved.length} items, returning success`);
+      res.json({ success: true, savedItems: saved });
     } else {
       await db.saveSavedItems(newItems);
+      res.json({ success: true });
     }
-    res.json({ success: true });
   } catch (error) {
     console.error('Error saving items:', error);
     res.status(500).json({ error: 'Failed to save items' });
