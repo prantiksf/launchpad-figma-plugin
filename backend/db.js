@@ -449,20 +449,20 @@ async function saveUserSavedItems(figmaUserId, items) {
       console.log(`✓ Column created`);
     }
     
-    // CRITICAL: Pass the JavaScript array directly - pg driver will convert to JSONB automatically
-    // The pg driver knows how to convert JavaScript arrays/objects to JSONB
+    // CRITICAL: Use JSON.stringify and cast to jsonb
+    // PostgreSQL needs the JSON string to parse it as JSONB
+    const jsonString = JSON.stringify(itemsToSave);
     console.log(`🔄 Executing UPDATE with ${itemsToSave.length} items`);
-    console.log(`🔄 Items to save:`, JSON.stringify(itemsToSave));
-    console.log(`🔄 Items type:`, typeof itemsToSave, 'isArray:', Array.isArray(itemsToSave));
+    console.log(`🔄 Items to save:`, jsonString);
+    console.log(`🔄 JSON string length:`, jsonString.length);
     
-    // Pass the JavaScript array directly - pg driver converts it to JSONB
-    // This is the recommended way according to pg documentation
+    // Use JSON.stringify and cast to jsonb - this is the reliable way
     const result = await client.query(
       `UPDATE user_preferences 
        SET saved_items = $1::jsonb, updated_at = NOW() 
        WHERE figma_user_id = $2
        RETURNING saved_items, figma_user_id`,
-      [itemsToSave, figmaUserId]
+      [jsonString, figmaUserId]
     );
     
     console.log(`✓ UPDATE query executed, rowCount=${result.rowCount}`);
