@@ -789,24 +789,32 @@ export function useSavedItems(figmaUserId?: string | null) {
       }
 
       // CRITICAL: Save to database FIRST - await to ensure it completes
-      // Then verify by reading back - only update state with verified data
+      // Backend now returns saved items in response, use that as source of truth
       console.log(`💾 Saving ${next.length} items to database for user ${figmaUserId}...`);
       console.log(`💾 Items being saved:`, JSON.stringify(next, null, 2));
       try {
-        const response = await apiRequest('/api/saved-items', {
+        const response = await apiRequest<{ success: boolean; savedItems?: any[] }>('/api/saved-items', {
           method: 'POST',
           headers: { 'X-Figma-User-Id': String(figmaUserId) },
           body: JSON.stringify({ savedItems: next }),
         });
         console.log(`✅ Save API call succeeded`);
         
-        // CRITICAL: Immediately verify by reading back from database
-        // Use the verified data as the source of truth
-        const verifyData = await apiRequest<any[]>('/api/saved-items', {
-          headers: { 'X-Figma-User-Id': String(figmaUserId) }
-        });
-        const verified = Array.isArray(verifyData) ? verifyData : [];
-        console.log(`✓ Verified: Database has ${verified.length} items after save`);
+        // Use saved items from response if available, otherwise verify by reading back
+        let verified: any[];
+        if (response.savedItems && Array.isArray(response.savedItems)) {
+          verified = response.savedItems;
+          console.log(`✓ Using saved items from response: ${verified.length} items`);
+        } else {
+          // Fallback: verify by reading back from database
+          console.log(`⚠️ No savedItems in response, reading back from database...`);
+          const verifyData = await apiRequest<any[]>('/api/saved-items', {
+            headers: { 'X-Figma-User-Id': String(figmaUserId) }
+          });
+          verified = Array.isArray(verifyData) ? verifyData : [];
+          console.log(`✓ Verified: Database has ${verified.length} items after save`);
+        }
+        
         console.log(`✓ Verified data:`, JSON.stringify(verified, null, 2));
         
         // Update state with VERIFIED data from database (not optimistic update)
