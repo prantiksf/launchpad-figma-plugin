@@ -886,11 +886,18 @@ export function useSavedItems(figmaUserId?: string | null) {
         console.log(`🔄 Save requested: ${prev.length} -> ${next.length} items`);
         console.log(`🔄 prev:`, JSON.stringify(prev));
         console.log(`🔄 next:`, JSON.stringify(next));
+        
+        // CRITICAL: If next is empty but we're trying to save, something is wrong
+        if (next.length === 0 && prev.length === 0) {
+          console.warn(`⚠️ WARNING: Both prev and next are empty - this might be an unsave operation`);
+        }
+        
         // Persist and update state with verified result
         // validateAndMaybePersist will update state after verification
         // CRITICAL: Use prev from closure, not savedItems from outer scope
         validateAndMaybePersist(next, prev).catch((error) => {
           console.error('❌ Error in validateAndMaybePersist:', error);
+          console.error('❌ Error details - prev:', prev, 'next:', next);
           // On error, revert to previous state
           setSavedItemsState(() => prev);
         });
