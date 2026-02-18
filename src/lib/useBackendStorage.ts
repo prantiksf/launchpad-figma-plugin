@@ -792,11 +792,26 @@ export function useSavedItems(figmaUserId?: string | null) {
       // Backend now returns saved items in response, use that as source of truth
       console.log(`💾 Saving ${next.length} items to database for user ${figmaUserId}...`);
       console.log(`💾 Items being saved:`, JSON.stringify(next, null, 2));
+      console.log(`💾 Items array length: ${next.length}, type: ${typeof next}, isArray: ${Array.isArray(next)}`);
+      
+      // CRITICAL: Validate items before sending
+      const itemsToSend = next.filter(item => item && typeof item === 'object' && item.templateId);
+      if (itemsToSend.length !== next.length) {
+        console.error(`⚠️ WARNING: Filtered out ${next.length - itemsToSend.length} invalid items before sending`);
+        console.error(`Invalid items:`, next.filter(item => !item || typeof item !== 'object' || !item.templateId));
+      }
+      
+      if (itemsToSend.length === 0 && next.length > 0) {
+        console.error(`✗ ERROR: All ${next.length} items were filtered out! Not saving.`);
+        return prev;
+      }
+      
+      console.log(`💾 Sending ${itemsToSend.length} valid items to backend...`);
       try {
         const response = await apiRequest<{ success: boolean; savedItems?: any[] }>('/api/saved-items', {
           method: 'POST',
           headers: { 'X-Figma-User-Id': String(figmaUserId) },
-          body: JSON.stringify({ savedItems: next }),
+          body: JSON.stringify({ savedItems: itemsToSend }),
         });
         console.log(`✅ Save API call succeeded`);
         
