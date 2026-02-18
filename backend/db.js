@@ -426,7 +426,6 @@ async function saveUserSavedItems(figmaUserId, items) {
   const itemsToSave = Array.isArray(items) ? items : [];
   
   console.log(`💾 saveUserSavedItems: Saving ${itemsToSave.length} items for user ${figmaUserId}`);
-  console.log(`💾 Items:`, JSON.stringify(itemsToSave));
   
   // Ensure user exists
   await getUserPreferences(figmaUserId);
@@ -441,17 +440,32 @@ async function saveUserSavedItems(figmaUserId, items) {
     // Column might already exist, ignore
   }
   
-  // CRITICAL: Pass JavaScript array directly - pg driver converts to JSONB automatically
-  // The pg library handles JS array -> JSONB conversion natively
-  console.log(`🔄 Updating saved_items with ${itemsToSave.length} items`);
+  // Use jsonb_build_array to properly construct JSONB array from individual items
+  // This is the most reliable way to ensure proper JSONB array storage
+  if (itemsToSave.length === 0) {
+    // Empty array - simple update
+    const result = await pool.query(
+      `UPDATE user_preferences 
+       SET saved_items = '[]'::jsonb, updated_at = NOW() 
+       WHERE figma_user_id = $1
+       RETURNING saved_items`,
+      [figmaUserId]
+    );
+    return result.rows[0]?.saved_items || [];
+  }
   
-  // Pass the JavaScript array directly - pg driver will convert it to JSONB
+  // Build JSONB array using jsonb_build_array for each item
+  // Convert each item to JSONB object, then aggregate into array
+  const jsonString = JSON.stringify(itemsToSave);
+  console.log(`🔄 Updating with JSON:`, jsonString);
+  
+  // Use jsonb_build_array approach - parse JSON string and build array
   const result = await pool.query(
     `UPDATE user_preferences 
-     SET saved_items = $1::jsonb, updated_at = NOW() 
+     SET saved_items = ($1::text)::jsonb, updated_at = NOW() 
      WHERE figma_user_id = $2
      RETURNING saved_items`,
-    [JSON.stringify(itemsToSave), figmaUserId]
+    [jsonString, figmaUserId]
   );
   
   if (result.rowCount === 0) {
@@ -459,8 +473,10 @@ async function saveUserSavedItems(figmaUserId, items) {
   }
   
   const saved = result.rows[0].saved_items;
+  console.log(`✓ UPDATE returned:`, JSON.stringify(saved));
+  console.log(`✓ Type:`, typeof saved, 'isArray:', Array.isArray(saved));
   
-  // pg driver returns JSONB as JavaScript array/object automatically
+  // Ensure it's an array
   if (!Array.isArray(saved)) {
     console.error(`✗ ERROR: saved_items is not an array:`, typeof saved, saved);
     throw new Error(`saved_items is not an array after update`);
