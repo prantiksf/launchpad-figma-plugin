@@ -884,8 +884,11 @@ export function useSavedItems(figmaUserId?: string | null) {
       setSavedItemsState(prev => {
         const next = newItems(prev);
         console.log(`🔄 Save requested: ${prev.length} -> ${next.length} items`);
+        console.log(`🔄 prev:`, JSON.stringify(prev));
+        console.log(`🔄 next:`, JSON.stringify(next));
         // Persist and update state with verified result
         // validateAndMaybePersist will update state after verification
+        // CRITICAL: Use prev from closure, not savedItems from outer scope
         validateAndMaybePersist(next, prev).catch((error) => {
           console.error('❌ Error in validateAndMaybePersist:', error);
           // On error, revert to previous state
@@ -901,6 +904,8 @@ export function useSavedItems(figmaUserId?: string | null) {
     // Use functional update to get latest savedItems value
     setSavedItemsState(currentSavedItems => {
       console.log(`🔄 Save requested: ${currentSavedItems.length} -> ${newItems.length} items`);
+      console.log(`🔄 currentSavedItems:`, JSON.stringify(currentSavedItems));
+      console.log(`🔄 newItems:`, JSON.stringify(newItems));
       validateAndMaybePersist(newItems, currentSavedItems).catch((error) => {
         console.error('❌ Error in validateAndMaybePersist:', error);
         // On error, keep current state
