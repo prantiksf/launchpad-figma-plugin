@@ -387,7 +387,14 @@ app.post('/api/saved-items', async (req, res) => {
       await db.cleanupOldBackups(backupKey, 50);
     }
     if (figmaUserId) {
+      console.log(`💾 Backend: Saving ${newItems.length} items for user ${figmaUserId}`);
       await db.saveUserSavedItems(String(figmaUserId), newItems);
+      // Immediately verify after save
+      const verifyItems = await db.getUserSavedItems(String(figmaUserId));
+      console.log(`✓ Backend: Verified ${verifyItems.length} items after save for user ${figmaUserId}`);
+      if (verifyItems.length !== newItems.length) {
+        console.error(`⚠️ Backend MISMATCH: Saved ${newItems.length} but database has ${verifyItems.length}`);
+      }
     } else {
       await db.saveSavedItems(newItems);
     }

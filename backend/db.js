@@ -268,11 +268,26 @@ async function updateUserPreference(figmaUserId, field, value) {
   
   const jsonValue = (field === 'hidden_clouds' || field === 'saved_items') ? JSON.stringify(value) : value;
   
-  await pool.query(`
+  console.log(`🔄 updateUserPreference: Updating ${field} for user ${figmaUserId}`);
+  console.log(`🔄 Value type: ${typeof jsonValue}, Value:`, jsonValue);
+  
+  const result = await pool.query(`
     UPDATE user_preferences 
     SET ${field} = $1, updated_at = NOW()
     WHERE figma_user_id = $2
   `, [jsonValue, figmaUserId]);
+  
+  console.log(`✓ updateUserPreference: Updated ${result.rowCount} row(s) for user ${figmaUserId}`);
+  
+  if (result.rowCount === 0) {
+    console.error(`⚠️ WARNING: UPDATE affected 0 rows for user ${figmaUserId}, field ${field}`);
+    // Try to check if user exists
+    const checkResult = await pool.query(
+      'SELECT figma_user_id FROM user_preferences WHERE figma_user_id = $1',
+      [figmaUserId]
+    );
+    console.log(`✓ User exists check: ${checkResult.rows.length > 0 ? 'EXISTS' : 'NOT FOUND'}`);
+  }
 }
 
 // ============================================================================
