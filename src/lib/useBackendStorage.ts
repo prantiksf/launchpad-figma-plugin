@@ -762,19 +762,39 @@ export function useSavedItems(figmaUserId?: string | null) {
         }
       } catch {
         if (cancelled) return;
-        const cached = await loadFromClientStorage<any[]>('saved-items');
-        if (Array.isArray(cached) && cached.length > 0) {
-          setSavedItemsState(cached);
-          localDataRef.current = cached;
-          lastKnownCountRef.current = cached.length;
-          setHasLoaded(true);
-          setUsingFallback(true);
-          showToast('Using cached data. Syncing when connection is back.');
+        // If API fails, check migration flag - if set, user had unsaved items, don't restore from cache
+        const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
+        let alreadyMigrated = false;
+        try {
+          alreadyMigrated = migratedRef.current || localStorage.getItem(migrateKey) === 'true';
+        } catch {
+          alreadyMigrated = migratedRef.current;
+        }
+        
+        // Only restore from cache if migration flag is NOT set (first time, API unavailable)
+        // If migration flag is set, user had unsaved items - don't restore from stale cache
+        if (!alreadyMigrated) {
+          const cached = await loadFromClientStorage<any[]>('saved-items');
+          if (Array.isArray(cached) && cached.length > 0) {
+            setSavedItemsState(cached);
+            localDataRef.current = cached;
+            lastKnownCountRef.current = cached.length;
+            setHasLoaded(true);
+            setUsingFallback(true);
+            showToast('Using cached data. Syncing when connection is back.');
+          } else {
+            setSavedItemsState([]);
+            localDataRef.current = [];
+            lastKnownCountRef.current = 0;
+            setHasLoaded(true);
+          }
         } else {
+          // Migration flag set but API failed - user had unsaved items, don't restore from cache
           setSavedItemsState([]);
           localDataRef.current = [];
           lastKnownCountRef.current = 0;
           setHasLoaded(true);
+          setUsingFallback(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
