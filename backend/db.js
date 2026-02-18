@@ -269,25 +269,27 @@ async function updateUserPreference(figmaUserId, field, value) {
   // Ensure saved_items column exists (for existing databases)
   if (field === 'saved_items') {
     try {
-      const alterResult = await pool.query(`
-        ALTER TABLE user_preferences
-        ADD COLUMN IF NOT EXISTS saved_items JSONB DEFAULT '[]'
-      `);
-      console.log(`✓ Column check: saved_items column exists or was added`);
-      
-      // Verify column exists by checking table structure
+      // First check if column exists
       const colCheck = await pool.query(`
-        SELECT column_name, data_type 
+        SELECT column_name, data_type, column_default
         FROM information_schema.columns 
         WHERE table_name = 'user_preferences' AND column_name = 'saved_items'
       `);
-      if (colCheck.rows.length > 0) {
-        console.log(`✓ Column verified: saved_items exists as ${colCheck.rows[0].data_type}`);
+      
+      if (colCheck.rows.length === 0) {
+        // Column doesn't exist - add it
+        console.log(`⚠️ Column saved_items does NOT exist - adding it now`);
+        await pool.query(`
+          ALTER TABLE user_preferences
+          ADD COLUMN saved_items JSONB DEFAULT '[]'::jsonb
+        `);
+        console.log(`✓ Column saved_items added successfully`);
       } else {
-        console.error(`✗ Column NOT FOUND: saved_items does not exist in user_preferences table!`);
+        console.log(`✓ Column saved_items exists as ${colCheck.rows[0].data_type} with default ${colCheck.rows[0].column_default}`);
       }
     } catch (err) {
-      console.error(`✗ Column check error for saved_items:`, err.message);
+      console.error(`✗ Column check/creation error for saved_items:`, err.message, err.stack);
+      // Don't throw - continue with UPDATE attempt
     }
   }
   
