@@ -616,16 +616,14 @@ export function useSavedItems(figmaUserId?: string | null) {
   const refetch = useCallback(async () => {
     try {
       if (!figmaUserId) {
-        const cached = await loadFromClientStorage<any[]>('saved-items');
-        const safeCached = Array.isArray(cached) ? cached : [];
-        setSavedItemsState(safeCached);
-        localDataRef.current = safeCached;
-        lastKnownCountRef.current = safeCached.length;
+        // No user ID - can't fetch from database
+        setSavedItemsState([]);
+        localDataRef.current = [];
+        lastKnownCountRef.current = 0;
         setHasLoaded(true);
-        saveToClientStorage('saved-items', safeCached);
-        saveLastKnownGood({ savedItemsCount: safeCached.length });
         return;
       }
+      // Refetch from database - database is source of truth
       const data = await apiRequest<any[]>('/api/saved-items', {
         headers: { 'X-Figma-User-Id': String(figmaUserId) }
       });
@@ -637,7 +635,8 @@ export function useSavedItems(figmaUserId?: string | null) {
       saveToClientStorage('saved-items', safe);
       saveLastKnownGood({ savedItemsCount: safe.length });
     } catch (e) {
-      console.error('Failed to refetch saved items:', e);
+      console.error('Failed to refetch saved items from database:', e);
+      // Don't restore from cache - database is source of truth
     }
   }, [figmaUserId]);
 
@@ -645,136 +644,46 @@ export function useSavedItems(figmaUserId?: string | null) {
     let cancelled = false;
     (async () => {
       try {
-        // If we don't have the user id yet, load locally so UI can work,
-        // and we'll sync to backend once figmaUserId is available.
+        // If we don't have the user id yet, wait for it
+        // Database requires user ID - don't load from cache
         if (!figmaUserId) {
-          const cached = await loadFromClientStorage<any[]>('saved-items');
-          if (cancelled) return;
-          const safeCached = Array.isArray(cached) ? cached : [];
-          setSavedItemsState(safeCached);
-          localDataRef.current = safeCached;
-          lastKnownCountRef.current = safeCached.length;
+          // Wait for user ID - don't load from cache (database is source of truth)
+          setSavedItemsState([]);
+          localDataRef.current = [];
+          lastKnownCountRef.current = 0;
           setHasLoaded(true);
-          saveToClientStorage('saved-items', safeCached);
-          saveLastKnownGood({ savedItemsCount: safeCached.length });
           return;
         }
 
+        // DATABASE IS THE SOURCE OF TRUTH - No migration, no cache restoration
+        // Every save/unsave writes to DB, every load reads from DB
         const data = await apiRequest<any[]>('/api/saved-items', {
           headers: { 'X-Figma-User-Id': String(figmaUserId) }
         });
         if (cancelled) return;
         const safe = Array.isArray(data) ? data : [];
 
-        // One-time migration: if this user's personal list is empty, seed it from the legacy shared list.
-        // Important: we store a local flag so if the user later clears Saved intentionally, we don't
-        // repopulate it from shared again.
-        // CRITICAL: Only migrate if migration flag is NOT set - prevents re-migration after user unsaves items
-        const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
-        let alreadyMigrated = false;
-        try {
-          alreadyMigrated = migratedRef.current || localStorage.getItem(migrateKey) === 'true';
-        } catch {
-          alreadyMigrated = migratedRef.current;
-        }
-
-        // SIMPLE RULE: Backend is always the source of truth
-        // 1. If backend has data → use it (user has saved items)
-        // 2. If backend is empty:
-        //    a) Migration flag NOT set → first load → migrate from shared list once
-        //    b) Migration flag IS set → user unsaved → use empty
-        
-        if (safe.length === 0 && !alreadyMigrated) {
-          // First load: backend is empty, migration flag not set
-          // Try one-time migration from shared list (legacy shared saved items)
-          let shared: any[] = [];
-          try {
-            const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
-            shared = Array.isArray(sharedData) ? sharedData : [];
-          } catch {}
-
-          // Set migration flag BEFORE processing to prevent re-migration
-          migratedRef.current = true;
-          try { localStorage.setItem(migrateKey, 'true'); } catch {}
-
-          if (shared.length > 0) {
-            // Migrate from shared list
-            setSavedItemsState(shared);
-            localDataRef.current = shared;
-            lastKnownCountRef.current = shared.length;
-            setHasLoaded(true);
-            saveToClientStorage('saved-items', shared);
-            saveLastKnownGood({ savedItemsCount: shared.length });
-            try {
-              await apiRequest('/api/saved-items', {
-                method: 'POST',
-                headers: { 'X-Figma-User-Id': String(figmaUserId) },
-                body: JSON.stringify({ savedItems: shared })
-              });
-            } catch {}
-            return;
-          } else {
-            // Nothing to migrate - continue with empty
-            setSavedItemsState([]);
-            localDataRef.current = [];
-            lastKnownCountRef.current = 0;
-            setHasLoaded(true);
-            saveToClientStorage('saved-items', []);
-            saveLastKnownGood({ savedItemsCount: 0 });
-            return;
-          }
-        }
-        
-        // Backend has data OR backend is empty but migration already happened
-        // Always trust backend - it's the source of truth
+        // Use whatever database returns - it's the truth
+        // If database has items → user saved them
+        // If database is empty → user unsaved them (or never saved)
+        // NO migration, NO cache restoration - database is the only source
         setSavedItemsState(safe);
         localDataRef.current = safe;
         lastKnownCountRef.current = safe.length;
         setHasLoaded(true);
-        saveToClientStorage('saved-items', safe); // Always sync cache with backend
+        saveToClientStorage('saved-items', safe); // Sync cache with database (for offline fallback only)
         saveLastKnownGood({ savedItemsCount: safe.length });
-        
-        // Ensure migration flag is set (should already be set, but be safe)
-        if (!alreadyMigrated) {
-          migratedRef.current = true;
-          try { localStorage.setItem(migrateKey, 'true'); } catch {}
-        }
-      } catch {
+      } catch (error) {
         if (cancelled) return;
-        // If API fails, check migration flag - if set, user had unsaved items, don't restore from cache
-        const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
-        let alreadyMigrated = false;
-        try {
-          alreadyMigrated = migratedRef.current || localStorage.getItem(migrateKey) === 'true';
-        } catch {
-          alreadyMigrated = migratedRef.current;
-        }
-        
-        // Only restore from cache if migration flag is NOT set (first time, API unavailable)
-        // If migration flag is set, user had unsaved items - don't restore from stale cache
-        if (!alreadyMigrated) {
-          const cached = await loadFromClientStorage<any[]>('saved-items');
-          if (Array.isArray(cached) && cached.length > 0) {
-            setSavedItemsState(cached);
-            localDataRef.current = cached;
-            lastKnownCountRef.current = cached.length;
-            setHasLoaded(true);
-            setUsingFallback(true);
-            showToast('Using cached data. Syncing when connection is back.');
-          } else {
-            setSavedItemsState([]);
-            localDataRef.current = [];
-            lastKnownCountRef.current = 0;
-            setHasLoaded(true);
-          }
-        } else {
-          // Migration flag set but API failed - user had unsaved items, don't restore from cache
-          setSavedItemsState([]);
-          localDataRef.current = [];
-          lastKnownCountRef.current = 0;
-          setHasLoaded(true);
-          setUsingFallback(true);
-        }
+        console.error('Failed to load saved items from database:', error);
+        // Database failed - use empty array (database is source of truth)
+        // Don't restore from cache - if database fails, we don't know the truth
+        setSavedItemsState([]);
+        localDataRef.current = [];
+        lastKnownCountRef.current = 0;
+        setHasLoaded(true);
+        setUsingFallback(true);
+        showToast('Database unavailable - saved items will sync when connection is back.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -787,52 +696,27 @@ export function useSavedItems(figmaUserId?: string | null) {
     if (!figmaUserId) return;
     const id = setInterval(async () => {
       try {
+        // Retry loading from database - database is source of truth
         const data = await apiRequest<any[]>('/api/saved-items', {
           headers: { 'X-Figma-User-Id': String(figmaUserId) }
         });
         const safe = Array.isArray(data) ? data : [];
-        if (safe.length === 0 && localDataRef.current.length > 0) {
-          await apiRequest('/api/saved-items', {
-            method: 'POST',
-            headers: { 'X-Figma-User-Id': String(figmaUserId) },
-            body: JSON.stringify({ savedItems: localDataRef.current }),
-          });
-          const refetched = await apiRequest<any[]>('/api/saved-items', {
-            headers: { 'X-Figma-User-Id': String(figmaUserId) }
-          });
-          const refetchedSafe = Array.isArray(refetched) ? refetched : [];
-          setSavedItemsState(refetchedSafe);
-          localDataRef.current = refetchedSafe;
-          lastKnownCountRef.current = refetchedSafe.length;
-          saveToClientStorage('saved-items', refetchedSafe);
-          saveLastKnownGood({ savedItemsCount: refetchedSafe.length });
-        } else {
-          if (safe.length === 0 && lastKnownCountRef.current > 0) {
-            const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
-            if (cached && cached.length > 0) {
-              setSavedItemsState(cached);
-              localDataRef.current = cached;
-              lastKnownCountRef.current = cached.length;
-              saveToClientStorage('saved-items', cached);
-              saveLastKnownGood({ savedItemsCount: cached.length });
-              setUsingFallback(false);
-              showToast('Server returned empty - kept your data.');
-              return;
-            }
-          }
-          setSavedItemsState(safe);
-          localDataRef.current = safe;
-          lastKnownCountRef.current = safe.length;
-          saveToClientStorage('saved-items', safe);
-          saveLastKnownGood({ savedItemsCount: safe.length });
-        }
+        // Use whatever database returns - it's the truth
+        setSavedItemsState(safe);
+        localDataRef.current = safe;
+        lastKnownCountRef.current = safe.length;
+        saveToClientStorage('saved-items', safe);
+        saveLastKnownGood({ savedItemsCount: safe.length });
         setUsingFallback(false);
         if (retryRef.current) {
           clearInterval(retryRef.current);
           retryRef.current = null;
         }
-        showToast('Synced with server');
-      } catch {}
+        showToast('Synced with database');
+      } catch (error) {
+        console.error('Retry failed:', error);
+        // Keep using fallback - don't restore from cache
+      }
     }, 30000);
     retryRef.current = id;
     return () => {
@@ -846,7 +730,7 @@ export function useSavedItems(figmaUserId?: string | null) {
       return;
     }
 
-    const validateAndMaybePersist = (next: any[], prev: any[]) => {
+    const validateAndMaybePersist = async (next: any[], prev: any[]): Promise<any[]> => {
       if (!Array.isArray(next)) {
         console.error('🛑 BLOCKED: Invalid saved items data');
         return prev;
@@ -875,60 +759,62 @@ export function useSavedItems(figmaUserId?: string | null) {
       saveToClientStorage('saved-items', next);
       saveLastKnownGood({ savedItemsCount: newCount });
 
-      // Set migration flag when saving (whether empty or not) to prevent re-migration
-      // This ensures that if user unsaves all items, we know backend was written to
-      const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
-      migratedRef.current = true;
-      try { localStorage.setItem(migrateKey, 'true'); } catch {}
+      // CRITICAL: Every save/unsave MUST write to database
+      // Database is the source of truth - no exceptions
+      if (!figmaUserId) {
+        // No user ID - save locally only, will sync when user ID available
+        return next;
+      }
 
-      // Persist in background (only when we have user id).
-      // Without user id we still store locally (clientStorage), and will sync on next load.
-      if (!figmaUserId) return next;
-
-      apiRequest('/api/saved-items', {
-        method: 'POST',
-        headers: { 'X-Figma-User-Id': String(figmaUserId) },
-        body: JSON.stringify({ savedItems: next }),
-      }).catch((error: any) => {
-        console.error('✗ Failed to save saved items:', error);
-        if (error?.message?.includes('400')) {
-          apiRequest<any[]>('/api/saved-items', {
+      // Save to database - await to ensure it completes
+      // If save fails, log error but don't restore from cache
+      try {
+        await apiRequest('/api/saved-items', {
+          method: 'POST',
+          headers: { 'X-Figma-User-Id': String(figmaUserId) },
+          body: JSON.stringify({ savedItems: next }),
+        });
+        // Save successful - database now has the truth
+      } catch (error: any) {
+        console.error('✗ Failed to save saved items to database:', error);
+        // Don't restore from cache - database is source of truth
+        // If save failed, reload from database to get current state
+        try {
+          const dbData = await apiRequest<any[]>('/api/saved-items', {
             headers: { 'X-Figma-User-Id': String(figmaUserId) }
-          })
-            .then(data => {
-              const safe = Array.isArray(data) ? data : [];
-              // Only restore from cache if backend returns empty AND we had items before
-              // AND the backend rejection was likely a validation error (not intentional clear)
-              // But trust backend if it consistently returns empty (user intentionally cleared)
-              if (safe.length === 0 && lastKnownCountRef.current > 0) {
-                // Check if this is likely a validation error vs intentional clear
-                // If we're trying to save empty and backend rejects, trust backend (user cleared)
-                const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
-                // Only restore if cache has items AND we're not intentionally clearing
-                // Since we're here due to a 400 error on save, trust the backend response
-                // Don't restore from cache - backend knows best
-              }
-              setSavedItemsState(safe);
-              localDataRef.current = safe;
-              lastKnownCountRef.current = safe.length;
-              saveToClientStorage('saved-items', safe);
-              saveLastKnownGood({ savedItemsCount: safe.length });
-            })
-            .catch(console.error);
+          });
+          const safe = Array.isArray(dbData) ? dbData : [];
+          // Use database state (even if empty) - it's the truth
+          setSavedItemsState(safe);
+          localDataRef.current = safe;
+          lastKnownCountRef.current = safe.length;
+          saveToClientStorage('saved-items', safe);
+          saveLastKnownGood({ savedItemsCount: safe.length });
+          return safe; // Return database state
+        } catch (reloadError) {
+          console.error('✗ Failed to reload from database after save error:', reloadError);
+          // Keep current state if reload fails - don't restore from cache
         }
-      });
+      }
 
       return next;
     };
 
     // Support React-style updater: setSavedItems(prev => next)
     if (typeof newItems === 'function') {
-      setSavedItemsState(prev => validateAndMaybePersist(newItems(prev), prev));
+      setSavedItemsState(prev => {
+        const next = newItems(prev);
+        validateAndMaybePersist(next, prev).catch(console.error);
+        return next; // Optimistic update
+      });
       return;
     }
 
     // Direct array
-    setSavedItemsState(prev => validateAndMaybePersist(newItems, prev));
+    setSavedItemsState(prev => {
+      validateAndMaybePersist(newItems, prev).catch(console.error);
+      return newItems; // Optimistic update
+    });
   }, [hasLoaded, usingFallback, figmaUserId]);
 
   return { savedItems, setSavedItems: save, loading, usingFallback, refetch };
