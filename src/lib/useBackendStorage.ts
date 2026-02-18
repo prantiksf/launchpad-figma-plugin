@@ -731,19 +731,32 @@ export function useSavedItems(figmaUserId?: string | null) {
           }
         }
 
-        // Trust the backend response - use whatever backend returns
+        // If backend returns empty AND migration already happened, user intentionally unsaved
+        // Clear cache to match backend and prevent items from coming back
+        if (safe.length === 0 && alreadyMigrated) {
+          // User intentionally cleared their list - ensure cache is also cleared
+          setSavedItemsState([]);
+          localDataRef.current = [];
+          lastKnownCountRef.current = 0;
+          setHasLoaded(true);
+          saveToClientStorage('saved-items', []); // Clear cache to match backend
+          saveLastKnownGood({ savedItemsCount: 0 });
+          migratedRef.current = true;
+          try { localStorage.setItem(migrateKey, 'true'); } catch {}
+          return;
+        }
+        
         // If backend has data, use it (normal case - user has saved items)
-        // If backend is empty, use empty (user unsaved or first time)
+        // If backend is empty but migration hasn't happened, migration logic above handles it
         setSavedItemsState(safe);
         localDataRef.current = safe;
         lastKnownCountRef.current = safe.length;
         setHasLoaded(true);
-        saveToClientStorage('saved-items', safe); // Always sync cache with backend
+        saveToClientStorage('saved-items', safe); // Sync cache with backend
         saveLastKnownGood({ savedItemsCount: safe.length });
         
-        // Set migration flag if backend has data OR if backend is empty but migration already happened
-        // This ensures we don't re-migrate after user unsaves
-        if (safe.length > 0 || alreadyMigrated) {
+        // Set migration flag if backend has data (means migration completed or user has saved items)
+        if (safe.length > 0 && !alreadyMigrated) {
           migratedRef.current = true;
           try { localStorage.setItem(migrateKey, 'true'); } catch {}
         }
@@ -862,6 +875,12 @@ export function useSavedItems(figmaUserId?: string | null) {
       if (usingFallback) localDataRef.current = next;
       saveToClientStorage('saved-items', next);
       saveLastKnownGood({ savedItemsCount: newCount });
+
+      // Set migration flag when saving (whether empty or not) to prevent re-migration
+      // This ensures that if user unsaves all items, we know backend was written to
+      const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
+      migratedRef.current = true;
+      try { localStorage.setItem(migrateKey, 'true'); } catch {}
 
       // Persist in background (only when we have user id).
       // Without user id we still store locally (clientStorage), and will sync on next load.
