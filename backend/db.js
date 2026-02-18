@@ -356,15 +356,37 @@ async function getUserSavedItems(figmaUserId) {
   
   // Handle null/undefined - PostgreSQL returns null for JSONB columns that are NULL
   let items = result.rows[0]?.saved_items;
+  console.log(`🔍 Raw database value:`, items, `type: ${typeof items}, isArray: ${Array.isArray(items)}`);
+  
   if (items === null || items === undefined) {
+    console.log(`📖 saved_items is null/undefined, returning empty array`);
     items = [];
   } else if (!Array.isArray(items)) {
-    // If it's not an array, try to parse it or default to empty array
-    console.warn(`⚠️ saved_items is not an array for user ${figmaUserId}, got:`, typeof items);
-    items = [];
+    // If it's not an array, log what we got and convert to array
+    console.warn(`⚠️ saved_items is not an array for user ${figmaUserId}, got type: ${typeof items}, value:`, JSON.stringify(items).substring(0, 200));
+    // Try to convert object to array if it has array-like structure
+    if (typeof items === 'object' && items !== null) {
+      // Check if it's an object that should be an array
+      const keys = Object.keys(items);
+      if (keys.length === 0) {
+        items = [];
+      } else {
+        // If it has numeric keys, try to convert to array
+        const numericKeys = keys.filter(k => !isNaN(parseInt(k)));
+        if (numericKeys.length === keys.length) {
+          items = Object.values(items);
+          console.log(`✓ Converted object with numeric keys to array: ${items.length} items`);
+        } else {
+          console.error(`✗ Cannot convert object to array, returning empty array`);
+          items = [];
+        }
+      }
+    } else {
+      items = [];
+    }
   }
   
-  console.log(`📖 getUserSavedItems: Found ${items.length} items for user ${figmaUserId} (type: ${typeof items}, isArray: ${Array.isArray(items)})`);
+  console.log(`📖 getUserSavedItems: Found ${items.length} items for user ${figmaUserId} (final type: ${typeof items}, isArray: ${Array.isArray(items)})`);
   return items;
 }
 
