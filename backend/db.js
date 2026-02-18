@@ -389,67 +389,75 @@ async function updateUserPreference(figmaUserId, field, value) {
 // ============================================================================
 
 async function getUserSavedItems(figmaUserId) {
-  if (!figmaUserId) {
-    console.log('⚠️ getUserSavedItems called without figmaUserId');
-    return [];
-  }
+  if (!figmaUserId) return [];
+  
+  // Ensure user exists
   await getUserPreferences(figmaUserId);
+  
+  // SIMPLE DIRECT SELECT
   const result = await pool.query(
     'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
     [figmaUserId]
   );
   
-  // Handle null/undefined - PostgreSQL returns null for JSONB columns that are NULL
-  let items = result.rows[0]?.saved_items;
-  console.log(`🔍 Raw database value:`, items, `type: ${typeof items}, isArray: ${Array.isArray(items)}`);
-  
-  if (items === null || items === undefined) {
-    console.log(`📖 saved_items is null/undefined, returning empty array`);
-    items = [];
-  } else if (!Array.isArray(items)) {
-    // If it's not an array, log what we got and convert to array
-    console.warn(`⚠️ saved_items is not an array for user ${figmaUserId}, got type: ${typeof items}, value:`, JSON.stringify(items).substring(0, 200));
-    // Try to convert object to array if it has array-like structure
-    if (typeof items === 'object' && items !== null) {
-      // Check if it's an object that should be an array
-      const keys = Object.keys(items);
-      if (keys.length === 0) {
-        items = [];
-      } else {
-        // If it has numeric keys, try to convert to array
-        const numericKeys = keys.filter(k => !isNaN(parseInt(k)));
-        if (numericKeys.length === keys.length) {
-          items = Object.values(items);
-          console.log(`✓ Converted object with numeric keys to array: ${items.length} items`);
-        } else {
-          console.error(`✗ Cannot convert object to array, returning empty array`);
-          items = [];
-        }
-      }
-    } else {
-      items = [];
-    }
+  if (result.rows.length === 0) {
+    return [];
   }
   
-  console.log(`📖 getUserSavedItems: Found ${items.length} items for user ${figmaUserId} (final type: ${typeof items}, isArray: ${Array.isArray(items)})`);
-  return items;
+  const savedItems = result.rows[0].saved_items;
+  
+  // Handle null/undefined
+  if (savedItems === null || savedItems === undefined) {
+    return [];
+  }
+  
+  // Ensure it's an array
+  if (!Array.isArray(savedItems)) {
+    console.error(`⚠️ saved_items is not an array, got: ${typeof savedItems}`);
+    return [];
+  }
+  
+  console.log(`📖 getUserSavedItems: Found ${savedItems.length} items for user ${figmaUserId}`);
+  return savedItems;
 }
 
 async function saveUserSavedItems(figmaUserId, items) {
   if (!figmaUserId) throw new Error('Missing figmaUserId');
-  const itemsToSave = items || [];
+  const itemsToSave = Array.isArray(items) ? items : [];
+  
   console.log(`💾 saveUserSavedItems: Saving ${itemsToSave.length} items for user ${figmaUserId}`);
-  await updateUserPreference(figmaUserId, 'saved_items', itemsToSave);
-  // Verify the save
-  const verifyResult = await pool.query(
-    'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
-    [figmaUserId]
-  );
-  const verifyItems = verifyResult.rows[0]?.saved_items || [];
-  console.log(`✓ saveUserSavedItems: Verified ${verifyItems.length} items in database for user ${figmaUserId}`);
-  if (verifyItems.length !== itemsToSave.length) {
-    console.error(`⚠️ MISMATCH: Tried to save ${itemsToSave.length} but database has ${verifyItems.length}`);
+  
+  // Ensure user exists
+  await getUserPreferences(figmaUserId);
+  
+  // Ensure column exists
+  try {
+    await pool.query(`
+      ALTER TABLE user_preferences
+      ADD COLUMN IF NOT EXISTS saved_items JSONB DEFAULT '[]'::jsonb
+    `);
+  } catch (err) {
+    // Column might already exist
   }
+  
+  // SIMPLE DIRECT UPDATE - use JSON string and cast to jsonb
+  const jsonString = JSON.stringify(itemsToSave);
+  const result = await pool.query(
+    `UPDATE user_preferences 
+     SET saved_items = $1::jsonb, updated_at = NOW() 
+     WHERE figma_user_id = $2
+     RETURNING saved_items`,
+    [jsonString, figmaUserId]
+  );
+  
+  if (result.rowCount === 0) {
+    throw new Error(`Failed to update saved_items for user ${figmaUserId}`);
+  }
+  
+  const saved = result.rows[0].saved_items;
+  console.log(`✓ saveUserSavedItems: Saved ${Array.isArray(saved) ? saved.length : 0} items (rowCount: ${result.rowCount})`);
+  
+  return saved;
 }
 
 // ============================================================================
