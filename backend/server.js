@@ -387,13 +387,30 @@ app.post('/api/saved-items', async (req, res) => {
       await db.cleanupOldBackups(backupKey, 50);
     }
     if (figmaUserId) {
-      console.log(`💾 Backend: Saving ${newItems.length} items for user ${figmaUserId}`);
-      await db.saveUserSavedItems(String(figmaUserId), newItems);
-      // Immediately verify after save
-      const verifyItems = await db.getUserSavedItems(String(figmaUserId));
-      console.log(`✓ Backend: Verified ${verifyItems.length} items after save for user ${figmaUserId}`);
-      if (verifyItems.length !== newItems.length) {
-        console.error(`⚠️ Backend MISMATCH: Saved ${newItems.length} but database has ${verifyItems.length}`);
+      console.log(`💾 Backend POST /api/saved-items: Saving ${newItems.length} items for user ${figmaUserId}`);
+      console.log(`💾 Items to save:`, JSON.stringify(newItems).substring(0, 500));
+      
+      try {
+        await db.saveUserSavedItems(String(figmaUserId), newItems);
+        
+        // Wait a tiny bit to ensure transaction is committed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Immediately verify after save
+        const verifyItems = await db.getUserSavedItems(String(figmaUserId));
+        console.log(`✓ Backend POST: Verified ${verifyItems.length} items after save for user ${figmaUserId}`);
+        console.log(`✓ Backend POST: Verified items:`, JSON.stringify(verifyItems).substring(0, 500));
+        
+        if (verifyItems.length !== newItems.length) {
+          console.error(`⚠️ Backend MISMATCH: Saved ${newItems.length} but database has ${verifyItems.length}`);
+          // Try reading again after a longer delay
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const verifyItems2 = await db.getUserSavedItems(String(figmaUserId));
+          console.log(`✓ Backend POST: Second read after 500ms: ${verifyItems2.length} items`);
+        }
+      } catch (saveError) {
+        console.error(`✗ Backend POST: Error saving items:`, saveError);
+        throw saveError;
       }
     } else {
       await db.saveSavedItems(newItems);
