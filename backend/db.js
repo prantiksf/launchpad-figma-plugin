@@ -426,120 +426,53 @@ async function saveUserSavedItems(figmaUserId, items) {
   const itemsToSave = Array.isArray(items) ? items : [];
   
   console.log(`💾 saveUserSavedItems: Saving ${itemsToSave.length} items for user ${figmaUserId}`);
-  console.log(`💾 Items:`, JSON.stringify(itemsToSave).substring(0, 300));
   
   // Ensure user exists
   await getUserPreferences(figmaUserId);
   
-  // Ensure column exists - use client to ensure it's on same connection
-  const client = await pool.connect();
+  // Ensure column exists
   try {
-    // Check if column exists
-    const colCheck = await client.query(`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'user_preferences' AND column_name = 'saved_items'
+    await pool.query(`
+      ALTER TABLE user_preferences
+      ADD COLUMN IF NOT EXISTS saved_items JSONB DEFAULT '[]'::jsonb
     `);
-    
-    if (colCheck.rows.length === 0) {
-      console.log(`⚠️ Column saved_items does NOT exist - creating it`);
-      await client.query(`
-        ALTER TABLE user_preferences
-        ADD COLUMN saved_items JSONB DEFAULT '[]'::jsonb
-      `);
-      console.log(`✓ Column created`);
-    }
-    
-    // CRITICAL: Use JSON.stringify and cast to jsonb
-    // PostgreSQL needs the JSON string to parse it as JSONB
-    const jsonString = JSON.stringify(itemsToSave);
-    console.log(`🔄 Executing UPDATE with ${itemsToSave.length} items`);
-    console.log(`🔄 Items to save:`, jsonString);
-    console.log(`🔄 JSON string length:`, jsonString.length);
-    
-    // Use JSON.stringify and cast to jsonb - this is the reliable way
-    const result = await client.query(
-      `UPDATE user_preferences 
-       SET saved_items = $1::jsonb, updated_at = NOW() 
-       WHERE figma_user_id = $2
-       RETURNING saved_items, figma_user_id`,
-      [jsonString, figmaUserId]
-    );
-    
-    console.log(`✓ UPDATE query executed, rowCount=${result.rowCount}`);
-    
-    console.log(`✓ UPDATE result: rowCount=${result.rowCount}, rows.length=${result.rows.length}`);
-    
-    if (result.rowCount === 0) {
-      throw new Error(`UPDATE affected 0 rows for user ${figmaUserId}`);
-    }
-    
-    const saved = result.rows[0].saved_items;
-    console.log(`✓ UPDATE returned saved_items: type=${typeof saved}, isArray=${Array.isArray(saved)}, length=${Array.isArray(saved) ? saved.length : 'N/A'}`);
-    console.log(`✓ UPDATE returned value:`, JSON.stringify(saved).substring(0, 300));
-    
-    // CRITICAL: Use the RETURNING value directly - it's what was actually saved
-    // If it's not an array, something went wrong
-    if (!Array.isArray(saved)) {
-      console.error(`✗ ERROR: UPDATE returned non-array value:`, saved);
-      // Try to read back to see what's actually in the database
-      const verifyResult = await client.query(
-        'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
-        [figmaUserId]
-      );
-      const verified = verifyResult.rows[0]?.saved_items;
-      console.error(`✗ Database readback shows:`, verified);
-      throw new Error(`UPDATE did not return array. Got: ${typeof saved}`);
-    }
-    
-    // CRITICAL: Use the RETURNING value - it's what was actually written
-    // If RETURNING shows empty, the UPDATE didn't work correctly
-    if (saved.length === 0 && itemsToSave.length > 0) {
-      console.error(`✗ CRITICAL ERROR: UPDATE returned empty array but we tried to save ${itemsToSave.length} items!`);
-      console.error(`✗ JSON string sent:`, jsonString);
-      console.error(`✗ Items we tried to save:`, JSON.stringify(itemsToSave));
-      
-      // Try to read back to see what's actually in the database
-      const verifyResult = await client.query(
-        'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
-        [figmaUserId]
-      );
-      const verified = verifyResult.rows[0]?.saved_items;
-      console.error(`✗ Database readback shows:`, verified);
-      
-      // If database has the items, use that
-      if (Array.isArray(verified) && verified.length > 0) {
-        console.log(`✓ Database actually has ${verified.length} items - using that`);
-        return verified;
-      }
-      
-      // Otherwise, throw error - UPDATE failed
-      throw new Error(`UPDATE returned empty array but tried to save ${itemsToSave.length} items`);
-    }
-    
-    // Immediately read back using same client to verify it was actually saved
-    const verifyResult = await client.query(
-      'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
-      [figmaUserId]
-    );
-    const verified = verifyResult.rows[0]?.saved_items;
-    console.log(`✓ Immediate readback: type=${typeof verified}, isArray=${Array.isArray(verified)}, length=${Array.isArray(verified) ? verified.length : 'N/A'}`);
-    console.log(`✓ Immediate readback value:`, JSON.stringify(verified).substring(0, 300));
-    
-    // Use verified value - it's what's actually in the database
-    const finalResult = Array.isArray(verified) ? verified : saved;
-    
-    if (finalResult.length !== itemsToSave.length) {
-      console.error(`⚠️ WARNING: Saved ${itemsToSave.length} items but got ${finalResult.length} back`);
-      console.error(`Expected:`, JSON.stringify(itemsToSave));
-      console.error(`Got:`, JSON.stringify(finalResult));
-    }
-    
-    console.log(`✓ Returning ${finalResult.length} items from saveUserSavedItems`);
-    
-    return finalResult;
-  } finally {
-    client.release();
+  } catch (err) {
+    // Column might already exist, ignore
   }
+  
+  // SIMPLE DIRECT APPROACH: Use PostgreSQL's jsonb_build_array or cast properly
+  // Convert to JSON string first, then PostgreSQL will parse it
+  const jsonString = JSON.stringify(itemsToSave);
+  
+  console.log(`🔄 Updating saved_items with ${itemsToSave.length} items`);
+  console.log(`🔄 JSON:`, jsonString);
+  
+  // Use a simple UPDATE with explicit JSONB casting
+  // PostgreSQL's ::jsonb cast should handle the JSON string correctly
+  const result = await pool.query(
+    `UPDATE user_preferences 
+     SET saved_items = $1::jsonb, updated_at = NOW() 
+     WHERE figma_user_id = $2
+     RETURNING saved_items`,
+    [jsonString, figmaUserId]
+  );
+  
+  if (result.rowCount === 0) {
+    throw new Error(`Failed to update saved_items for user ${figmaUserId}`);
+  }
+  
+  const saved = result.rows[0].saved_items;
+  
+  // Ensure it's an array
+  if (!Array.isArray(saved)) {
+    console.error(`✗ ERROR: saved_items is not an array:`, typeof saved, saved);
+    throw new Error(`saved_items is not an array after update`);
+  }
+  
+  console.log(`✓ Saved ${saved.length} items successfully`);
+  
+  // Return what was actually saved
+  return saved;
 }
 
 // ============================================================================
