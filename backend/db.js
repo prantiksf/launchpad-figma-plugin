@@ -344,8 +344,18 @@ async function getUserSavedItems(figmaUserId) {
     'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
     [figmaUserId]
   );
-  const items = result.rows[0]?.saved_items || [];
-  console.log(`📖 getUserSavedItems: Found ${items.length} items for user ${figmaUserId}`);
+  
+  // Handle null/undefined - PostgreSQL returns null for JSONB columns that are NULL
+  let items = result.rows[0]?.saved_items;
+  if (items === null || items === undefined) {
+    items = [];
+  } else if (!Array.isArray(items)) {
+    // If it's not an array, try to parse it or default to empty array
+    console.warn(`⚠️ saved_items is not an array for user ${figmaUserId}, got:`, typeof items);
+    items = [];
+  }
+  
+  console.log(`📖 getUserSavedItems: Found ${items.length} items for user ${figmaUserId} (type: ${typeof items}, isArray: ${Array.isArray(items)})`);
   return items;
 }
 
