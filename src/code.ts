@@ -74,6 +74,18 @@ figma.ui.onmessage = async (msg) => {
     try {
       console.log('🔄 Reading data from clientStorage for migration...');
       
+      // CRITICAL: Clear any old savedItems from clientStorage to prevent accidental restoration
+      // Saved items are per-user and managed by database only - clientStorage is not source of truth
+      try {
+        const oldSavedItems = await figma.clientStorage.getAsync('starter-kit-saved');
+        if (oldSavedItems && Array.isArray(oldSavedItems) && oldSavedItems.length > 0) {
+          console.log(`⚠️ Clearing ${oldSavedItems.length} old saved items from clientStorage - database is source of truth`);
+          await figma.clientStorage.setAsync('starter-kit-saved', []);
+        }
+      } catch (e) {
+        // Ignore errors when clearing
+      }
+      
       // Read all data from clientStorage
       // NOTE: savedItems are NOT migrated - they are per-user and stored in database only
       // Reading them from clientStorage would restore old data when user intentionally unsaved items

@@ -687,6 +687,14 @@ export function App() {
             // DON'T migrate saved items - database is the source of truth
             // Saved items are per-user and managed by database only
             // Migration would restore old data when user intentionally unsaved items
+            // Explicitly ignore savedItems if present in migration data (shouldn't be sent anymore from code.ts)
+            if (msg.savedItems && Array.isArray(msg.savedItems) && msg.savedItems.length > 0) {
+              console.log(`⚠️ IGNORING ${msg.savedItems.length} saved items from migration - database is source of truth`);
+            }
+            // Explicitly ignore savedItems if present in migration data (shouldn't be sent anymore)
+            if (msg.savedItems) {
+              console.log('⚠️ Ignoring savedItems in migration data - database is source of truth');
+            }
 
             // Migrate figma links
             if (msg.figmaLinks && (Array.isArray(msg.figmaLinks) || Object.keys(msg.figmaLinks).length > 0)) {
