@@ -669,67 +669,90 @@ export function useSavedItems(figmaUserId?: string | null) {
         // One-time migration: if this user's personal list is empty, seed it from the legacy shared list.
         // Important: we store a local flag so if the user later clears Saved intentionally, we don't
         // repopulate it from shared again.
-        if (safe.length === 0) {
-          const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
-          let alreadyMigrated = false;
+        // CRITICAL: Only migrate if migration flag is NOT set - prevents re-migration after user unsaves items
+        const migrateKey = `starter-kit-saved-items-migrated:${String(figmaUserId)}`;
+        let alreadyMigrated = false;
+        try {
+          alreadyMigrated = migratedRef.current || localStorage.getItem(migrateKey) === 'true';
+        } catch {
+          alreadyMigrated = migratedRef.current;
+        }
+
+        if (safe.length === 0 && !alreadyMigrated) {
+          // Only migrate on first load when backend is empty AND migration hasn't happened
+          const cached = await loadFromClientStorage<any[]>('saved-items');
+          const safeCached = Array.isArray(cached) ? cached : [];
+          let shared: any[] = [];
           try {
-            alreadyMigrated = migratedRef.current || localStorage.getItem(migrateKey) === 'true';
-          } catch {
-            alreadyMigrated = migratedRef.current;
-          }
+            const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
+            shared = Array.isArray(sharedData) ? sharedData : [];
+          } catch {}
 
-          if (!alreadyMigrated) {
-            const cached = await loadFromClientStorage<any[]>('saved-items');
-            const safeCached = Array.isArray(cached) ? cached : [];
-            let shared: any[] = [];
+          // Merge shared + local cache (avoid duplicates)
+          const merged: any[] = [];
+          const seen = new Set<string>();
+          const add = (item: any) => {
+            if (!item || typeof item !== 'object' || !item.templateId) return;
+            const key = `${String(item.templateId)}::${item.variantKey ? String(item.variantKey) : ''}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            merged.push({ templateId: item.templateId, ...(item.variantKey ? { variantKey: item.variantKey } : {}) });
+          };
+          shared.forEach(add);
+          safeCached.forEach(add);
+
+          // Set migration flag BEFORE saving to prevent re-migration
+          migratedRef.current = true;
+          try { localStorage.setItem(migrateKey, 'true'); } catch {}
+
+          if (merged.length > 0) {
+            setSavedItemsState(merged);
+            localDataRef.current = merged;
+            lastKnownCountRef.current = merged.length;
+            setHasLoaded(true);
+            saveToClientStorage('saved-items', merged);
+            saveLastKnownGood({ savedItemsCount: merged.length });
             try {
-              const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
-              shared = Array.isArray(sharedData) ? sharedData : [];
+              await apiRequest('/api/saved-items', {
+                method: 'POST',
+                headers: { 'X-Figma-User-Id': String(figmaUserId) },
+                body: JSON.stringify({ savedItems: merged })
+              });
             } catch {}
-
-            // Merge shared + local cache (avoid duplicates)
-            const merged: any[] = [];
-            const seen = new Set<string>();
-            const add = (item: any) => {
-              if (!item || typeof item !== 'object' || !item.templateId) return;
-              const key = `${String(item.templateId)}::${item.variantKey ? String(item.variantKey) : ''}`;
-              if (seen.has(key)) return;
-              seen.add(key);
-              merged.push({ templateId: item.templateId, ...(item.variantKey ? { variantKey: item.variantKey } : {}) });
-            };
-            shared.forEach(add);
-            safeCached.forEach(add);
-
-            migratedRef.current = true;
-            try { localStorage.setItem(migrateKey, 'true'); } catch {}
-
-            if (merged.length > 0) {
-              setSavedItemsState(merged);
-              localDataRef.current = merged;
-              lastKnownCountRef.current = merged.length;
-              setHasLoaded(true);
-              saveToClientStorage('saved-items', merged);
-              saveLastKnownGood({ savedItemsCount: merged.length });
-              try {
-                await apiRequest('/api/saved-items', {
-                  method: 'POST',
-                  headers: { 'X-Figma-User-Id': String(figmaUserId) },
-                  body: JSON.stringify({ savedItems: merged })
-                });
-              } catch {}
-              return;
-            }
+            return;
           }
         }
 
-        // Trust the backend response - if it returns empty, user intentionally cleared their list
-        // Don't restore from cache when API succeeds, only when it fails (handled in catch block)
+        // If backend returns empty, check if migration already happened
+        // If migration happened, user intentionally cleared - trust backend
+        // If migration hasn't happened yet, migration logic above will handle it
+        if (safe.length === 0 && alreadyMigrated) {
+          // User intentionally cleared their list after migration - ensure cache is also cleared
+          migratedRef.current = true;
+          try { localStorage.setItem(migrateKey, 'true'); } catch {}
+          setSavedItemsState([]);
+          localDataRef.current = [];
+          lastKnownCountRef.current = 0;
+          setHasLoaded(true);
+          saveToClientStorage('saved-items', []); // Clear cache
+          saveLastKnownGood({ savedItemsCount: 0 });
+          return;
+        }
+
+        // If backend returns empty but migration hasn't happened, migration logic above handles it
+        // Otherwise, trust the backend response
         setSavedItemsState(safe);
         localDataRef.current = safe;
         lastKnownCountRef.current = safe.length;
         setHasLoaded(true);
         saveToClientStorage('saved-items', safe);
         saveLastKnownGood({ savedItemsCount: safe.length });
+        
+        // Set migration flag if backend has data (means migration completed or user has saved items)
+        if (safe.length > 0 && !alreadyMigrated) {
+          migratedRef.current = true;
+          try { localStorage.setItem(migrateKey, 'true'); } catch {}
+        }
       } catch {
         if (cancelled) return;
         const cached = await loadFromClientStorage<any[]>('saved-items');
@@ -862,15 +885,16 @@ export function useSavedItems(figmaUserId?: string | null) {
           })
             .then(data => {
               const safe = Array.isArray(data) ? data : [];
+              // Only restore from cache if backend returns empty AND we had items before
+              // AND the backend rejection was likely a validation error (not intentional clear)
+              // But trust backend if it consistently returns empty (user intentionally cleared)
               if (safe.length === 0 && lastKnownCountRef.current > 0) {
+                // Check if this is likely a validation error vs intentional clear
+                // If we're trying to save empty and backend rejects, trust backend (user cleared)
                 const cached = localDataRef.current.length > 0 ? localDataRef.current : null;
-                if (cached && cached.length > 0) {
-                  setSavedItemsState(cached);
-                  lastKnownCountRef.current = cached.length;
-                  saveToClientStorage('saved-items', cached);
-                  showToast('Server rejected change - kept your data.');
-                  return;
-                }
+                // Only restore if cache has items AND we're not intentionally clearing
+                // Since we're here due to a 400 error on save, trust the backend response
+                // Don't restore from cache - backend knows best
               }
               setSavedItemsState(safe);
               localDataRef.current = safe;
