@@ -471,7 +471,21 @@ async function saveUserSavedItems(figmaUserId, items) {
     console.log(`✓ UPDATE returned saved_items: type=${typeof saved}, isArray=${Array.isArray(saved)}, length=${Array.isArray(saved) ? saved.length : 'N/A'}`);
     console.log(`✓ UPDATE returned value:`, JSON.stringify(saved).substring(0, 300));
     
-    // Immediately read back using same client to verify
+    // CRITICAL: Use the RETURNING value directly - it's what was actually saved
+    // If it's not an array, something went wrong
+    if (!Array.isArray(saved)) {
+      console.error(`✗ ERROR: UPDATE returned non-array value:`, saved);
+      // Try to read back to see what's actually in the database
+      const verifyResult = await client.query(
+        'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
+        [figmaUserId]
+      );
+      const verified = verifyResult.rows[0]?.saved_items;
+      console.error(`✗ Database readback shows:`, verified);
+      throw new Error(`UPDATE did not return array. Got: ${typeof saved}`);
+    }
+    
+    // Immediately read back using same client to verify it was actually saved
     const verifyResult = await client.query(
       'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
       [figmaUserId]
@@ -480,8 +494,15 @@ async function saveUserSavedItems(figmaUserId, items) {
     console.log(`✓ Immediate readback: type=${typeof verified}, isArray=${Array.isArray(verified)}, length=${Array.isArray(verified) ? verified.length : 'N/A'}`);
     console.log(`✓ Immediate readback value:`, JSON.stringify(verified).substring(0, 300));
     
-    // CRITICAL: Ensure we return an array
-    const finalResult = Array.isArray(saved) ? saved : (Array.isArray(verified) ? verified : []);
+    // Use verified value if it's different (shouldn't be, but just in case)
+    const finalResult = Array.isArray(verified) ? verified : saved;
+    
+    if (finalResult.length !== itemsToSave.length) {
+      console.error(`⚠️ WARNING: Saved ${itemsToSave.length} items but got ${finalResult.length} back`);
+      console.error(`Expected:`, JSON.stringify(itemsToSave));
+      console.error(`Got:`, JSON.stringify(finalResult));
+    }
+    
     console.log(`✓ Returning ${finalResult.length} items from saveUserSavedItems`);
     
     return finalResult;
