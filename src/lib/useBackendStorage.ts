@@ -678,21 +678,36 @@ export function useSavedItems(figmaUserId?: string | null) {
           alreadyMigrated = migratedRef.current;
         }
 
-        // CRITICAL FIX: If backend returns empty AND we have items in cache, check if backend was ever written to
-        // If backend was written to before (even if now empty), don't migrate - user intentionally cleared
-        // Only migrate if this is truly the first time (backend empty AND cache empty AND no migration flag)
+        // CRITICAL: Backend is the source of truth. If backend returns empty, trust it.
+        // Only migrate on FIRST load when backend is empty AND migration flag NOT set AND cache is empty
+        // If backend is empty but cache has data, backend was cleared intentionally - don't migrate
         if (safe.length === 0 && !alreadyMigrated) {
-          // First time load - backend is empty and migration hasn't happened
-          // Try migration from shared list and cache
+          // Check cache first - if cache has data but backend is empty, backend was cleared intentionally
           const cached = await loadFromClientStorage<any[]>('saved-items');
           const safeCached = Array.isArray(cached) ? cached : [];
+          
+          // If cache has items but backend is empty, backend was cleared intentionally
+          // Set migration flag and clear cache to match backend
+          if (safeCached.length > 0) {
+            migratedRef.current = true;
+            try { localStorage.setItem(migrateKey, 'true'); } catch {}
+            setSavedItemsState([]);
+            localDataRef.current = [];
+            lastKnownCountRef.current = 0;
+            setHasLoaded(true);
+            saveToClientStorage('saved-items', []); // Clear cache to match backend
+            saveLastKnownGood({ savedItemsCount: 0 });
+            return;
+          }
+          
+          // Cache is also empty - this is truly first load, try migration from shared list only
           let shared: any[] = [];
           try {
             const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
             shared = Array.isArray(sharedData) ? sharedData : [];
           } catch {}
 
-          // Merge shared + local cache (avoid duplicates)
+          // Only migrate from shared list (not cache, since cache is empty)
           const merged: any[] = [];
           const seen = new Set<string>();
           const add = (item: any) => {
@@ -703,7 +718,6 @@ export function useSavedItems(figmaUserId?: string | null) {
             merged.push({ templateId: item.templateId, ...(item.variantKey ? { variantKey: item.variantKey } : {}) });
           };
           shared.forEach(add);
-          safeCached.forEach(add);
 
           // Set migration flag BEFORE saving to prevent re-migration
           migratedRef.current = true;
