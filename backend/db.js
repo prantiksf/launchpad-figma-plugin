@@ -450,9 +450,13 @@ async function saveUserSavedItems(figmaUserId, items) {
     }
     
     // SIMPLE DIRECT UPDATE - use JSON string and cast to jsonb
+    // CRITICAL: PostgreSQL expects the JSON string to be valid JSON
     const jsonString = JSON.stringify(itemsToSave);
     console.log(`🔄 Executing UPDATE with JSON string length: ${jsonString.length}`);
+    console.log(`🔄 JSON string:`, jsonString);
     
+    // Try using the array directly - pg driver should handle JSONB conversion
+    // But first ensure it's a valid JSON string
     const result = await client.query(
       `UPDATE user_preferences 
        SET saved_items = $1::jsonb, updated_at = NOW() 
@@ -460,6 +464,8 @@ async function saveUserSavedItems(figmaUserId, items) {
        RETURNING saved_items, figma_user_id`,
       [jsonString, figmaUserId]
     );
+    
+    console.log(`✓ UPDATE query executed, rowCount=${result.rowCount}`);
     
     console.log(`✓ UPDATE result: rowCount=${result.rowCount}, rows.length=${result.rows.length}`);
     
