@@ -739,9 +739,11 @@ export function useSavedItems(figmaUserId?: string | null) {
   const save = useCallback(async (newItems: any[] | ((prev: any[]) => any[])) => {
     console.log(`💾 save() called: hasLoaded=${hasLoaded}, figmaUserId=${figmaUserId}, newItems type=${typeof newItems}`);
     
+    // Allow saves even if not fully loaded - user might be saving immediately
+    // The backend will handle it correctly
     if (!hasLoaded) {
-      console.warn('⚠️ BLOCKED: Cannot save saved items before initial load');
-      return;
+      console.warn('⚠️ WARNING: Saving before initial load complete - proceeding anyway');
+      // Don't block - allow the save to proceed
     }
 
     const validateAndMaybePersist = async (next: any[], prev: any[]): Promise<any[]> => {
