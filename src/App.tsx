@@ -2957,7 +2957,7 @@ async function loadActivityLog(cloudId?: string) {
     }
   }
 
-  const VERSION = '1.18.0';
+  const VERSION = '1.18.1';
 
   // Safety: after 10s, force show UI even if loading (prevents stuck blank screen)
   useEffect(() => {

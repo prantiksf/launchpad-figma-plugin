@@ -2,7 +2,7 @@
 // Helps designers quickly insert pre-built templates from Team Library
 
 const STORAGE_KEY = 'launchpad_templates';
-const PLUGIN_VERSION = '1.18.0';
+const PLUGIN_VERSION = '1.18.1';
 
 // Build identifiers injected at build time - these make each build unique
 // This ensures Figma's CDN recognizes each build as a new version
