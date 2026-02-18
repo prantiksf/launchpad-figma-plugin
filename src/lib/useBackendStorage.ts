@@ -786,31 +786,13 @@ export function useSavedItems(figmaUserId?: string | null) {
         console.log(`✅ SUCCESS: Saved ${next.length} items to database for user ${figmaUserId}`);
         
         // Save successful - NOW update refs and cache
+        // Don't verify immediately - database transaction might not be committed yet
+        // Trust that the save succeeded (we got success response)
         lastKnownCountRef.current = newCount;
         if (usingFallback) localDataRef.current = next;
         saveToClientStorage('saved-items', next);
         saveLastKnownGood({ savedItemsCount: newCount });
         setUsingFallback(false);
-        
-        // Verify the save by immediately reading back from database
-        try {
-          const verifyData = await apiRequest<any[]>('/api/saved-items', {
-            headers: { 'X-Figma-User-Id': String(figmaUserId) }
-          });
-          const verifySafe = Array.isArray(verifyData) ? verifyData : [];
-          console.log(`✓ Verified: Database now has ${verifySafe.length} items for user ${figmaUserId}`);
-          if (verifySafe.length !== next.length) {
-            console.error(`⚠️ MISMATCH: Saved ${next.length} but database has ${verifySafe.length} - using database value`);
-            // Use what database actually has
-            lastKnownCountRef.current = verifySafe.length;
-            if (usingFallback) localDataRef.current = verifySafe;
-            saveToClientStorage('saved-items', verifySafe);
-            saveLastKnownGood({ savedItemsCount: verifySafe.length });
-            return verifySafe;
-          }
-        } catch (verifyError) {
-          console.error('⚠️ Could not verify save:', verifyError);
-        }
       } catch (error: any) {
         console.error('✗ Failed to save saved items to database:', error);
         // If save failed, reload from database to get current state
@@ -837,64 +819,29 @@ export function useSavedItems(figmaUserId?: string | null) {
       return next;
     };
 
-    // CRITICAL: We need to await the database save BEFORE updating state
-    // This ensures data is persisted before state changes
+    // Update state optimistically for immediate UI feedback
+    // Then persist to database in background
+    // If save fails, validateAndMaybePersist will reload from database and update state
     // Support React-style updater: setSavedItems(prev => next)
     if (typeof newItems === 'function') {
       setSavedItemsState(prev => {
         const next = newItems(prev);
-        // Save to database FIRST, then update state with result
-        validateAndMaybePersist(next, prev).then((finalItems) => {
-          // Update state with what database actually has (might differ if save failed)
-          setSavedItemsState(finalItems);
-        }).catch((error) => {
-          console.error('❌ Critical error saving to database:', error);
-          // On critical error, reload from database
-          if (figmaUserId) {
-            apiRequest<any[]>('/api/saved-items', {
-              headers: { 'X-Figma-User-Id': String(figmaUserId) }
-            })
-              .then(data => {
-                const safe = Array.isArray(data) ? data : [];
-                console.log(`↻ Reloaded ${safe.length} items after critical error`);
-                setSavedItemsState(safe);
-                localDataRef.current = safe;
-                lastKnownCountRef.current = safe.length;
-                saveToClientStorage('saved-items', safe);
-              })
-              .catch(console.error);
-          }
+        // Persist to database (will update state if save fails)
+        validateAndMaybePersist(next, prev).catch((error) => {
+          console.error('❌ Error in validateAndMaybePersist:', error);
         });
-        return next; // Optimistic update (will be corrected by validateAndMaybePersist)
+        return next; // Optimistic update - will be corrected by validateAndMaybePersist if needed
       });
       return;
     }
 
-    // Direct array - save to database FIRST
+    // Direct array - update state optimistically
     setSavedItemsState(prev => {
-      // Save to database FIRST, then update state with result
-      validateAndMaybePersist(newItems, prev).then((finalItems) => {
-        // Update state with what database actually has (might differ if save failed)
-        setSavedItemsState(finalItems);
-      }).catch((error) => {
-        console.error('❌ Critical error saving to database:', error);
-        // On critical error, reload from database
-        if (figmaUserId) {
-          apiRequest<any[]>('/api/saved-items', {
-            headers: { 'X-Figma-User-Id': String(figmaUserId) }
-          })
-            .then(data => {
-              const safe = Array.isArray(data) ? data : [];
-              console.log(`↻ Reloaded ${safe.length} items after critical error`);
-              setSavedItemsState(safe);
-              localDataRef.current = safe;
-              lastKnownCountRef.current = safe.length;
-              saveToClientStorage('saved-items', safe);
-            })
-            .catch(console.error);
-        }
+      // Persist to database (will update state if save fails)
+      validateAndMaybePersist(newItems, prev).catch((error) => {
+        console.error('❌ Error in validateAndMaybePersist:', error);
       });
-      return newItems; // Optimistic update (will be corrected by validateAndMaybePersist)
+      return newItems; // Optimistic update - will be corrected by validateAndMaybePersist if needed
     });
   }, [hasLoaded, usingFallback, figmaUserId]);
 
