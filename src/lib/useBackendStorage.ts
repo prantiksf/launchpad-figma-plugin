@@ -678,99 +678,64 @@ export function useSavedItems(figmaUserId?: string | null) {
           alreadyMigrated = migratedRef.current;
         }
 
-        // CRITICAL: Backend is the source of truth. If backend returns empty, trust it.
-        // Only migrate on FIRST load when backend is empty AND migration flag NOT set AND cache is empty
-        // If backend is empty but cache has data, backend was cleared intentionally - don't migrate
+        // SIMPLE RULE: Backend is always the source of truth
+        // 1. If backend has data → use it (user has saved items)
+        // 2. If backend is empty:
+        //    a) Migration flag NOT set → first load → migrate from shared list once
+        //    b) Migration flag IS set → user unsaved → use empty
+        
         if (safe.length === 0 && !alreadyMigrated) {
-          // Check cache first - if cache has data but backend is empty, backend was cleared intentionally
-          const cached = await loadFromClientStorage<any[]>('saved-items');
-          const safeCached = Array.isArray(cached) ? cached : [];
-          
-          // If cache has items but backend is empty, backend was cleared intentionally
-          // Set migration flag and clear cache to match backend
-          if (safeCached.length > 0) {
-            migratedRef.current = true;
-            try { localStorage.setItem(migrateKey, 'true'); } catch {}
-            setSavedItemsState([]);
-            localDataRef.current = [];
-            lastKnownCountRef.current = 0;
-            setHasLoaded(true);
-            saveToClientStorage('saved-items', []); // Clear cache to match backend
-            saveLastKnownGood({ savedItemsCount: 0 });
-            return;
-          }
-          
-          // Cache is also empty - this is truly first load, try migration from shared list only
+          // First load: backend is empty, migration flag not set
+          // Try one-time migration from shared list (legacy shared saved items)
           let shared: any[] = [];
           try {
             const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
             shared = Array.isArray(sharedData) ? sharedData : [];
           } catch {}
 
-          // Only migrate from shared list (not cache, since cache is empty)
-          const merged: any[] = [];
-          const seen = new Set<string>();
-          const add = (item: any) => {
-            if (!item || typeof item !== 'object' || !item.templateId) return;
-            const key = `${String(item.templateId)}::${item.variantKey ? String(item.variantKey) : ''}`;
-            if (seen.has(key)) return;
-            seen.add(key);
-            merged.push({ templateId: item.templateId, ...(item.variantKey ? { variantKey: item.variantKey } : {}) });
-          };
-          shared.forEach(add);
-
-          // Set migration flag BEFORE saving to prevent re-migration
+          // Set migration flag BEFORE processing to prevent re-migration
           migratedRef.current = true;
           try { localStorage.setItem(migrateKey, 'true'); } catch {}
 
-          if (merged.length > 0) {
-            setSavedItemsState(merged);
-            localDataRef.current = merged;
-            lastKnownCountRef.current = merged.length;
+          if (shared.length > 0) {
+            // Migrate from shared list
+            setSavedItemsState(shared);
+            localDataRef.current = shared;
+            lastKnownCountRef.current = shared.length;
             setHasLoaded(true);
-            saveToClientStorage('saved-items', merged);
-            saveLastKnownGood({ savedItemsCount: merged.length });
+            saveToClientStorage('saved-items', shared);
+            saveLastKnownGood({ savedItemsCount: shared.length });
             try {
               await apiRequest('/api/saved-items', {
                 method: 'POST',
                 headers: { 'X-Figma-User-Id': String(figmaUserId) },
-                body: JSON.stringify({ savedItems: merged })
+                body: JSON.stringify({ savedItems: shared })
               });
             } catch {}
             return;
           } else {
-            // Migration attempted but nothing to migrate - set flag and continue with empty
-            migratedRef.current = true;
-            try { localStorage.setItem(migrateKey, 'true'); } catch {}
+            // Nothing to migrate - continue with empty
+            setSavedItemsState([]);
+            localDataRef.current = [];
+            lastKnownCountRef.current = 0;
+            setHasLoaded(true);
+            saveToClientStorage('saved-items', []);
+            saveLastKnownGood({ savedItemsCount: 0 });
+            return;
           }
         }
-
-        // If backend returns empty AND migration already happened, user intentionally unsaved
-        // Clear cache to match backend and prevent items from coming back
-        if (safe.length === 0 && alreadyMigrated) {
-          // User intentionally cleared their list - ensure cache is also cleared
-          setSavedItemsState([]);
-          localDataRef.current = [];
-          lastKnownCountRef.current = 0;
-          setHasLoaded(true);
-          saveToClientStorage('saved-items', []); // Clear cache to match backend
-          saveLastKnownGood({ savedItemsCount: 0 });
-          migratedRef.current = true;
-          try { localStorage.setItem(migrateKey, 'true'); } catch {}
-          return;
-        }
         
-        // If backend has data, use it (normal case - user has saved items)
-        // If backend is empty but migration hasn't happened, migration logic above handles it
+        // Backend has data OR backend is empty but migration already happened
+        // Always trust backend - it's the source of truth
         setSavedItemsState(safe);
         localDataRef.current = safe;
         lastKnownCountRef.current = safe.length;
         setHasLoaded(true);
-        saveToClientStorage('saved-items', safe); // Sync cache with backend
+        saveToClientStorage('saved-items', safe); // Always sync cache with backend
         saveLastKnownGood({ savedItemsCount: safe.length });
         
-        // Set migration flag if backend has data (means migration completed or user has saved items)
-        if (safe.length > 0 && !alreadyMigrated) {
+        // Ensure migration flag is set (should already be set, but be safe)
+        if (!alreadyMigrated) {
           migratedRef.current = true;
           try { localStorage.setItem(migrateKey, 'true'); } catch {}
         }
