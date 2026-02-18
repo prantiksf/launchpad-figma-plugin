@@ -280,18 +280,35 @@ async function updateUserPreference(figmaUserId, field, value) {
 // ============================================================================
 
 async function getUserSavedItems(figmaUserId) {
-  if (!figmaUserId) return [];
+  if (!figmaUserId) {
+    console.log('⚠️ getUserSavedItems called without figmaUserId');
+    return [];
+  }
   await getUserPreferences(figmaUserId);
   const result = await pool.query(
     'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
     [figmaUserId]
   );
-  return result.rows[0]?.saved_items || [];
+  const items = result.rows[0]?.saved_items || [];
+  console.log(`📖 getUserSavedItems: Found ${items.length} items for user ${figmaUserId}`);
+  return items;
 }
 
 async function saveUserSavedItems(figmaUserId, items) {
   if (!figmaUserId) throw new Error('Missing figmaUserId');
-  await updateUserPreference(figmaUserId, 'saved_items', items || []);
+  const itemsToSave = items || [];
+  console.log(`💾 saveUserSavedItems: Saving ${itemsToSave.length} items for user ${figmaUserId}`);
+  await updateUserPreference(figmaUserId, 'saved_items', itemsToSave);
+  // Verify the save
+  const verifyResult = await pool.query(
+    'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
+    [figmaUserId]
+  );
+  const verifyItems = verifyResult.rows[0]?.saved_items || [];
+  console.log(`✓ saveUserSavedItems: Verified ${verifyItems.length} items in database for user ${figmaUserId}`);
+  if (verifyItems.length !== itemsToSave.length) {
+    console.error(`⚠️ MISMATCH: Tried to save ${itemsToSave.length} but database has ${verifyItems.length}`);
+  }
 }
 
 // ============================================================================

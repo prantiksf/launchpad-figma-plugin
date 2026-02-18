@@ -665,6 +665,7 @@ export function useSavedItems(figmaUserId?: string | null) {
           if (cancelled) return;
           const safe = Array.isArray(data) ? data : [];
           console.log(`✅ Loaded ${safe.length} saved items from database for user ${figmaUserId}`);
+          console.log(`✅ Loaded data:`, JSON.stringify(safe, null, 2));
 
           // Use whatever database returns - it's the truth
           // If database has items → user saved them
@@ -677,6 +678,9 @@ export function useSavedItems(figmaUserId?: string | null) {
           saveToClientStorage('saved-items', safe); // Sync cache with database (for offline fallback only)
           saveLastKnownGood({ savedItemsCount: safe.length });
           setUsingFallback(false);
+          
+          // Log final state
+          console.log(`✓ Final state: ${safe.length} items in state, ref has ${lastKnownCountRef.current}`);
         } catch (error) {
           if (cancelled) return;
           console.error('Failed to load saved items from database:', error);
@@ -777,6 +781,7 @@ export function useSavedItems(figmaUserId?: string | null) {
       // CRITICAL: Save to database FIRST - await to ensure it completes
       // Only update refs/cache AFTER database save succeeds
       console.log(`💾 Saving ${next.length} items to database for user ${figmaUserId}...`);
+      console.log(`💾 Items being saved:`, JSON.stringify(next, null, 2));
       try {
         const response = await apiRequest('/api/saved-items', {
           method: 'POST',
@@ -784,10 +789,32 @@ export function useSavedItems(figmaUserId?: string | null) {
           body: JSON.stringify({ savedItems: next }),
         });
         console.log(`✅ SUCCESS: Saved ${next.length} items to database for user ${figmaUserId}`);
+        console.log(`✅ Response:`, response);
+        
+        // Immediately verify by reading back from database
+        try {
+          const verifyData = await apiRequest<any[]>('/api/saved-items', {
+            headers: { 'X-Figma-User-Id': String(figmaUserId) }
+          });
+          const verifySafe = Array.isArray(verifyData) ? verifyData : [];
+          console.log(`✓ Verification read: Database has ${verifySafe.length} items for user ${figmaUserId}`);
+          console.log(`✓ Verification data:`, JSON.stringify(verifySafe, null, 2));
+          
+          if (verifySafe.length !== next.length) {
+            console.error(`⚠️ MISMATCH: Saved ${next.length} but database has ${verifySafe.length}`);
+            // Use what database actually has
+            lastKnownCountRef.current = verifySafe.length;
+            if (usingFallback) localDataRef.current = verifySafe;
+            saveToClientStorage('saved-items', verifySafe);
+            saveLastKnownGood({ savedItemsCount: verifySafe.length });
+            setUsingFallback(false);
+            return verifySafe;
+          }
+        } catch (verifyError) {
+          console.error('⚠️ Could not verify save (non-critical):', verifyError);
+        }
         
         // Save successful - NOW update refs and cache
-        // Don't verify immediately - database transaction might not be committed yet
-        // Trust that the save succeeded (we got success response)
         lastKnownCountRef.current = newCount;
         if (usingFallback) localDataRef.current = next;
         saveToClientStorage('saved-items', next);
