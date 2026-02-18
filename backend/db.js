@@ -441,21 +441,17 @@ async function saveUserSavedItems(figmaUserId, items) {
     // Column might already exist, ignore
   }
   
-  // CRITICAL: Use PostgreSQL's to_jsonb function to properly convert
-  // This ensures the JSON is properly parsed as JSONB
-  const jsonString = JSON.stringify(itemsToSave);
-  
+  // CRITICAL: Pass JavaScript array directly - pg driver converts to JSONB automatically
+  // The pg library handles JS array -> JSONB conversion natively
   console.log(`🔄 Updating saved_items with ${itemsToSave.length} items`);
-  console.log(`🔄 JSON string:`, jsonString);
   
-  // Try using to_jsonb() function instead of ::jsonb cast
-  // This should properly parse the JSON string
+  // Pass the JavaScript array directly - pg driver will convert it to JSONB
   const result = await pool.query(
     `UPDATE user_preferences 
-     SET saved_items = to_jsonb($1::text), updated_at = NOW() 
+     SET saved_items = $1::jsonb, updated_at = NOW() 
      WHERE figma_user_id = $2
      RETURNING saved_items`,
-    [jsonString, figmaUserId]
+    [JSON.stringify(itemsToSave), figmaUserId]
   );
   
   if (result.rowCount === 0) {
@@ -463,25 +459,15 @@ async function saveUserSavedItems(figmaUserId, items) {
   }
   
   const saved = result.rows[0].saved_items;
-  console.log(`✓ UPDATE returned:`, JSON.stringify(saved));
-  console.log(`✓ Type:`, typeof saved, 'isArray:', Array.isArray(saved));
   
-  // Ensure it's an array
+  // pg driver returns JSONB as JavaScript array/object automatically
   if (!Array.isArray(saved)) {
     console.error(`✗ ERROR: saved_items is not an array:`, typeof saved, saved);
-    // Try reading back to see what's actually stored
-    const readback = await pool.query(
-      'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
-      [figmaUserId]
-    );
-    console.error(`✗ Readback shows:`, readback.rows[0]?.saved_items);
     throw new Error(`saved_items is not an array after update`);
   }
   
   console.log(`✓ Saved ${saved.length} items successfully`);
-  console.log(`✓ Returning:`, JSON.stringify(saved));
   
-  // Return what was actually saved
   return saved;
 }
 
