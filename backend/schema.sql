@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   onboarding_completed BOOLEAN DEFAULT FALSE,
   skip_splash BOOLEAN DEFAULT FALSE,
   hidden_clouds JSONB DEFAULT '[]',
+  saved_items JSONB DEFAULT '[]',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

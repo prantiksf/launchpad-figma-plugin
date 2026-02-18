@@ -266,27 +266,58 @@ async function updateUserPreference(figmaUserId, field, value) {
     throw new Error(`Invalid field: ${field}`);
   }
   
+  // Ensure saved_items column exists (for existing databases)
+  if (field === 'saved_items') {
+    try {
+      await pool.query(`
+        ALTER TABLE user_preferences
+        ADD COLUMN IF NOT EXISTS saved_items JSONB DEFAULT '[]'
+      `);
+    } catch (err) {
+      // Column might already exist, ignore error
+      console.log(`Column check for saved_items: ${err.message}`);
+    }
+  }
+  
   const jsonValue = (field === 'hidden_clouds' || field === 'saved_items') ? JSON.stringify(value) : value;
   
   console.log(`🔄 updateUserPreference: Updating ${field} for user ${figmaUserId}`);
-  console.log(`🔄 Value type: ${typeof jsonValue}, Value:`, jsonValue);
+  console.log(`🔄 Value type: ${typeof jsonValue}, Value length: ${typeof jsonValue === 'string' ? jsonValue.length : 'N/A'}`);
+  
+  // Use parameterized query with explicit column name mapping to avoid SQL injection
+  const columnMap = {
+    'default_cloud': 'default_cloud',
+    'onboarding_completed': 'onboarding_completed',
+    'skip_splash': 'skip_splash',
+    'hidden_clouds': 'hidden_clouds',
+    'saved_items': 'saved_items'
+  };
+  
+  const columnName = columnMap[field];
+  if (!columnName) {
+    throw new Error(`Invalid field: ${field}`);
+  }
   
   const result = await pool.query(`
     UPDATE user_preferences 
-    SET ${field} = $1, updated_at = NOW()
+    SET ${columnName} = $1::jsonb, updated_at = NOW()
     WHERE figma_user_id = $2
   `, [jsonValue, figmaUserId]);
   
-  console.log(`✓ updateUserPreference: Updated ${result.rowCount} row(s) for user ${figmaUserId}`);
+  console.log(`✓ updateUserPreference: Updated ${result.rowCount} row(s) for user ${figmaUserId}, field ${field}`);
   
   if (result.rowCount === 0) {
     console.error(`⚠️ WARNING: UPDATE affected 0 rows for user ${figmaUserId}, field ${field}`);
     // Try to check if user exists
     const checkResult = await pool.query(
-      'SELECT figma_user_id FROM user_preferences WHERE figma_user_id = $1',
+      'SELECT figma_user_id, saved_items FROM user_preferences WHERE figma_user_id = $1',
       [figmaUserId]
     );
-    console.log(`✓ User exists check: ${checkResult.rows.length > 0 ? 'EXISTS' : 'NOT FOUND'}`);
+    if (checkResult.rows.length > 0) {
+      console.log(`✓ User exists, current saved_items:`, checkResult.rows[0].saved_items);
+    } else {
+      console.error(`✗ User NOT FOUND: ${figmaUserId}`);
+    }
   }
 }
 
