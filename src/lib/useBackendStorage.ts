@@ -838,25 +838,17 @@ export function useSavedItems(figmaUserId?: string | null) {
     // NO OPTIMISTIC UPDATES - Wait for database save and verification
     // Support React-style updater: setSavedItems(prev => next)
     if (typeof newItems === 'function') {
-      setSavedItemsState(prev => {
-        const next = newItems(prev);
-        // Persist to database and update state with verified result
-        validateAndMaybePersist(next, prev).then((verified) => {
-          // State will be updated inside validateAndMaybePersist after verification
-          console.log(`✓ State updated with verified data: ${verified.length} items`);
-        }).catch((error) => {
-          console.error('❌ Error in validateAndMaybePersist:', error);
-        });
-        return prev; // Keep previous state until verified
+      // Calculate next value first
+      const next = newItems(savedItems);
+      // Then persist and update state with verified result
+      validateAndMaybePersist(next, savedItems).catch((error) => {
+        console.error('❌ Error in validateAndMaybePersist:', error);
       });
       return;
     }
 
     // Direct array - wait for database save and verification
-    validateAndMaybePersist(newItems, savedItems).then((verified) => {
-      // State will be updated inside validateAndMaybePersist after verification
-      console.log(`✓ State updated with verified data: ${verified.length} items`);
-    }).catch((error) => {
+    validateAndMaybePersist(newItems, savedItems).catch((error) => {
       console.error('❌ Error in validateAndMaybePersist:', error);
     });
   }, [hasLoaded, usingFallback, figmaUserId]);
