@@ -684,12 +684,9 @@ export function App() {
               }
             }
 
-            // Migrate saved items when backend is empty
-            // Never migrate empty; require at least one item to avoid data loss
-            if (msg.savedItems && Array.isArray(msg.savedItems) && msg.savedItems.length > 0 && savedItems.length === 0) {
-              setSavedItems(msg.savedItems);
-              console.log(`✓ Migrated ${msg.savedItems.length} saved items from local to database`);
-            }
+            // DON'T migrate saved items - database is the source of truth
+            // Saved items are per-user and managed by database only
+            // Migration would restore old data when user intentionally unsaved items
 
             // Migrate figma links
             if (msg.figmaLinks && (Array.isArray(msg.figmaLinks) || Object.keys(msg.figmaLinks).length > 0)) {

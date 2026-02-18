@@ -796,7 +796,24 @@ export function useSavedItems(figmaUserId?: string | null) {
     if (typeof newItems === 'function') {
       setSavedItemsState(prev => {
         const next = newItems(prev);
-        validateAndMaybePersist(next, prev).catch(console.error);
+        // CRITICAL: Await database save to ensure it completes
+        validateAndMaybePersist(next, prev).catch((error) => {
+          console.error('Failed to save to database:', error);
+          // If save fails, reload from database to get truth
+          if (figmaUserId) {
+            apiRequest<any[]>('/api/saved-items', {
+              headers: { 'X-Figma-User-Id': String(figmaUserId) }
+            })
+              .then(data => {
+                const safe = Array.isArray(data) ? data : [];
+                setSavedItemsState(safe);
+                localDataRef.current = safe;
+                lastKnownCountRef.current = safe.length;
+                saveToClientStorage('saved-items', safe);
+              })
+              .catch(console.error);
+          }
+        });
         return next; // Optimistic update
       });
       return;
@@ -804,7 +821,24 @@ export function useSavedItems(figmaUserId?: string | null) {
 
     // Direct array
     setSavedItemsState(prev => {
-      validateAndMaybePersist(newItems, prev).catch(console.error);
+      // CRITICAL: Await database save to ensure it completes
+      validateAndMaybePersist(newItems, prev).catch((error) => {
+        console.error('Failed to save to database:', error);
+        // If save fails, reload from database to get truth
+        if (figmaUserId) {
+          apiRequest<any[]>('/api/saved-items', {
+            headers: { 'X-Figma-User-Id': String(figmaUserId) }
+          })
+            .then(data => {
+              const safe = Array.isArray(data) ? data : [];
+              setSavedItemsState(safe);
+              localDataRef.current = safe;
+              lastKnownCountRef.current = safe.length;
+              saveToClientStorage('saved-items', safe);
+            })
+            .catch(console.error);
+        }
+      });
       return newItems; // Optimistic update
     });
   }, [hasLoaded, usingFallback, figmaUserId]);
