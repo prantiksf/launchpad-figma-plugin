@@ -369,11 +369,17 @@ app.post('/api/saved-items', async (req, res) => {
     const currentItems = figmaUserId ? await db.getUserSavedItems(String(figmaUserId)) : await db.getSavedItems();
     const currentCount = Array.isArray(currentItems) ? currentItems.length : 0;
     const newCount = newItems.length;
-    const block = validateArrayBulkDelete(currentCount, newCount, 'saved items');
-    if (block) {
+    // CRITICAL: Allow clearing all saved items - it's user preference, not critical data
+    // Users should be able to unsave all items if they want (unlike templates which are critical)
+    // Only validate if it's a suspicious bulk delete (not clearing all)
+    if (newCount > 0 && currentCount >= 3 && newCount < currentCount - 2) {
+      // Block suspicious partial deletions (but allow clearing all)
+      const block = { status: 400, error: 'Data protection triggered', message: `Cannot reduce saved items from ${currentCount} to ${newCount}. Max 2 deletions at a time.`, currentCount, attemptedCount: newCount };
       console.error('🛑 BLOCKED: saved-items', block);
       return res.status(block.status).json(block);
     }
+    // Allow: 0->0, 1->0, 2->0, 3->0, etc. (clearing all is fine)
+    // Allow: any->any (adding/removing items is fine)
     // Auto-backup before saving
     if (Array.isArray(currentItems) && currentItems.length > 0) {
       const backupKey = figmaUserId ? `saved_items:${String(figmaUserId)}` : 'saved_items';

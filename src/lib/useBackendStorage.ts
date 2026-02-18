@@ -663,6 +663,7 @@ export function useSavedItems(figmaUserId?: string | null) {
           });
           if (cancelled) return;
           const safe = Array.isArray(data) ? data : [];
+          console.log(`Loaded ${safe.length} saved items from database for user ${figmaUserId}`);
 
           // Use whatever database returns - it's the truth
           // If database has items → user saved them
@@ -682,6 +683,7 @@ export function useSavedItems(figmaUserId?: string | null) {
           // But mark as fallback so we sync when database is back
           const cached = await loadFromClientStorage<any[]>('saved-items');
           const safeCached = Array.isArray(cached) ? cached : [];
+          console.log(`Using local storage fallback: ${safeCached.length} items`);
           setSavedItemsState(safeCached);
           localDataRef.current = safeCached;
           lastKnownCountRef.current = safeCached.length;
@@ -771,22 +773,38 @@ export function useSavedItems(figmaUserId?: string | null) {
         return next;
       }
 
-      // Save to database - await to ensure it completes
-      // If save fails (backend unavailable), still save locally for local testing
+      // CRITICAL: Save to database - await to ensure it completes
+      // Database is the source of truth - every save/unsave MUST write to DB
       try {
-        await apiRequest('/api/saved-items', {
+        const response = await apiRequest('/api/saved-items', {
           method: 'POST',
           headers: { 'X-Figma-User-Id': String(figmaUserId) },
           body: JSON.stringify({ savedItems: next }),
         });
+        console.log(`✓ Saved ${next.length} items to database for user ${figmaUserId}`);
         // Save successful - database now has the truth
         setUsingFallback(false);
       } catch (error: any) {
         console.error('✗ Failed to save saved items to database:', error);
-        // Database unavailable (local testing or offline) - mark as fallback
-        // Local storage already saved above, will sync when database is back
-        setUsingFallback(true);
-        // Don't restore from cache - keep what user just saved
+        // If save failed, reload from database to get current state
+        // Don't trust local state - database is source of truth
+        try {
+          const dbData = await apiRequest<any[]>('/api/saved-items', {
+            headers: { 'X-Figma-User-Id': String(figmaUserId) }
+          });
+          const safe = Array.isArray(dbData) ? dbData : [];
+          console.log(`Reloaded from database after save error: ${safe.length} items`);
+          setSavedItemsState(safe);
+          localDataRef.current = safe;
+          lastKnownCountRef.current = safe.length;
+          saveToClientStorage('saved-items', safe);
+          saveLastKnownGood({ savedItemsCount: safe.length });
+          setUsingFallback(false);
+        } catch (reloadError) {
+          console.error('✗ Failed to reload from database:', reloadError);
+          // Database unavailable - mark as fallback, keep local state
+          setUsingFallback(true);
+        }
       }
 
       return next;
