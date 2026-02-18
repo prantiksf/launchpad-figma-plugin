@@ -327,13 +327,24 @@ async function updateUserPreference(figmaUserId, field, value) {
   }
   
   // For JSONB fields, use ::jsonb cast; for others, use direct assignment
-  // CRITICAL: Use COALESCE to ensure we're not setting to NULL, and explicitly cast to JSONB
-  const updateQuery = (field === 'hidden_clouds' || field === 'saved_items')
-    ? `UPDATE user_preferences SET ${columnName} = COALESCE($1::jsonb, '[]'::jsonb), updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}, figma_user_id`
-    : `UPDATE user_preferences SET ${columnName} = $1, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}, figma_user_id`;
+  // CRITICAL: Use explicit JSONB cast - pg driver should handle JS array -> JSONB automatically
+  let updateQuery;
+  let queryParams;
   
-  console.log(`🔄 Executing UPDATE query for ${field}:`, updateQuery.substring(0, 150));
-  const result = await pool.query(updateQuery, [paramValue, figmaUserId]);
+  if (field === 'saved_items' || field === 'hidden_clouds') {
+    // For JSONB, pass the JavaScript array/object directly - pg driver converts it
+    // Use explicit ::jsonb cast to ensure PostgreSQL treats it as JSONB
+    updateQuery = `UPDATE user_preferences SET ${columnName} = $1::jsonb, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}, figma_user_id`;
+    queryParams = [paramValue, figmaUserId];
+  } else {
+    updateQuery = `UPDATE user_preferences SET ${columnName} = $1, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}, figma_user_id`;
+    queryParams = [paramValue, figmaUserId];
+  }
+  
+  console.log(`🔄 Executing UPDATE query for ${field}:`, updateQuery);
+  console.log(`🔄 Query params: paramValue type=${typeof queryParams[0]}, isArray=${Array.isArray(queryParams[0])}, length=${Array.isArray(queryParams[0]) ? queryParams[0].length : 'N/A'}`);
+  
+  const result = await pool.query(updateQuery, queryParams);
   
   // Verify what was actually written
   if (result.rows.length > 0) {
