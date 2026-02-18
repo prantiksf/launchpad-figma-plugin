@@ -279,10 +279,18 @@ async function updateUserPreference(figmaUserId, field, value) {
     }
   }
   
-  const jsonValue = (field === 'hidden_clouds' || field === 'saved_items') ? JSON.stringify(value) : value;
+  // For JSONB fields, pass the value directly (pg will handle JSONB conversion)
+  // For other fields, use the value as-is
+  let paramValue;
+  if (field === 'hidden_clouds' || field === 'saved_items') {
+    // Pass as JavaScript object/array - pg driver will convert to JSONB
+    paramValue = value;
+  } else {
+    paramValue = value;
+  }
   
   console.log(`🔄 updateUserPreference: Updating ${field} for user ${figmaUserId}`);
-  console.log(`🔄 Value type: ${typeof jsonValue}, Value length: ${typeof jsonValue === 'string' ? jsonValue.length : 'N/A'}`);
+  console.log(`🔄 Value type: ${typeof paramValue}, Is array: ${Array.isArray(paramValue)}, Value:`, JSON.stringify(paramValue).substring(0, 200));
   
   // Use parameterized query with explicit column name mapping to avoid SQL injection
   const columnMap = {
@@ -298,11 +306,12 @@ async function updateUserPreference(figmaUserId, field, value) {
     throw new Error(`Invalid field: ${field}`);
   }
   
-  const result = await pool.query(`
-    UPDATE user_preferences 
-    SET ${columnName} = $1::jsonb, updated_at = NOW()
-    WHERE figma_user_id = $2
-  `, [jsonValue, figmaUserId]);
+  // For JSONB fields, use ::jsonb cast; for others, use direct assignment
+  const updateQuery = (field === 'hidden_clouds' || field === 'saved_items')
+    ? `UPDATE user_preferences SET ${columnName} = $1::jsonb, updated_at = NOW() WHERE figma_user_id = $2`
+    : `UPDATE user_preferences SET ${columnName} = $1, updated_at = NOW() WHERE figma_user_id = $2`;
+  
+  const result = await pool.query(updateQuery, [paramValue, figmaUserId]);
   
   console.log(`✓ updateUserPreference: Updated ${result.rowCount} row(s) for user ${figmaUserId}, field ${field}`);
   
