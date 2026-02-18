@@ -657,13 +657,14 @@ export function useSavedItems(figmaUserId?: string | null) {
 
         // DATABASE IS THE SOURCE OF TRUTH - No migration, no cache restoration
         // Every save/unsave writes to DB, every load reads from DB
+        console.log(`🔄 Loading saved items from database for user ${figmaUserId}...`);
         try {
           const data = await apiRequest<any[]>('/api/saved-items', {
             headers: { 'X-Figma-User-Id': String(figmaUserId) }
           });
           if (cancelled) return;
           const safe = Array.isArray(data) ? data : [];
-          console.log(`Loaded ${safe.length} saved items from database for user ${figmaUserId}`);
+          console.log(`✅ Loaded ${safe.length} saved items from database for user ${figmaUserId}`);
 
           // Use whatever database returns - it's the truth
           // If database has items → user saved them
@@ -761,29 +762,55 @@ export function useSavedItems(figmaUserId?: string | null) {
         return prev;
       }
 
-      lastKnownCountRef.current = newCount;
-      if (usingFallback) localDataRef.current = next;
-      saveToClientStorage('saved-items', next);
-      saveLastKnownGood({ savedItemsCount: newCount });
-
-      // CRITICAL: Every save/unsave MUST write to database
+      // CRITICAL: Every save/unsave MUST write to database FIRST
       // Database is the source of truth - no exceptions
       if (!figmaUserId) {
+        console.warn('⚠️ No user ID - saving locally only, will sync when user ID available');
         // No user ID - save locally only, will sync when user ID available
+        lastKnownCountRef.current = newCount;
+        if (usingFallback) localDataRef.current = next;
+        saveToClientStorage('saved-items', next);
+        saveLastKnownGood({ savedItemsCount: newCount });
         return next;
       }
 
-      // CRITICAL: Save to database - await to ensure it completes
-      // Database is the source of truth - every save/unsave MUST write to DB
+      // CRITICAL: Save to database FIRST - await to ensure it completes
+      // Only update refs/cache AFTER database save succeeds
+      console.log(`💾 Saving ${next.length} items to database for user ${figmaUserId}...`);
       try {
         const response = await apiRequest('/api/saved-items', {
           method: 'POST',
           headers: { 'X-Figma-User-Id': String(figmaUserId) },
           body: JSON.stringify({ savedItems: next }),
         });
-        console.log(`✓ Saved ${next.length} items to database for user ${figmaUserId}`);
-        // Save successful - database now has the truth
+        console.log(`✅ SUCCESS: Saved ${next.length} items to database for user ${figmaUserId}`);
+        
+        // Save successful - NOW update refs and cache
+        lastKnownCountRef.current = newCount;
+        if (usingFallback) localDataRef.current = next;
+        saveToClientStorage('saved-items', next);
+        saveLastKnownGood({ savedItemsCount: newCount });
         setUsingFallback(false);
+        
+        // Verify the save by immediately reading back from database
+        try {
+          const verifyData = await apiRequest<any[]>('/api/saved-items', {
+            headers: { 'X-Figma-User-Id': String(figmaUserId) }
+          });
+          const verifySafe = Array.isArray(verifyData) ? verifyData : [];
+          console.log(`✓ Verified: Database now has ${verifySafe.length} items for user ${figmaUserId}`);
+          if (verifySafe.length !== next.length) {
+            console.error(`⚠️ MISMATCH: Saved ${next.length} but database has ${verifySafe.length} - using database value`);
+            // Use what database actually has
+            lastKnownCountRef.current = verifySafe.length;
+            if (usingFallback) localDataRef.current = verifySafe;
+            saveToClientStorage('saved-items', verifySafe);
+            saveLastKnownGood({ savedItemsCount: verifySafe.length });
+            return verifySafe;
+          }
+        } catch (verifyError) {
+          console.error('⚠️ Could not verify save:', verifyError);
+        }
       } catch (error: any) {
         console.error('✗ Failed to save saved items to database:', error);
         // If save failed, reload from database to get current state
@@ -810,20 +837,26 @@ export function useSavedItems(figmaUserId?: string | null) {
       return next;
     };
 
+    // CRITICAL: We need to await the database save BEFORE updating state
+    // This ensures data is persisted before state changes
     // Support React-style updater: setSavedItems(prev => next)
     if (typeof newItems === 'function') {
       setSavedItemsState(prev => {
         const next = newItems(prev);
-        // CRITICAL: Await database save to ensure it completes
-        validateAndMaybePersist(next, prev).catch((error) => {
-          console.error('Failed to save to database:', error);
-          // If save fails, reload from database to get truth
+        // Save to database FIRST, then update state with result
+        validateAndMaybePersist(next, prev).then((finalItems) => {
+          // Update state with what database actually has (might differ if save failed)
+          setSavedItemsState(finalItems);
+        }).catch((error) => {
+          console.error('❌ Critical error saving to database:', error);
+          // On critical error, reload from database
           if (figmaUserId) {
             apiRequest<any[]>('/api/saved-items', {
               headers: { 'X-Figma-User-Id': String(figmaUserId) }
             })
               .then(data => {
                 const safe = Array.isArray(data) ? data : [];
+                console.log(`↻ Reloaded ${safe.length} items after critical error`);
                 setSavedItemsState(safe);
                 localDataRef.current = safe;
                 lastKnownCountRef.current = safe.length;
@@ -832,23 +865,27 @@ export function useSavedItems(figmaUserId?: string | null) {
               .catch(console.error);
           }
         });
-        return next; // Optimistic update
+        return next; // Optimistic update (will be corrected by validateAndMaybePersist)
       });
       return;
     }
 
-    // Direct array
+    // Direct array - save to database FIRST
     setSavedItemsState(prev => {
-      // CRITICAL: Await database save to ensure it completes
-      validateAndMaybePersist(newItems, prev).catch((error) => {
-        console.error('Failed to save to database:', error);
-        // If save fails, reload from database to get truth
+      // Save to database FIRST, then update state with result
+      validateAndMaybePersist(newItems, prev).then((finalItems) => {
+        // Update state with what database actually has (might differ if save failed)
+        setSavedItemsState(finalItems);
+      }).catch((error) => {
+        console.error('❌ Critical error saving to database:', error);
+        // On critical error, reload from database
         if (figmaUserId) {
           apiRequest<any[]>('/api/saved-items', {
             headers: { 'X-Figma-User-Id': String(figmaUserId) }
           })
             .then(data => {
               const safe = Array.isArray(data) ? data : [];
+              console.log(`↻ Reloaded ${safe.length} items after critical error`);
               setSavedItemsState(safe);
               localDataRef.current = safe;
               lastKnownCountRef.current = safe.length;
@@ -857,7 +894,7 @@ export function useSavedItems(figmaUserId?: string | null) {
             .catch(console.error);
         }
       });
-      return newItems; // Optimistic update
+      return newItems; // Optimistic update (will be corrected by validateAndMaybePersist)
     });
   }, [hasLoaded, usingFallback, figmaUserId]);
 
