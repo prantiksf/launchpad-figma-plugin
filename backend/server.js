@@ -346,6 +346,32 @@ app.get('/api/saved-items', async (req, res) => {
   try {
     const figmaUserIdRaw = req.headers['x-figma-user-id'] || null;
     const figmaUserId = Array.isArray(figmaUserIdRaw) ? figmaUserIdRaw[0] : figmaUserIdRaw;
+    
+    // Direct database query to see what's actually stored - bypass all helper functions
+    if (figmaUserId) {
+      const { Pool } = require('pg');
+      const directPool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: process.env.PGSSLREJECTUNAUTHORIZED !== '0' } : false
+      });
+      try {
+        const directResult = await directPool.query(
+          'SELECT saved_items, pg_typeof(saved_items) as column_type FROM user_preferences WHERE figma_user_id = $1',
+          [String(figmaUserId)]
+        );
+        console.log(`🔍 DIRECT DB QUERY for user ${figmaUserId}:`, {
+          rowCount: directResult.rows.length,
+          saved_items: directResult.rows[0]?.saved_items,
+          column_type: directResult.rows[0]?.column_type,
+          rawValue: JSON.stringify(directResult.rows[0]?.saved_items),
+          isNull: directResult.rows[0]?.saved_items === null,
+          isUndefined: directResult.rows[0]?.saved_items === undefined
+        });
+      } finally {
+        await directPool.end();
+      }
+    }
+    
     const items = figmaUserId ? await db.getUserSavedItems(String(figmaUserId)) : await db.getSavedItems();
     res.json(Array.isArray(items) ? items : []);
   } catch (error) {
