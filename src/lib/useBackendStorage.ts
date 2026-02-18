@@ -746,15 +746,25 @@ export function useSavedItems(figmaUserId?: string | null) {
 
     const validateAndMaybePersist = async (next: any[], prev: any[]): Promise<any[]> => {
       console.log(`🔍 validateAndMaybePersist called: prev=${prev.length}, next=${next.length}`);
+      console.log(`🔍 next items:`, JSON.stringify(next, null, 2));
       
       if (!Array.isArray(next)) {
         console.error('🛑 BLOCKED: Invalid saved items data - not an array');
         return prev;
       }
+      
+      // Check each item individually
+      const invalidItems = next.filter(item => !item || typeof item !== 'object' || !item.templateId);
+      if (invalidItems.length > 0) {
+        console.error(`🛑 BLOCKED: ${invalidItems.length} saved items missing templateId`);
+        console.error(`Invalid items:`, invalidItems);
+        console.error(`Valid items would be:`, next.filter(item => item && typeof item === 'object' && item.templateId));
+        return prev;
+      }
+      
       const validItems = next.filter(item => item && typeof item === 'object' && item.templateId);
       if (validItems.length !== next.length) {
-        console.error(`🛑 BLOCKED: ${next.length - validItems.length} saved items missing templateId`);
-        console.error(`Invalid items:`, next.filter(item => !item || typeof item !== 'object' || !item.templateId));
+        console.error(`🛑 BLOCKED: Validation mismatch - expected ${next.length} but got ${validItems.length} valid items`);
         return prev;
       }
 
