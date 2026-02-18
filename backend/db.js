@@ -302,17 +302,20 @@ async function updateUserPreference(figmaUserId, field, value) {
       console.error(`✗ ERROR: saved_items must be an array, got ${typeof value}`);
       throw new Error(`saved_items must be an array, got ${typeof value}`);
     }
-    paramValue = value; // Pass array directly - pg driver handles JSONB conversion
+    // CRITICAL: Convert to JSON string first, then PostgreSQL will parse it as JSONB array
+    // This ensures it's stored as an array, not an object
+    paramValue = JSON.stringify(value);
+    console.log(`🔄 Converting array to JSON string for saved_items: ${paramValue.substring(0, 200)}`);
   } else if (field === 'hidden_clouds') {
     // hidden_clouds should also be an array
-    paramValue = Array.isArray(value) ? value : [];
+    paramValue = Array.isArray(value) ? JSON.stringify(value) : '[]';
   } else {
     paramValue = value;
   }
   
   console.log(`🔄 updateUserPreference: Updating ${field} for user ${figmaUserId}`);
-  console.log(`🔄 Value type: ${typeof paramValue}, Is array: ${Array.isArray(paramValue)}, Length: ${Array.isArray(paramValue) ? paramValue.length : 'N/A'}`);
-  console.log(`🔄 Value preview:`, JSON.stringify(paramValue).substring(0, 500));
+  console.log(`🔄 Value type: ${typeof paramValue}, Is string: ${typeof paramValue === 'string'}, Length: ${typeof paramValue === 'string' ? paramValue.length : 'N/A'}`);
+  console.log(`🔄 Value preview:`, paramValue.toString().substring(0, 500));
   
   // Use parameterized query with explicit column name mapping to avoid SQL injection
   const columnMap = {
@@ -328,14 +331,13 @@ async function updateUserPreference(figmaUserId, field, value) {
     throw new Error(`Invalid field: ${field}`);
   }
   
-  // For JSONB fields, use ::jsonb cast; for others, use direct assignment
-  // CRITICAL: Use explicit JSONB cast - pg driver should handle JS array -> JSONB automatically
+  // For JSONB fields, pass as JSON string and cast to jsonb
+  // This ensures PostgreSQL stores it correctly as JSONB array
   let updateQuery;
   let queryParams;
   
   if (field === 'saved_items' || field === 'hidden_clouds') {
-    // For JSONB, pass the JavaScript array/object directly - pg driver converts it
-    // Use explicit ::jsonb cast to ensure PostgreSQL treats it as JSONB
+    // Pass JSON string and cast to jsonb - PostgreSQL will parse it correctly
     updateQuery = `UPDATE user_preferences SET ${columnName} = $1::jsonb, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}, figma_user_id`;
     queryParams = [paramValue, figmaUserId];
   } else {
@@ -343,8 +345,10 @@ async function updateUserPreference(figmaUserId, field, value) {
     queryParams = [paramValue, figmaUserId];
   }
   
-  console.log(`🔄 Executing UPDATE query for ${field}:`, updateQuery);
-  console.log(`🔄 Query params: paramValue type=${typeof queryParams[0]}, isArray=${Array.isArray(queryParams[0])}, length=${Array.isArray(queryParams[0]) ? queryParams[0].length : 'N/A'}`);
+  console.log(`🔄 Executing UPDATE query for ${field}`);
+  console.log(`🔄 Query: UPDATE user_preferences SET ${columnName} = $1::jsonb WHERE figma_user_id = $2`);
+  console.log(`🔄 Param 1 (value): ${typeof queryParams[0] === 'string' ? queryParams[0].substring(0, 200) : queryParams[0]}`);
+  console.log(`🔄 Param 2 (user_id): ${queryParams[1]}`);
   
   const result = await pool.query(updateQuery, queryParams);
   
