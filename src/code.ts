@@ -75,8 +75,9 @@ figma.ui.onmessage = async (msg) => {
       console.log('🔄 Reading data from clientStorage for migration...');
       
       // Read all data from clientStorage
+      // NOTE: savedItems are NOT migrated - they are per-user and stored in database only
+      // Reading them from clientStorage would restore old data when user intentionally unsaved items
       const templates = await figma.clientStorage.getAsync(STORAGE_KEY) || [];
-      const savedItems = await figma.clientStorage.getAsync('starter-kit-saved') || [];
       const figmaLinks = await figma.clientStorage.getAsync('starter-kit-figma-links') || [];
       const cloudFigmaLinks = await figma.clientStorage.getAsync('starter-kit-cloud-figma-links') || {};
       const customClouds = await figma.clientStorage.getAsync('starter-kit-custom-clouds') || [];
@@ -89,10 +90,10 @@ figma.ui.onmessage = async (msg) => {
       const hiddenClouds = await figma.clientStorage.getAsync('starter-kit-hidden-clouds') || [];
       
       // Send all data to UI for migration to backend
+      // savedItems are NOT included - they are per-user and managed by database only
       figma.ui.postMessage({
         type: 'MIGRATION_DATA',
         templates,
-        savedItems,
         figmaLinks,
         cloudFigmaLinks,
         customClouds,
@@ -105,7 +106,7 @@ figma.ui.onmessage = async (msg) => {
         hiddenClouds,
       });
       
-      console.log(`✓ Migration data prepared: ${templates.length} templates, ${savedItems.length} saved items`);
+      console.log(`✓ Migration data prepared: ${templates.length} templates (saved items are per-user, stored in database only)`);
     } catch (error) {
       console.error('❌ Migration error:', error);
       figma.ui.postMessage({ type: 'MIGRATION_DATA', error: String(error) });
