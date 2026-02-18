@@ -806,6 +806,10 @@ export function useSavedItems(figmaUserId?: string | null) {
       
       // CRITICAL: Validate items before sending
       const itemsToSend = next.filter(item => item && typeof item === 'object' && item.templateId);
+      console.log(`🔍 Validation: next.length=${next.length}, itemsToSend.length=${itemsToSend.length}`);
+      console.log(`🔍 next items:`, JSON.stringify(next));
+      console.log(`🔍 itemsToSend:`, JSON.stringify(itemsToSend));
+      
       if (itemsToSend.length !== next.length) {
         console.error(`⚠️ WARNING: Filtered out ${next.length - itemsToSend.length} invalid items before sending`);
         console.error(`Invalid items:`, next.filter(item => !item || typeof item !== 'object' || !item.templateId));
@@ -813,6 +817,7 @@ export function useSavedItems(figmaUserId?: string | null) {
       
       if (itemsToSend.length === 0 && next.length > 0) {
         console.error(`✗ ERROR: All ${next.length} items were filtered out! Not saving.`);
+        console.error(`✗ This means validation is too strict - check item structure`);
         return prev;
       }
       
