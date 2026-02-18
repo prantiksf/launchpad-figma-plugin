@@ -682,26 +682,10 @@ export function useSavedItems(figmaUserId?: string | null) {
         // If backend was written to before (even if now empty), don't migrate - user intentionally cleared
         // Only migrate if this is truly the first time (backend empty AND cache empty AND no migration flag)
         if (safe.length === 0 && !alreadyMigrated) {
-          // Check if cache has data - if it does and backend is empty, backend was likely cleared intentionally
+          // First time load - backend is empty and migration hasn't happened
+          // Try migration from shared list and cache
           const cached = await loadFromClientStorage<any[]>('saved-items');
           const safeCached = Array.isArray(cached) ? cached : [];
-          
-          // If cache has items but backend is empty, backend was cleared intentionally - set migration flag and skip
-          if (safeCached.length > 0) {
-            // Backend was cleared but cache still has data - this means user unsaved items
-            // Set migration flag to prevent future migrations and clear cache
-            migratedRef.current = true;
-            try { localStorage.setItem(migrateKey, 'true'); } catch {}
-            setSavedItemsState([]);
-            localDataRef.current = [];
-            lastKnownCountRef.current = 0;
-            setHasLoaded(true);
-            saveToClientStorage('saved-items', []); // Clear stale cache
-            saveLastKnownGood({ savedItemsCount: 0 });
-            return;
-          }
-          
-          // Cache is also empty - this is truly first load, try migration from shared list
           let shared: any[] = [];
           try {
             const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
@@ -747,33 +731,19 @@ export function useSavedItems(figmaUserId?: string | null) {
           }
         }
 
-        // If backend returns empty, check if migration already happened
-        // If migration happened, user intentionally cleared - trust backend
-        // If migration hasn't happened yet, migration logic above will handle it
-        if (safe.length === 0 && alreadyMigrated) {
-          // User intentionally cleared their list after migration - ensure cache is also cleared
-          migratedRef.current = true;
-          try { localStorage.setItem(migrateKey, 'true'); } catch {}
-          setSavedItemsState([]);
-          localDataRef.current = [];
-          lastKnownCountRef.current = 0;
-          setHasLoaded(true);
-          saveToClientStorage('saved-items', []); // Clear cache
-          saveLastKnownGood({ savedItemsCount: 0 });
-          return;
-        }
-
-        // If backend returns empty but migration hasn't happened, migration logic above handles it
-        // Otherwise, trust the backend response
+        // Trust the backend response - use whatever backend returns
+        // If backend has data, use it (normal case - user has saved items)
+        // If backend is empty, use empty (user unsaved or first time)
         setSavedItemsState(safe);
         localDataRef.current = safe;
         lastKnownCountRef.current = safe.length;
         setHasLoaded(true);
-        saveToClientStorage('saved-items', safe);
+        saveToClientStorage('saved-items', safe); // Always sync cache with backend
         saveLastKnownGood({ savedItemsCount: safe.length });
         
-        // Set migration flag if backend has data (means migration completed or user has saved items)
-        if (safe.length > 0 && !alreadyMigrated) {
+        // Set migration flag if backend has data OR if backend is empty but migration already happened
+        // This ensures we don't re-migrate after user unsaves
+        if (safe.length > 0 || alreadyMigrated) {
           migratedRef.current = true;
           try { localStorage.setItem(migrateKey, 'true'); } catch {}
         }
