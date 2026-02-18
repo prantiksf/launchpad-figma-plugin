@@ -491,6 +491,31 @@ async function saveUserSavedItems(figmaUserId, items) {
       throw new Error(`UPDATE did not return array. Got: ${typeof saved}`);
     }
     
+    // CRITICAL: Use the RETURNING value - it's what was actually written
+    // If RETURNING shows empty, the UPDATE didn't work correctly
+    if (saved.length === 0 && itemsToSave.length > 0) {
+      console.error(`✗ CRITICAL ERROR: UPDATE returned empty array but we tried to save ${itemsToSave.length} items!`);
+      console.error(`✗ JSON string sent:`, jsonString);
+      console.error(`✗ Items we tried to save:`, JSON.stringify(itemsToSave));
+      
+      // Try to read back to see what's actually in the database
+      const verifyResult = await client.query(
+        'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
+        [figmaUserId]
+      );
+      const verified = verifyResult.rows[0]?.saved_items;
+      console.error(`✗ Database readback shows:`, verified);
+      
+      // If database has the items, use that
+      if (Array.isArray(verified) && verified.length > 0) {
+        console.log(`✓ Database actually has ${verified.length} items - using that`);
+        return verified;
+      }
+      
+      // Otherwise, throw error - UPDATE failed
+      throw new Error(`UPDATE returned empty array but tried to save ${itemsToSave.length} items`);
+    }
+    
     // Immediately read back using same client to verify it was actually saved
     const verifyResult = await client.query(
       'SELECT saved_items FROM user_preferences WHERE figma_user_id = $1',
@@ -500,7 +525,7 @@ async function saveUserSavedItems(figmaUserId, items) {
     console.log(`✓ Immediate readback: type=${typeof verified}, isArray=${Array.isArray(verified)}, length=${Array.isArray(verified) ? verified.length : 'N/A'}`);
     console.log(`✓ Immediate readback value:`, JSON.stringify(verified).substring(0, 300));
     
-    // Use verified value if it's different (shouldn't be, but just in case)
+    // Use verified value - it's what's actually in the database
     const finalResult = Array.isArray(verified) ? verified : saved;
     
     if (finalResult.length !== itemsToSave.length) {
