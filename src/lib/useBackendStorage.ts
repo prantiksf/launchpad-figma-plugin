@@ -678,10 +678,30 @@ export function useSavedItems(figmaUserId?: string | null) {
           alreadyMigrated = migratedRef.current;
         }
 
+        // CRITICAL FIX: If backend returns empty AND we have items in cache, check if backend was ever written to
+        // If backend was written to before (even if now empty), don't migrate - user intentionally cleared
+        // Only migrate if this is truly the first time (backend empty AND cache empty AND no migration flag)
         if (safe.length === 0 && !alreadyMigrated) {
-          // Only migrate on first load when backend is empty AND migration hasn't happened
+          // Check if cache has data - if it does and backend is empty, backend was likely cleared intentionally
           const cached = await loadFromClientStorage<any[]>('saved-items');
           const safeCached = Array.isArray(cached) ? cached : [];
+          
+          // If cache has items but backend is empty, backend was cleared intentionally - set migration flag and skip
+          if (safeCached.length > 0) {
+            // Backend was cleared but cache still has data - this means user unsaved items
+            // Set migration flag to prevent future migrations and clear cache
+            migratedRef.current = true;
+            try { localStorage.setItem(migrateKey, 'true'); } catch {}
+            setSavedItemsState([]);
+            localDataRef.current = [];
+            lastKnownCountRef.current = 0;
+            setHasLoaded(true);
+            saveToClientStorage('saved-items', []); // Clear stale cache
+            saveLastKnownGood({ savedItemsCount: 0 });
+            return;
+          }
+          
+          // Cache is also empty - this is truly first load, try migration from shared list
           let shared: any[] = [];
           try {
             const sharedData = await apiRequest<any[]>('/api/saved-items'); // no header => legacy shared list
@@ -720,6 +740,10 @@ export function useSavedItems(figmaUserId?: string | null) {
               });
             } catch {}
             return;
+          } else {
+            // Migration attempted but nothing to migrate - set flag and continue with empty
+            migratedRef.current = true;
+            try { localStorage.setItem(migrateKey, 'true'); } catch {}
           }
         }
 
