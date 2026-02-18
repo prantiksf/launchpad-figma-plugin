@@ -856,7 +856,7 @@ export function useSavedItems(figmaUserId?: string | null) {
         validateAndMaybePersist(next, prev).catch((error) => {
           console.error('❌ Error in validateAndMaybePersist:', error);
           // On error, revert to previous state
-          setSavedItemsState(prev);
+          setSavedItemsState(() => prev);
         });
         // Return previous state temporarily - will be updated by validateAndMaybePersist after DB verification
         return prev;
@@ -865,10 +865,15 @@ export function useSavedItems(figmaUserId?: string | null) {
     }
 
     // Direct array - wait for database save and verification
-    console.log(`🔄 Save requested: ${savedItems.length} -> ${newItems.length} items`);
-    validateAndMaybePersist(newItems, savedItems).catch((error) => {
-      console.error('❌ Error in validateAndMaybePersist:', error);
-      // On error, keep current state
+    // Use functional update to get latest savedItems value
+    setSavedItemsState(currentSavedItems => {
+      console.log(`🔄 Save requested: ${currentSavedItems.length} -> ${newItems.length} items`);
+      validateAndMaybePersist(newItems, currentSavedItems).catch((error) => {
+        console.error('❌ Error in validateAndMaybePersist:', error);
+        // On error, keep current state
+      });
+      // Return current state temporarily - will be updated by validateAndMaybePersist
+      return currentSavedItems;
     });
   }, [hasLoaded, usingFallback, figmaUserId]);
 
