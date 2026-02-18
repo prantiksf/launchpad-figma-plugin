@@ -347,31 +347,7 @@ app.get('/api/saved-items', async (req, res) => {
     const figmaUserIdRaw = req.headers['x-figma-user-id'] || null;
     const figmaUserId = Array.isArray(figmaUserIdRaw) ? figmaUserIdRaw[0] : figmaUserIdRaw;
     
-    // Direct database query to see what's actually stored - bypass all helper functions
-    if (figmaUserId) {
-      const { Pool } = require('pg');
-      const directPool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: process.env.PGSSLREJECTUNAUTHORIZED !== '0' } : false
-      });
-      try {
-        const directResult = await directPool.query(
-          'SELECT saved_items, pg_typeof(saved_items) as column_type FROM user_preferences WHERE figma_user_id = $1',
-          [String(figmaUserId)]
-        );
-        console.log(`🔍 DIRECT DB QUERY for user ${figmaUserId}:`, {
-          rowCount: directResult.rows.length,
-          saved_items: directResult.rows[0]?.saved_items,
-          column_type: directResult.rows[0]?.column_type,
-          rawValue: JSON.stringify(directResult.rows[0]?.saved_items),
-          isNull: directResult.rows[0]?.saved_items === null,
-          isUndefined: directResult.rows[0]?.saved_items === undefined
-        });
-      } finally {
-        await directPool.end();
-      }
-    }
-    
+    // SIMPLE: Just load it
     const items = figmaUserId ? await db.getUserSavedItems(String(figmaUserId)) : await db.getSavedItems();
     res.json(Array.isArray(items) ? items : []);
   } catch (error) {
@@ -413,31 +389,8 @@ app.post('/api/saved-items', async (req, res) => {
       await db.cleanupOldBackups(backupKey, 50);
     }
     if (figmaUserId) {
-      console.log(`💾 Backend POST /api/saved-items: Saving ${newItems.length} items for user ${figmaUserId}`);
-      console.log(`💾 Items to save:`, JSON.stringify(newItems).substring(0, 500));
-      
-      try {
-        await db.saveUserSavedItems(String(figmaUserId), newItems);
-        
-        // Wait a tiny bit to ensure transaction is committed
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Immediately verify after save
-        const verifyItems = await db.getUserSavedItems(String(figmaUserId));
-        console.log(`✓ Backend POST: Verified ${verifyItems.length} items after save for user ${figmaUserId}`);
-        console.log(`✓ Backend POST: Verified items:`, JSON.stringify(verifyItems).substring(0, 500));
-        
-        if (verifyItems.length !== newItems.length) {
-          console.error(`⚠️ Backend MISMATCH: Saved ${newItems.length} but database has ${verifyItems.length}`);
-          // Try reading again after a longer delay
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const verifyItems2 = await db.getUserSavedItems(String(figmaUserId));
-          console.log(`✓ Backend POST: Second read after 500ms: ${verifyItems2.length} items`);
-        }
-      } catch (saveError) {
-        console.error(`✗ Backend POST: Error saving items:`, saveError);
-        throw saveError;
-      }
+      // SIMPLE: Just save it
+      await db.saveUserSavedItems(String(figmaUserId), newItems);
     } else {
       await db.saveSavedItems(newItems);
     }
