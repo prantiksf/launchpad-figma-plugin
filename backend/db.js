@@ -290,7 +290,8 @@ async function updateUserPreference(figmaUserId, field, value) {
   }
   
   console.log(`🔄 updateUserPreference: Updating ${field} for user ${figmaUserId}`);
-  console.log(`🔄 Value type: ${typeof paramValue}, Is array: ${Array.isArray(paramValue)}, Value:`, JSON.stringify(paramValue).substring(0, 200));
+  console.log(`🔄 Value type: ${typeof paramValue}, Is array: ${Array.isArray(paramValue)}, Length: ${Array.isArray(paramValue) ? paramValue.length : 'N/A'}`);
+  console.log(`🔄 Value preview:`, JSON.stringify(paramValue).substring(0, 500));
   
   // Use parameterized query with explicit column name mapping to avoid SQL injection
   const columnMap = {
@@ -308,10 +309,18 @@ async function updateUserPreference(figmaUserId, field, value) {
   
   // For JSONB fields, use ::jsonb cast; for others, use direct assignment
   const updateQuery = (field === 'hidden_clouds' || field === 'saved_items')
-    ? `UPDATE user_preferences SET ${columnName} = $1::jsonb, updated_at = NOW() WHERE figma_user_id = $2`
-    : `UPDATE user_preferences SET ${columnName} = $1, updated_at = NOW() WHERE figma_user_id = $2`;
+    ? `UPDATE user_preferences SET ${columnName} = $1::jsonb, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}`
+    : `UPDATE user_preferences SET ${columnName} = $1, updated_at = NOW() WHERE figma_user_id = $2 RETURNING ${columnName}`;
   
   const result = await pool.query(updateQuery, [paramValue, figmaUserId]);
+  
+  // Verify what was actually written
+  if (result.rows.length > 0 && result.rows[0][columnName] !== undefined) {
+    const writtenValue = result.rows[0][columnName];
+    console.log(`✓ UPDATE wrote value: type=${typeof writtenValue}, isArray=${Array.isArray(writtenValue)}, length=${Array.isArray(writtenValue) ? writtenValue.length : 'N/A'}`);
+  } else {
+    console.warn(`⚠️ UPDATE returned no rows or missing column value`);
+  }
   
   console.log(`✓ updateUserPreference: Updated ${result.rowCount} row(s) for user ${figmaUserId}, field ${field}`);
   
